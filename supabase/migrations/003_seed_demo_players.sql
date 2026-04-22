@@ -1,4 +1,4 @@
--- Inscribe jugadores reales en el torneo demo "Demo Open 2026" (Grupo A) y crea el cruce 1vs1.
+-- Inscribe jugadores reales en el torneo demo "Torneo Mega Varonil" (Grupo A) y crea el cruce 1vs1.
 -- Solo aplica filas si el perfil existe (FK a profiles).
 
 insert into public.group_players (group_id, user_id, display_name, seed_order)
@@ -11,7 +11,7 @@ cross join (
     ('de10029f-061d-48c2-8aeb-cd43f4c437a3'::uuid, 'Edgar Alonso Pérez Vázquez', 2)
 ) as u(uid, dname, seed)
 inner join public.profiles p on p.id = u.uid
-where t.name = 'Demo Open 2026'
+where t.name = 'Torneo Mega Varonil'
 on conflict (group_id, user_id) do update set
   display_name = excluded.display_name,
   seed_order = excluded.seed_order;
@@ -41,7 +41,7 @@ join public.group_players gp_zaiah
 join public.group_players gp_edgar
   on gp_edgar.group_id = g.id
   and gp_edgar.user_id = 'de10029f-061d-48c2-8aeb-cd43f4c437a3'::uuid
-where t.name = 'Demo Open 2026'
+where t.name = 'Torneo Mega Varonil'
   and exists (select 1 from public.profiles where id = gp_zaiah.user_id)
   and exists (select 1 from public.profiles where id = gp_edgar.user_id)
   and not exists (

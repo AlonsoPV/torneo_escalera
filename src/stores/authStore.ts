@@ -36,9 +36,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     try {
       const profile = await fetchProfile(uid)
+      // Evita aplicar un perfil obsoleto si hubo cierre de sesión durante el fetch
+      if (get().user?.id !== uid) return
       set({ profile })
     } catch {
-      set({ profile: null })
+      if (get().user?.id === uid) set({ profile: null })
     }
   },
 }))

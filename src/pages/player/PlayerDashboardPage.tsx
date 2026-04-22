@@ -20,10 +20,10 @@ import {
   groupStandingToRankingRow,
   miTorneoDemoBundle,
   MI_TORNEO_DEMO_GROUP_ID,
+  MI_TORNEO_DEMO_PLAYER3_ID,
   miTorneoSimPlayersToGroupPlayers,
 } from '@/mock/miTorneoDemoBundle'
 import { useAuthStore } from '@/stores/authStore'
-import type { GroupStandingRow } from '@/types/tournament'
 import type { RankingRow } from '@/utils/ranking'
 
 function firstNameFromProfile(name: string | null | undefined): string {
@@ -42,27 +42,63 @@ export function PlayerDashboardPage() {
   const matches = demo.matchesByGroupId[MI_TORNEO_DEMO_GROUP_ID] ?? []
   const standingsGs = demo.standingsByGroupId[MI_TORNEO_DEMO_GROUP_ID] ?? []
 
-  const groupStandingForMatrix: GroupStandingRow[] = standingsGs
+  const playersForUi = useMemo(() => {
+    const name = profile?.full_name?.trim()
+    if (userId === MI_TORNEO_DEMO_PLAYER3_ID && name) {
+      return players.map((p) =>
+        p.id === MI_TORNEO_DEMO_PLAYER3_ID ? { ...p, full_name: name } : p,
+      )
+    }
+    return players
+  }, [players, userId, profile?.full_name])
+
+  const groupStandingForMatrix = useMemo(() => {
+    const name = profile?.full_name?.trim()
+    if (userId === MI_TORNEO_DEMO_PLAYER3_ID && name) {
+      return standingsGs.map((r) =>
+        r.playerId === MI_TORNEO_DEMO_PLAYER3_ID ? { ...r, displayName: name } : r,
+      )
+    }
+    return standingsGs
+  }, [standingsGs, userId, profile?.full_name])
 
   const myDemoPlayerId = useMemo(() => {
     if (!userId) return DEMO_SIM_USER_ZAIAH_ID
-    if (userId === DEMO_SIM_USER_ZAIAH_ID || userId === DEMO_SIM_USER_EDGAR_ID) return userId
+    if (
+      userId === DEMO_SIM_USER_ZAIAH_ID ||
+      userId === DEMO_SIM_USER_EDGAR_ID ||
+      userId === MI_TORNEO_DEMO_PLAYER3_ID
+    ) {
+      return userId
+    }
     return DEMO_SIM_USER_ZAIAH_ID
   }, [userId])
 
   const standingRow = useMemo(() => getMiTorneoDemoStandingForUser(userId), [userId])
-  const standing: RankingRow | null = useMemo(
-    () => (standingRow ? groupStandingToRankingRow(standingRow) : null),
-    [standingRow],
-  )
+  const standing: RankingRow | null = useMemo(() => {
+    if (!standingRow) return null
+    const base = groupStandingToRankingRow(standingRow)
+    const name = profile?.full_name?.trim()
+    if (
+      userId === MI_TORNEO_DEMO_PLAYER3_ID &&
+      name &&
+      base.userId === MI_TORNEO_DEMO_PLAYER3_ID
+    ) {
+      return { ...base, displayName: name }
+    }
+    return base
+  }, [standingRow, userId, profile?.full_name])
 
   const leader: RankingRow | null = useMemo(() => {
-    const sorted = [...standingsGs].sort((a, b) => a.position - b.position)
+    const sorted = [...groupStandingForMatrix].sort((a, b) => a.position - b.position)
     const first = sorted[0]
     return first ? groupStandingToRankingRow(first) : null
-  }, [standingsGs])
+  }, [groupStandingForMatrix])
 
-  const groupPlayersUi = useMemo(() => miTorneoSimPlayersToGroupPlayers(players), [players])
+  const groupPlayersUi = useMemo(
+    () => miTorneoSimPlayersToGroupPlayers(playersForUi),
+    [playersForUi],
+  )
 
   const playedMatchesCount = matches.length
   const totalPerPlayer = players.length >= 2 ? players.length - 1 : 0
@@ -107,9 +143,9 @@ export function PlayerDashboardPage() {
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
             <div className="min-w-0 xl:col-span-8">
               <ResultsMatrixCard
-                playerCount={players.length}
+                playerCount={playersForUi.length}
                 matchCount={playedMatchesCount}
-                players={players}
+                players={playersForUi}
                 matches={matches}
                 standings={groupStandingForMatrix}
               />
@@ -140,7 +176,7 @@ export function PlayerDashboardPage() {
               <SimMyResultsCard
                 myPlayerId={myDemoPlayerId}
                 matches={matches}
-                players={players}
+                players={playersForUi}
               />
             </div>
             <div className="space-y-6 xl:col-span-4">

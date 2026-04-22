@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Loader2, Lock, Mail, Trophy, UserRound } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { Link, Navigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -9,15 +10,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { signUpWithEmail } from '@/lib/auth'
+import { cn } from '@/lib/utils'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 
+import { AuthPageShell } from '@/pages/auth/AuthPageShell'
+import { AuthHomeLink } from '@/pages/auth/AuthHomeLink'
+
 const schema = z
   .object({
-    fullName: z.string().min(2, 'Nombre muy corto'),
-    email: z.string().email(),
+    fullName: z.string().min(2, 'Al menos 2 caracteres'),
+    email: z.string().min(1, 'Introduce tu email').email('Email no válido'),
     password: z.string().min(6, 'Mínimo 6 caracteres'),
-    confirm: z.string().min(6),
+    confirm: z.string().min(6, 'Confirma tu contraseña'),
   })
   .refine((v) => v.password === v.confirm, {
     message: 'Las contraseñas no coinciden',
@@ -30,7 +35,10 @@ export function RegisterPage() {
   const session = useAuthStore((s) => s.session)
   const initialized = useAuthStore((s) => s.initialized)
 
-  const form = useForm<Form>({ resolver: zodResolver(schema) })
+  const form = useForm<Form>({
+    resolver: zodResolver(schema),
+    defaultValues: { fullName: '', email: '', password: '', confirm: '' },
+  })
 
   if (initialized && session) {
     return <Navigate to="/player" replace />
@@ -38,10 +46,38 @@ export function RegisterPage() {
 
   if (!isSupabaseConfigured) {
     return (
-      <div className="mx-auto max-w-md p-6 text-sm text-muted-foreground">
-        Configura <code className="rounded bg-muted px-1">.env</code> con las variables de Supabase
-        antes de registrarte.
-      </div>
+      <AuthPageShell>
+        <div className="relative mx-auto min-h-dvh max-w-6xl">
+          <div className="absolute right-4 top-4 z-20 sm:right-8 lg:right-10">
+            <AuthHomeLink />
+          </div>
+          <div className="flex min-h-dvh items-center justify-center p-6 pt-16">
+            <Card className="w-full max-w-md border-border/60 shadow-lg shadow-black/5">
+              <CardHeader className="space-y-1 pb-2">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-11 items-center justify-center rounded-xl bg-muted">
+                    <Trophy className="size-5 text-muted-foreground" aria-hidden />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">Configuración pendiente</CardTitle>
+                    <CardDescription>Conecta Supabase para poder registrarte.</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="text-sm leading-relaxed text-muted-foreground">
+                Añade en <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs">.env</code>{' '}
+                las variables{' '}
+                <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs">VITE_SUPABASE_URL</code>{' '}
+                y{' '}
+                <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs">
+                  VITE_SUPABASE_ANON_KEY
+                </code>
+                , reinicia el servidor de desarrollo y vuelve a esta página.
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </AuthPageShell>
     )
   }
 
@@ -55,70 +91,196 @@ export function RegisterPage() {
   })
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-4 py-8">
-      <Card>
-        <CardHeader>
-          <CardTitle>Crear cuenta</CardTitle>
-          <CardDescription>Se creará tu perfil como jugador por defecto.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-4" onSubmit={submit}>
-            <div className="space-y-2">
-              <Label htmlFor="fullName">Nombre</Label>
-              <Input id="fullName" {...form.register('fullName')} />
-              {form.formState.errors.fullName ? (
-                <p className="text-xs text-destructive">
-                  {form.formState.errors.fullName.message}
+    <AuthPageShell>
+      <div className="relative mx-auto min-h-dvh max-w-6xl">
+        <div className="absolute right-4 top-4 z-20 sm:right-8 lg:right-10">
+          <AuthHomeLink />
+        </div>
+
+        <div className="mx-auto grid min-h-dvh max-w-6xl lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:gap-0">
+          <aside className="relative hidden flex-col justify-between border-border/50 px-10 py-12 lg:flex lg:border-r">
+            <div>
+              <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-border/60 bg-card/80 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm">
+                <span className="size-1.5 rounded-full bg-emerald-500/90" aria-hidden />
+                Nuevo jugador
+              </div>
+              <h1 className="max-w-sm text-balance text-3xl font-semibold tracking-tight text-foreground">
+                Únete al torneo y entra en tu grupo.
+              </h1>
+              <p className="mt-4 max-w-md text-pretty text-sm leading-relaxed text-muted-foreground">
+                Crea tu cuenta con nombre visible para rivales y organizadores. Podrás registrar
+                resultados cuando el torneo lo permita.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                <Trophy className="size-5" aria-hidden />
+              </div>
+              <p className="leading-snug">
+                <span className="font-medium text-foreground">Torneo Mega Varonil</span>
+                <br />
+                Escalera varonil · un solo perfil por jugador.
+              </p>
+            </div>
+          </aside>
+
+          <main className="flex flex-col justify-center px-4 py-10 pt-16 sm:px-8 lg:px-12 lg:pt-10">
+            <div className="mb-8 flex items-center gap-3 lg:hidden">
+              <div className="flex size-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                <Trophy className="size-5" aria-hidden />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Torneo Mega Varonil</p>
+                <p className="text-xs text-muted-foreground">Crea tu cuenta para participar</p>
+              </div>
+            </div>
+
+            <Card className="border-border/60 shadow-xl shadow-black/[0.04] dark:shadow-black/20">
+              <CardHeader className="space-y-1 pb-4">
+                <CardTitle className="text-2xl font-semibold tracking-tight">Crear cuenta</CardTitle>
+                <CardDescription className="text-base">
+                  Tu perfil se guardará como jugador. Usa un nombre que reconozcan en el club.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form className="space-y-5" onSubmit={submit} noValidate>
+                  <div className="space-y-2">
+                    <Label htmlFor="reg-fullName">Nombre completo</Label>
+                    <div className="relative">
+                      <UserRound
+                        className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                        aria-hidden
+                      />
+                      <Input
+                        id="reg-fullName"
+                        autoComplete="name"
+                        placeholder="Juan Pérez"
+                        className={cn(
+                          'h-10 pl-9',
+                          form.formState.errors.fullName && 'border-destructive aria-invalid:border-destructive',
+                        )}
+                        aria-invalid={!!form.formState.errors.fullName}
+                        {...form.register('fullName')}
+                      />
+                    </div>
+                    {form.formState.errors.fullName ? (
+                      <p className="text-xs text-destructive" role="alert">
+                        {form.formState.errors.fullName.message}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="reg-email">Email</Label>
+                    <div className="relative">
+                      <Mail
+                        className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                        aria-hidden
+                      />
+                      <Input
+                        id="reg-email"
+                        type="email"
+                        autoComplete="email"
+                        placeholder="tu@email.com"
+                        className={cn(
+                          'h-10 pl-9',
+                          form.formState.errors.email && 'border-destructive aria-invalid:border-destructive',
+                        )}
+                        aria-invalid={!!form.formState.errors.email}
+                        {...form.register('email')}
+                      />
+                    </div>
+                    {form.formState.errors.email ? (
+                      <p className="text-xs text-destructive" role="alert">
+                        {form.formState.errors.email.message}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="reg-password">Contraseña</Label>
+                    <div className="relative">
+                      <Lock
+                        className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                        aria-hidden
+                      />
+                      <Input
+                        id="reg-password"
+                        type="password"
+                        autoComplete="new-password"
+                        placeholder="••••••••"
+                        className={cn(
+                          'h-10 pl-9',
+                          form.formState.errors.password && 'border-destructive aria-invalid:border-destructive',
+                        )}
+                        aria-invalid={!!form.formState.errors.password}
+                        {...form.register('password')}
+                      />
+                    </div>
+                    {form.formState.errors.password ? (
+                      <p className="text-xs text-destructive" role="alert">
+                        {form.formState.errors.password.message}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="reg-confirm">Confirmar contraseña</Label>
+                    <div className="relative">
+                      <Lock
+                        className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                        aria-hidden
+                      />
+                      <Input
+                        id="reg-confirm"
+                        type="password"
+                        autoComplete="new-password"
+                        placeholder="••••••••"
+                        className={cn(
+                          'h-10 pl-9',
+                          form.formState.errors.confirm && 'border-destructive aria-invalid:border-destructive',
+                        )}
+                        aria-invalid={!!form.formState.errors.confirm}
+                        {...form.register('confirm')}
+                      />
+                    </div>
+                    {form.formState.errors.confirm ? (
+                      <p className="text-xs text-destructive" role="alert">
+                        {form.formState.errors.confirm.message}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <Button
+                    className="h-10 w-full gap-2 text-base font-medium"
+                    type="submit"
+                    disabled={form.formState.isSubmitting}
+                  >
+                    {form.formState.isSubmitting ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin" aria-hidden />
+                        Creando cuenta…
+                      </>
+                    ) : (
+                      'Registrarme'
+                    )}
+                  </Button>
+                </form>
+
+                <p className="mt-6 text-center text-sm text-muted-foreground">
+                  ¿Ya tienes cuenta?{' '}
+                  <Link
+                    className="font-medium text-primary underline-offset-4 transition-colors hover:text-primary/90 hover:underline"
+                    to="/login"
+                  >
+                    Inicia sesión
+                  </Link>
                 </p>
-              ) : null}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" autoComplete="email" {...form.register('email')} />
-              {form.formState.errors.email ? (
-                <p className="text-xs text-destructive">{form.formState.errors.email.message}</p>
-              ) : null}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Contraseña</Label>
-              <Input
-                id="password"
-                type="password"
-                autoComplete="new-password"
-                {...form.register('password')}
-              />
-              {form.formState.errors.password ? (
-                <p className="text-xs text-destructive">
-                  {form.formState.errors.password.message}
-                </p>
-              ) : null}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirm">Confirmar contraseña</Label>
-              <Input
-                id="confirm"
-                type="password"
-                autoComplete="new-password"
-                {...form.register('confirm')}
-              />
-              {form.formState.errors.confirm ? (
-                <p className="text-xs text-destructive">
-                  {form.formState.errors.confirm.message}
-                </p>
-              ) : null}
-            </div>
-            <Button className="w-full" type="submit" disabled={form.formState.isSubmitting}>
-              Registrarme
-            </Button>
-          </form>
-          <p className="mt-4 text-center text-sm text-muted-foreground">
-            ¿Ya tienes cuenta?{' '}
-            <Link className="font-medium text-primary underline-offset-4 hover:underline" to="/login">
-              Inicia sesión
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
-    </div>
+              </CardContent>
+            </Card>
+          </main>
+        </div>
+      </div>
+    </AuthPageShell>
   )
 }

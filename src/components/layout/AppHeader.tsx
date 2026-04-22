@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   LogIn,
   LogOut,
@@ -7,6 +8,7 @@ import {
   UserCircle2,
 } from 'lucide-react'
 import { Link, NavLink } from 'react-router-dom'
+import { toast } from 'sonner'
 
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -38,6 +40,7 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
 export function AppHeader() {
   const profile = useAuthStore((s) => s.profile)
   const session = useAuthStore((s) => s.session)
+  const [signingOut, setSigningOut] = useState(false)
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/80 bg-background/90 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-background/75">
@@ -51,10 +54,10 @@ export function AppHeader() {
           </span>
           <span className="hidden min-w-0 flex-col leading-none sm:flex">
             <span className="truncate font-semibold tracking-tight text-foreground">
-              Tennis Tournament
+              Torneo Mega Varonil
             </span>
             <span className="mt-0.5 text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">
-              Club & torneos
+              Escalera varonil
             </span>
           </span>
         </Link>
@@ -104,8 +107,16 @@ export function AppHeader() {
                 variant="outline"
                 size="sm"
                 className="gap-1.5"
+                disabled={signingOut}
                 onClick={async () => {
-                  await signOut()
+                  setSigningOut(true)
+                  try {
+                    await signOut()
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : 'No se pudo cerrar sesión')
+                  } finally {
+                    setSigningOut(false)
+                  }
                 }}
               >
                 <LogOut className="size-3.5" aria-hidden />

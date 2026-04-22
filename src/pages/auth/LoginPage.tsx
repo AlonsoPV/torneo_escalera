@@ -1,5 +1,4 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import type { ReactNode } from 'react'
 import { Loader2, Lock, Mail, Trophy } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
@@ -14,6 +13,8 @@ import { signInWithEmail } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
+import { AuthPageShell } from '@/pages/auth/AuthPageShell'
+import { AuthHomeLink } from '@/pages/auth/AuthHomeLink'
 
 const schema = z.object({
   email: z.string().min(1, 'Introduce tu email').email('Email no válido'),
@@ -21,19 +22,6 @@ const schema = z.object({
 })
 
 type Form = z.infer<typeof schema>
-
-function AuthBackdrop({ children }: { children: ReactNode }) {
-  return (
-    <div className="relative min-h-dvh w-full overflow-hidden bg-background">
-      <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_-30%,oklch(0.65_0.17_145/0.14),transparent_55%)] dark:bg-[radial-gradient(ellipse_120%_80%_at_50%_-30%,oklch(0.55_0.14_145/0.22),transparent_55%)]"
-        aria-hidden
-      />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent to-background" />
-      <div className="relative z-10">{children}</div>
-    </div>
-  )
-}
 
 export function LoginPage() {
   const session = useAuthStore((s) => s.session)
@@ -50,8 +38,12 @@ export function LoginPage() {
 
   if (!isSupabaseConfigured) {
     return (
-      <AuthBackdrop>
-        <div className="flex min-h-dvh items-center justify-center p-6">
+      <AuthPageShell>
+        <div className="relative mx-auto min-h-dvh max-w-6xl">
+          <div className="absolute right-4 top-4 z-20 sm:right-8 lg:right-10">
+            <AuthHomeLink />
+          </div>
+          <div className="flex min-h-dvh items-center justify-center p-6 pt-16">
           <Card className="w-full max-w-md border-border/60 shadow-lg shadow-black/5">
             <CardHeader className="space-y-1 pb-2">
               <div className="flex items-center gap-3">
@@ -76,7 +68,8 @@ export function LoginPage() {
             </CardContent>
           </Card>
         </div>
-      </AuthBackdrop>
+        </div>
+      </AuthPageShell>
     )
   }
 
@@ -99,7 +92,11 @@ export function LoginPage() {
   })
 
   return (
-    <AuthBackdrop>
+    <AuthPageShell>
+      <div className="relative mx-auto min-h-dvh max-w-6xl">
+        <div className="absolute right-4 top-4 z-20 sm:right-8 lg:right-10">
+          <AuthHomeLink />
+        </div>
       <div className="mx-auto grid min-h-dvh max-w-6xl lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:gap-0">
         <aside className="relative hidden flex-col justify-between border-border/50 px-10 py-12 lg:flex lg:border-r">
           <div>
@@ -119,20 +116,20 @@ export function LoginPage() {
               <Trophy className="size-5" aria-hidden />
             </div>
             <p className="leading-snug">
-              <span className="font-medium text-foreground">Tennis Tournament</span>
+              <span className="font-medium text-foreground">Torneo Mega Varonil</span>
               <br />
               Herramienta para clubes y organizadores.
             </p>
           </div>
         </aside>
 
-        <main className="flex flex-col justify-center px-4 py-10 sm:px-8 lg:px-12">
+        <main className="flex flex-col justify-center px-4 py-10 pt-16 sm:px-8 lg:px-12 lg:pt-10">
           <div className="mb-8 flex items-center gap-3 lg:hidden">
             <div className="flex size-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
               <Trophy className="size-5" aria-hidden />
             </div>
             <div>
-              <p className="text-sm font-semibold text-foreground">Tennis Tournament</p>
+              <p className="text-sm font-semibold text-foreground">Torneo Mega Varonil</p>
               <p className="text-xs text-muted-foreground">Inicia sesión para continuar</p>
             </div>
           </div>
@@ -224,6 +221,7 @@ export function LoginPage() {
           </Card>
         </main>
       </div>
-    </AuthBackdrop>
+      </div>
+    </AuthPageShell>
   )
 }

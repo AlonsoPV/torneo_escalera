@@ -1,13 +1,13 @@
 -- Demo seed: torneo + 2 grupos + reglas. Asigna jugadores y genera partidos desde el panel admin.
 insert into public.tournaments (name, description, category, status, created_by)
 select
-  'Demo Open 2026',
+  'Torneo Mega Varonil',
   'Torneo de demostración para probar grupos y matriz.',
   'Open',
   'active',
   null
 where not exists (
-  select 1 from public.tournaments t where t.name = 'Demo Open 2026'
+  select 1 from public.tournaments t where t.name = 'Torneo Mega Varonil'
 );
 
 insert into public.tournament_rules (
@@ -22,7 +22,7 @@ insert into public.tournament_rules (
 )
 select t.id, 3, 6, true, false, 3, 0, true
 from public.tournaments t
-where t.name = 'Demo Open 2026'
+where t.name = 'Torneo Mega Varonil'
   and not exists (
     select 1 from public.tournament_rules r where r.tournament_id = t.id
   );
@@ -35,7 +35,7 @@ cross join (
     ('Grupo A', 0),
     ('Grupo B', 1)
 ) as v(name, order_index)
-where t.name = 'Demo Open 2026'
+where t.name = 'Torneo Mega Varonil'
   and not exists (
     select 1 from public.groups g
     where g.tournament_id = t.id and g.name = v.name
