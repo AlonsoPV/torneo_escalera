@@ -1,0 +1,62 @@
+/**
+ * Premium sports dashboard — tokens (light).
+ * Scope with .tdash-root on the page shell.
+ */
+.tdash-root {
+  --tdash-bg: #f5f7fa;
+  --tdash-bg-alt: #eef2f6;
+  --tdash-surface: #ffffff;
+  --tdash-surface-2: #f9fbfd;
+  --tdash-text: #0f172a;
+  --tdash-muted: #64748b;
+  --tdash-border: #e2e8f0;
+  --tdash-primary: #163b65;
+  --tdash-primary-hover: #1e4d7a;
+  --tdash-gold: #cbae73;
+  --tdash-win-bg: #e8f7ee;
+  --tdash-win-text: #166534;
+  --tdash-win-border: #bbf7d0;
+  --tdash-loss-bg: #fbedee;
+  --tdash-loss-text: #991b1b;
+  --tdash-loss-border: #fecaca;
+  --tdash-def-bg: #fff4e5;
+  --tdash-def-text: #b45309;
+  --tdash-def-border: #fcd34d;
+  --tdash-block: #cbd5e1;
+  --tdash-block-2: #94a3b8;
+  --tdash-top1-bg: #fff7e6;
+  --tdash-top2-bg: #f3f4f6;
+  --tdash-top2-text: #475569;
+  --tdash-top3-bg: #f7efe8;
+  --tdash-top3-text: #9a6b46;
+  --tdash-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --tdash-shadow-lg: 0 4px 24px rgba(15, 23, 42, 0.07);
+}
+
+.dark .tdash-root {
+  --tdash-bg: oklch(0.2 0.02 260);
+  --tdash-surface: oklch(0.22 0.02 260);
+  --tdash-surface-2: oklch(0.24 0.02 260);
+  --tdash-text: oklch(0.96 0.01 260);
+  --tdash-muted: oklch(0.65 0.02 260);
+  --tdash-border: oklch(0.35 0.02 260);
+  --tdash-primary: oklch(0.55 0.08 250);
+  --tdash-primary-hover: oklch(0.6 0.08 250);
+  --tdash-gold: #cbae73;
+  --tdash-win-bg: oklch(0.28 0.05 150);
+  --tdash-win-text: oklch(0.85 0.12 150);
+  --tdash-win-border: oklch(0.4 0.08 150);
+  --tdash-loss-bg: oklch(0.28 0.04 25);
+  --tdash-loss-text: oklch(0.82 0.08 25);
+  --tdash-loss-border: oklch(0.42 0.06 25);
+  --tdash-def-bg: oklch(0.3 0.04 70);
+  --tdash-def-text: oklch(0.88 0.1 70);
+  --tdash-def-border: oklch(0.45 0.08 70);
+  --tdash-block: oklch(0.35 0.02 260);
+  --tdash-block-2: oklch(0.45 0.02 260);
+  --tdash-top1-bg: oklch(0.3 0.04 85);
+  --tdash-top2-bg: oklch(0.26 0.01 260);
+  --tdash-top2-text: oklch(0.8 0.02 260);
+  --tdash-top3-bg: oklch(0.28 0.03 55);
+  --tdash-top3-text: oklch(0.82 0.05 55);
+}
