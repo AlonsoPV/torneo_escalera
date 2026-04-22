@@ -227,8 +227,7 @@ export function generateTournamentSimulation(
   const playersByGroupId: Record<string, SimPlayer[]> = { ...byGroup }
 
   return {
-    tournamentName:
-      'Torneo demo · 90 jugadores / 18 grupos (round robin) · Grupo 1: Zaiah y Edgar',
+    tournamentName: 'Torneo Mega Varonil',
     groups,
     playersByGroupId,
     matchesByGroupId,

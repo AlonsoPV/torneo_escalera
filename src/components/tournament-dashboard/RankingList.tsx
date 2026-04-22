@@ -79,7 +79,7 @@ export function RankingList(props: Props) {
                 type="button"
                 onClick={() => setOpenId(open ? null : r.playerId)}
                 className={cn(
-                  'flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors',
+                  'flex w-full items-center justify-between gap-2 px-3 py-3 text-left transition-colors sm:gap-3 sm:px-4 sm:py-3.5',
                   'hover:bg-black/[0.02] active:bg-black/[0.04]',
                 )}
               >
@@ -107,7 +107,7 @@ export function RankingList(props: Props) {
                 </div>
               </button>
               {open ? (
-                <div className="border-t border-[var(--tdash-border)] bg-[var(--tdash-surface-2)]/80 px-4 py-3">
+                <div className="border-t border-[var(--tdash-border)] bg-[var(--tdash-surface-2)]/80 px-3 py-2.5 sm:px-4 sm:py-3">
                   <dl className="grid grid-cols-3 gap-3 text-xs">
                     <div>
                       <dt className="font-medium text-[var(--tdash-muted)]">PJ</dt>

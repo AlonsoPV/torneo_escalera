@@ -41,19 +41,19 @@ export function ResultsMatrixTable(props: Props) {
   )
 
   return (
-    <div className="relative overflow-x-auto [-webkit-overflow-scrolling:touch] [scrollbar-width:thin]">
-      <table className="min-w-[760px] border-separate border-spacing-0 text-sm">
+    <div className="relative overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] [scrollbar-width:thin]">
+      <table className="min-w-[34rem] border-separate border-spacing-0 text-xs sm:min-w-[760px] sm:text-sm">
           <thead>
             <tr className="border-b border-[var(--tdash-border)] bg-[var(--tdash-surface-2)]">
               <th
                 scope="col"
-                className="sticky left-0 z-30 w-11 min-w-[2.75rem] bg-[var(--tdash-surface-2)] px-2 py-3 text-center text-[11px] font-bold uppercase tracking-wide text-[var(--tdash-muted)] shadow-[2px_0_8px_rgba(15,23,42,0.06)]"
+                className="sticky left-0 z-30 w-9 min-w-[2.25rem] bg-[var(--tdash-surface-2)] px-1.5 py-2.5 text-center text-[10px] font-bold uppercase tracking-wide text-[var(--tdash-muted)] shadow-[2px_0_8px_rgba(15,23,42,0.06)] sm:w-11 sm:min-w-[2.75rem] sm:px-2 sm:py-3 sm:text-[11px]"
               >
                 #
               </th>
               <th
                 scope="col"
-                className="sticky left-11 z-30 min-w-[9.5rem] bg-[var(--tdash-surface-2)] px-2 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-[var(--tdash-muted)] shadow-[2px_0_8px_rgba(15,23,42,0.06)]"
+                className="sticky left-9 z-30 min-w-[5.5rem] bg-[var(--tdash-surface-2)] px-1.5 py-2.5 text-left text-[10px] font-bold uppercase tracking-wide text-[var(--tdash-muted)] shadow-[2px_0_8px_rgba(15,23,42,0.06)] sm:left-11 sm:min-w-[9.5rem] sm:px-2 sm:py-3 sm:text-[11px]"
               >
                 Jugador
               </th>
@@ -61,9 +61,9 @@ export function ResultsMatrixTable(props: Props) {
                 <th
                   key={p.id}
                   scope="col"
-                  className="min-w-[5rem] px-1 py-3 text-center align-bottom"
+                  className="min-w-[3.75rem] px-0.5 py-2 text-center align-bottom sm:min-w-[5rem] sm:px-1 sm:py-3"
                 >
-                  <span className="inline-flex size-9 items-center justify-center rounded-full border border-[var(--tdash-border)] bg-[var(--tdash-surface)] text-xs font-bold tabular-nums text-[var(--tdash-text)] shadow-sm">
+                  <span className="inline-flex size-8 items-center justify-center rounded-full border border-[var(--tdash-border)] bg-[var(--tdash-surface)] text-[11px] font-bold tabular-nums text-[var(--tdash-text)] shadow-sm sm:size-9 sm:text-xs">
                     {idx + 1}
                   </span>
                   <span className="sr-only">{p.full_name}</span>
@@ -71,25 +71,25 @@ export function ResultsMatrixTable(props: Props) {
               ))}
               <th
                 scope="col"
-                className="min-w-[2.75rem] bg-[var(--tdash-surface-2)] px-1 py-3 text-center text-[10px] font-bold uppercase text-[var(--tdash-muted)]"
+                className="min-w-[2.5rem] bg-[var(--tdash-surface-2)] px-0.5 py-2 text-center text-[9px] font-bold uppercase text-[var(--tdash-muted)] sm:min-w-[2.75rem] sm:px-1 sm:py-3 sm:text-[10px]"
               >
                 PG
               </th>
               <th
                 scope="col"
-                className="min-w-[2.75rem] bg-[var(--tdash-surface-2)] px-1 py-3 text-center text-[10px] font-bold uppercase text-[var(--tdash-muted)]"
+                className="min-w-[2.5rem] bg-[var(--tdash-surface-2)] px-0.5 py-2 text-center text-[9px] font-bold uppercase text-[var(--tdash-muted)] sm:min-w-[2.75rem] sm:px-1 sm:py-3 sm:text-[10px]"
               >
                 PP
               </th>
               <th
                 scope="col"
-                className="min-w-[3rem] bg-[var(--tdash-surface-2)] px-1 py-3 text-center text-[10px] font-bold uppercase text-[var(--tdash-primary)]"
+                className="min-w-[2.75rem] bg-[var(--tdash-surface-2)] px-0.5 py-2 text-center text-[9px] font-bold uppercase text-[var(--tdash-primary)] sm:min-w-[3rem] sm:px-1 sm:py-3 sm:text-[10px]"
               >
                 PTS
               </th>
               <th
                 scope="col"
-                className="min-w-[2.75rem] bg-[var(--tdash-surface-2)] px-1 py-3 text-center text-[10px] font-bold uppercase text-[var(--tdash-muted)]"
+                className="min-w-[2.5rem] bg-[var(--tdash-surface-2)] px-0.5 py-2 text-center text-[9px] font-bold uppercase text-[var(--tdash-muted)] sm:min-w-[2.75rem] sm:px-1 sm:py-3 sm:text-[10px]"
               >
                 POS
               </th>
@@ -108,15 +108,15 @@ export function ResultsMatrixTable(props: Props) {
                 >
                   <th
                     scope="row"
-                    className="sticky left-0 z-20 bg-[var(--tdash-surface)] px-2 py-2 text-center align-middle font-mono text-xs font-bold tabular-nums text-[var(--tdash-muted)] shadow-[2px_0_8px_rgba(15,23,42,0.04)]"
+                    className="sticky left-0 z-20 w-9 min-w-[2.25rem] bg-[var(--tdash-surface)] px-1.5 py-1.5 text-center align-middle font-mono text-[11px] font-bold tabular-nums text-[var(--tdash-muted)] shadow-[2px_0_8px_rgba(15,23,42,0.04)] sm:w-11 sm:min-w-[2.75rem] sm:px-2 sm:py-2 sm:text-xs"
                   >
                     {row.seed_order}
                   </th>
                   <th
                     scope="row"
-                    className="sticky left-11 z-20 max-w-[11rem] bg-[var(--tdash-surface)] px-2 py-2 text-left align-middle shadow-[2px_0_8px_rgba(15,23,42,0.04)]"
+                    className="sticky left-9 z-20 max-w-[9rem] bg-[var(--tdash-surface)] px-1.5 py-1.5 text-left align-middle shadow-[2px_0_8px_rgba(15,23,42,0.04)] sm:left-11 sm:max-w-[11rem] sm:px-2 sm:py-2"
                   >
-                    <span className="line-clamp-2 text-left text-sm font-semibold leading-snug text-[var(--tdash-text)]">
+                    <span className="line-clamp-2 text-left text-xs font-semibold leading-snug text-[var(--tdash-text)] sm:text-sm">
                       {row.full_name}
                     </span>
                   </th>
@@ -132,7 +132,7 @@ export function ResultsMatrixTable(props: Props) {
                       : null
 
                     return (
-                      <td key={col.id} className="p-1 align-middle">
+                      <td key={col.id} className="p-0.5 align-middle sm:p-1">
                         {isDiag ? (
                           <ScoreCell kind="diagonal" label="" />
                         ) : (
@@ -146,16 +146,16 @@ export function ResultsMatrixTable(props: Props) {
                       </td>
                     )
                   })}
-                  <td className="bg-[var(--tdash-surface-2)] px-1 text-center align-middle font-mono text-sm font-semibold tabular-nums text-[var(--tdash-text)]">
+                  <td className="bg-[var(--tdash-surface-2)] px-0.5 text-center align-middle font-mono text-xs font-semibold tabular-nums text-[var(--tdash-text)] sm:px-1 sm:text-sm">
                     {st?.won ?? '—'}
                   </td>
-                  <td className="bg-[var(--tdash-surface-2)] px-1 text-center align-middle font-mono text-sm tabular-nums text-[var(--tdash-muted)]">
+                  <td className="bg-[var(--tdash-surface-2)] px-0.5 text-center align-middle font-mono text-xs tabular-nums text-[var(--tdash-muted)] sm:px-1 sm:text-sm">
                     {st?.lost ?? '—'}
                   </td>
-                  <td className="bg-[var(--tdash-surface-2)] px-1 text-center align-middle font-mono text-sm font-bold tabular-nums text-[var(--tdash-primary)]">
+                  <td className="bg-[var(--tdash-surface-2)] px-0.5 text-center align-middle font-mono text-xs font-bold tabular-nums text-[var(--tdash-primary)] sm:px-1 sm:text-sm">
                     {st?.points ?? '—'}
                   </td>
-                  <td className="bg-[var(--tdash-surface-2)] px-1 text-center align-middle font-mono text-sm tabular-nums text-[var(--tdash-muted)]">
+                  <td className="bg-[var(--tdash-surface-2)] px-0.5 text-center align-middle font-mono text-xs tabular-nums text-[var(--tdash-muted)] sm:px-1 sm:text-sm">
                     {st?.position ?? '—'}
                   </td>
                 </tr>

@@ -35,18 +35,18 @@ export function UpcomingMatchesCard(props: Props) {
   return (
     <section
       className={cn(
-        'overflow-hidden rounded-2xl border border-[var(--tdash-border)] bg-[var(--tdash-surface)] shadow-[var(--tdash-shadow-lg)]',
+        'overflow-hidden rounded-xl border border-[var(--tdash-border)] bg-[var(--tdash-surface)] shadow-[var(--tdash-shadow-lg)] sm:rounded-2xl',
         className,
       )}
     >
-      <div className="border-b border-[var(--tdash-border)] bg-gradient-to-br from-[var(--tdash-surface)] to-[var(--tdash-surface-2)] px-5 py-4">
-        <h2 className="text-lg font-bold text-[var(--tdash-text)]">{PLY_COPY.upcomingTitle}</h2>
-        <p className="text-sm text-[var(--tdash-muted)]">{PLY_COPY.upcomingSub}</p>
+      <div className="border-b border-[var(--tdash-border)] bg-gradient-to-br from-[var(--tdash-surface)] to-[var(--tdash-surface-2)] px-4 py-3 sm:px-5 sm:py-4">
+        <h2 className="text-base font-bold text-[var(--tdash-text)] sm:text-lg">{PLY_COPY.upcomingTitle}</h2>
+        <p className="mt-0.5 text-xs text-[var(--tdash-muted)] sm:text-sm">{PLY_COPY.upcomingSub}</p>
       </div>
-      <div className="p-3 sm:p-4">
+      <div className="p-2 sm:p-4">
         {matches.length === 0 ? (
-          <div className="flex flex-col items-center rounded-xl border border-dashed border-[var(--tdash-border)] bg-[var(--tdash-surface-2)] px-4 py-10 text-center">
-            <p className="text-sm font-medium text-[var(--tdash-text)]">{PLY_COPY.allGroupDone}</p>
+          <div className="flex flex-col items-center rounded-lg border border-dashed border-[var(--tdash-border)] bg-[var(--tdash-surface-2)] px-3 py-8 text-center sm:rounded-xl sm:px-4 sm:py-10">
+            <p className="text-xs font-medium text-[var(--tdash-text)] sm:text-sm">{PLY_COPY.allGroupDone}</p>
           </div>
         ) : (
           <ul className="space-y-2">
@@ -87,8 +87,8 @@ export function UpcomingMatchesCard(props: Props) {
           </ul>
         )}
       </div>
-      <div className="flex items-center gap-2 border-t border-[var(--tdash-border)] bg-[var(--tdash-surface-2)]/50 px-4 py-2.5 text-xs text-[var(--tdash-muted)]">
-        <CalendarClock className="size-3.5 shrink-0" aria-hidden />
+      <div className="flex items-start gap-2 border-t border-[var(--tdash-border)] bg-[var(--tdash-surface-2)]/50 px-3 py-2 text-[11px] leading-snug text-[var(--tdash-muted)] sm:items-center sm:px-4 sm:py-2.5 sm:text-xs">
+        <CalendarClock className="mt-0.5 size-3.5 shrink-0 sm:mt-0" aria-hidden />
         <span>Las fechas y canchas se acuerdan con la organización o en el club.</span>
       </div>
     </section>

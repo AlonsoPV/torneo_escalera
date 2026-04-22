@@ -24,15 +24,15 @@ export function SimMyResultsCard(props: Props) {
   return (
     <section
       className={cn(
-        'overflow-hidden rounded-2xl border border-[var(--tdash-border)] bg-[var(--tdash-surface)] shadow-[var(--tdash-shadow-lg)]',
+        'overflow-hidden rounded-xl border border-[var(--tdash-border)] bg-[var(--tdash-surface)] shadow-[var(--tdash-shadow-lg)] sm:rounded-2xl',
         className,
       )}
     >
-      <div className="border-b border-[var(--tdash-border)] bg-gradient-to-br from-[var(--tdash-surface)] to-[var(--tdash-surface-2)] px-5 py-4">
-        <h2 className="text-lg font-bold text-[var(--tdash-text)]">{PLY_COPY.resultsTitle}</h2>
-        <p className="text-sm text-[var(--tdash-muted)]">Demo · {PLY_COPY.resultsSub}</p>
+      <div className="border-b border-[var(--tdash-border)] bg-gradient-to-br from-[var(--tdash-surface)] to-[var(--tdash-surface-2)] px-4 py-3 sm:px-5 sm:py-4">
+        <h2 className="text-base font-bold text-[var(--tdash-text)] sm:text-lg">{PLY_COPY.resultsTitle}</h2>
+        <p className="mt-0.5 text-xs text-[var(--tdash-muted)] sm:text-sm">Demo · {PLY_COPY.resultsSub}</p>
       </div>
-      <div className="max-h-[min(70vh,28rem)] overflow-y-auto p-3 sm:p-4 [scrollbar-width:thin]">
+      <div className="max-h-[min(70vh,28rem)] overflow-y-auto p-2 sm:p-4 [scrollbar-width:thin]">
         {mine.length === 0 ? (
           <p className="py-8 text-center text-sm text-[var(--tdash-muted)]">{PLY_COPY.noResults}</p>
         ) : (
@@ -46,10 +46,10 @@ export function SimMyResultsCard(props: Props) {
               return (
                 <li
                   key={m.id}
-                  className="rounded-xl border border-[var(--tdash-border)] bg-[var(--tdash-surface-2)]/50 p-3"
+                  className="rounded-lg border border-[var(--tdash-border)] bg-[var(--tdash-surface-2)]/50 p-2.5 sm:rounded-xl sm:p-3"
                 >
-                  <p className="font-semibold text-[var(--tdash-text)]">Vs. {rival}</p>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-[var(--tdash-text)] sm:text-base">Vs. {rival}</p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:gap-2">
                     <DashboardStatusBadge variant={won ? 'win' : 'loss'}>
                       {won ? PLY_COPY.win : PLY_COPY.loss}
                     </DashboardStatusBadge>

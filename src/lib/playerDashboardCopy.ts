@@ -1,7 +1,7 @@
 export const PLY_COPY = {
+  welcomeEyebrow: 'Espacio del jugador',
   welcomeTagline: 'Tu torneo está en juego',
-  welcomeSub:
-    'Consulta tu grupo, resultados y próximos partidos',
+  welcomeSub: 'Consulta tu grupo, resultados y próximos partidos.',
   yourGroup: 'Tu grupo',
   groupRivals: 'Rivales del grupo',
   youBadge: 'Tú',

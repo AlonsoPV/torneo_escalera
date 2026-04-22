@@ -19,7 +19,11 @@ export function TournamentSimulationPage() {
       totalGroups={GROUPS}
       totalMatches={totalMatches}
       heroTitle={bundle.tournamentName}
-      heroMeta={`Torneo por grupos · ${PLAYERS_TOTAL} jugadores · Formato round robin`}
+      heroStats={{
+        playerCount: PLAYERS_TOTAL,
+        groupCount: GROUPS,
+        format: 'Round robin',
+      }}
       statusLabel="En curso"
     />
   )

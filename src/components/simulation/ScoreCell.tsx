@@ -27,7 +27,7 @@ export function ScoreCell(props: Props) {
   if (kind === 'diagonal') {
     return (
       <div
-        className="flex h-[3.35rem] w-full items-center justify-center rounded-xl border border-[var(--tdash-border)] bg-[linear-gradient(135deg,var(--tdash-block)_0px,var(--tdash-block)_5px,transparent_5px,transparent_10px)]"
+        className="flex h-[3rem] w-full items-center justify-center rounded-lg border border-[var(--tdash-border)] bg-[linear-gradient(135deg,var(--tdash-block)_0px,var(--tdash-block)_5px,transparent_5px,transparent_10px)] sm:h-[3.35rem] sm:rounded-xl"
         style={{
           backgroundColor: 'var(--tdash-block)',
           backgroundImage: `repeating-linear-gradient(135deg, var(--tdash-block-2) 0px, var(--tdash-block-2) 3px, transparent 3px, transparent 6px)`,
@@ -53,7 +53,7 @@ export function ScoreCell(props: Props) {
   )
 
   const baseClass = cn(
-    'group flex h-[3.35rem] w-[4.75rem] max-w-full flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-center transition-[transform,box-shadow] duration-200 sm:w-[5.25rem]',
+    'group flex h-[3rem] w-[4rem] max-w-full flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 py-0.5 text-center transition-[transform,box-shadow] duration-200 sm:h-[3.35rem] sm:w-[4.75rem] sm:rounded-xl sm:px-1 sm:py-1 md:w-[5.25rem]',
     style,
   )
 

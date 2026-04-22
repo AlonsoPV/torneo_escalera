@@ -3,13 +3,13 @@
  * Scope with .tdash-root on the page shell.
  */
 .tdash-root {
-  --tdash-bg: #f5f7fa;
-  --tdash-bg-alt: #eef2f6;
-  --tdash-surface: #ffffff;
-  --tdash-surface-2: #f9fbfd;
+  
+ 
+  --tdash-surface: #fcfbfa;
+  --tdash-surface-2: #f7f5f1;
   --tdash-text: #0f172a;
   --tdash-muted: #64748b;
-  --tdash-border: #e2e8f0;
+  --tdash-border: #e4dfd6;
   --tdash-primary: #163b65;
   --tdash-primary-hover: #1e4d7a;
   --tdash-gold: #cbae73;
@@ -29,8 +29,450 @@
   --tdash-top2-text: #475569;
   --tdash-top3-bg: #f7efe8;
   --tdash-top3-text: #9a6b46;
-  --tdash-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
-  --tdash-shadow-lg: 0 4px 24px rgba(15, 23, 42, 0.07);
+  --tdash-shadow: 0 1px 2px rgba(16, 42, 67, 0.05), 0 1px 3px rgba(16, 42, 67, 0.04);
+  --tdash-shadow-lg: 0 4px 28px rgba(16, 42, 67, 0.065);
+
+  /* Club banner — paleta premium (torneo / demo) */
+  --club-ink: #102a43;
+  --club-ink-soft: #16324f;
+  --club-muted: #6e7a86;
+  --club-green: #1f5a4c;
+  --club-green-mid: #2a6b5c;
+  --club-green-soft: #e8f3ec;
+  --club-gold: #c8a96b;
+  --club-ivory: #fcfbf8;
+  --club-chip-bg: #faf8f4;
+  --club-chip-border: rgba(31, 90, 76, 0.14);
+}
+
+/* —— Tournament club banner (hero torneo) —— */
+.tournament-club-banner {
+  position: relative;
+  border-radius: 1.75rem;
+  border: 1px solid rgba(16, 42, 67, 0.07);
+  background: linear-gradient(168deg, #ffffff 0%, #fafafa 42%, #f4f5f6 100%);
+  box-shadow:
+    0 1px 2px rgba(16, 42, 67, 0.04),
+    0 10px 40px -8px rgba(16, 42, 67, 0.08);
+  transition:
+    box-shadow 0.4s ease,
+    border-color 0.35s ease,
+    transform 0.35s ease;
+}
+
+@media (min-width: 640px) {
+  .tournament-club-banner {
+    border-radius: 1.85rem;
+  }
+}
+
+.tournament-club-banner:hover {
+  border-color: rgba(16, 42, 67, 0.1);
+  box-shadow:
+    0 1px 2px rgba(16, 42, 67, 0.05),
+    0 16px 52px -10px rgba(16, 42, 67, 0.11);
+}
+
+.tournament-club-banner__radial {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 125% 80% at 8% -12%, rgba(31, 90, 76, 0.055), transparent 58%);
+}
+
+.tournament-club-banner__accent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  z-index: 2;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(180deg, var(--club-green) 0%, var(--club-green-mid) 48%, #143d35 100%);
+  opacity: 0.94;
+}
+
+@media (min-width: 640px) {
+  .tournament-club-banner__accent {
+    width: 4px;
+  }
+}
+
+.tournament-club-banner__inner {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.25rem;
+  padding: 1.5rem 1.35rem 1.5rem 1.25rem;
+  padding-left: calc(0.75rem + 3px);
+}
+
+@media (min-width: 640px) {
+  .tournament-club-banner__inner {
+    flex-direction: row;
+    gap: 1.75rem;
+    padding: 2rem 2rem 2rem 1.5rem;
+    padding-left: calc(1.1rem + 4px);
+  }
+}
+
+@media (min-width: 1024px) {
+  .tournament-club-banner__inner {
+    gap: 2.25rem;
+    padding: 2.35rem 2.5rem 2.35rem 1.65rem;
+    padding-left: calc(1.25rem + 4px);
+  }
+}
+
+.tournament-club-banner__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tournament-club-banner__icon-inner {
+  display: flex;
+  width: 3.75rem;
+  height: 3.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1.1rem;
+  background: linear-gradient(145deg, #1a4d42 0%, var(--club-green) 42%, #163d36 100%);
+  box-shadow:
+    0 4px 14px rgba(22, 50, 45, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset,
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+}
+
+@media (min-width: 640px) {
+  .tournament-club-banner__icon-inner {
+    width: 4.5rem;
+    height: 4.5rem;
+    border-radius: 1.2rem;
+  }
+}
+
+.tournament-club-banner__content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+@media (min-width: 640px) {
+  .tournament-club-banner__content {
+    gap: 0.75rem;
+    padding-top: 0.15rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .tournament-club-banner__content {
+    gap: 0.85rem;
+  }
+}
+
+.tournament-club-banner__eyebrow {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--club-green);
+}
+
+@media (min-width: 640px) {
+  .tournament-club-banner__eyebrow {
+    font-size: 0.6875rem;
+    letter-spacing: 0.22em;
+  }
+}
+
+.tournament-club-banner__title {
+  margin: 0;
+  font-size: 1.625rem;
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  color: var(--club-ink);
+  text-wrap: balance;
+}
+
+@media (min-width: 640px) {
+  .tournament-club-banner__title {
+    font-size: 2.125rem;
+    line-height: 1.1;
+  }
+}
+
+@media (min-width: 1024px) {
+  .tournament-club-banner__title {
+    font-size: 2.5rem;
+    letter-spacing: -0.035em;
+  }
+}
+
+.tournament-club-banner__chips {
+  margin: 0.15rem 0 0;
+}
+
+.tournament-club-banner__status-row {
+  margin-top: 0.15rem;
+}
+
+.club-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 9999px;
+  border: 1px solid var(--club-chip-border);
+  background: linear-gradient(180deg, #fdfcfa 0%, var(--club-chip-bg) 100%);
+  padding: 0.4rem 0.85rem 0.45rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--club-ink-soft);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85) inset;
+}
+
+@media (min-width: 640px) {
+  .club-chip {
+    padding: 0.45rem 1rem 0.5rem;
+    font-size: 0.8125rem;
+  }
+}
+
+.club-chip__dot {
+  flex-shrink: 0;
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 9999px;
+  background: rgba(31, 90, 76, 0.45);
+  box-shadow: 0 0 0 1px rgba(31, 90, 76, 0.12);
+}
+
+.club-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: fit-content;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.club-status--active {
+  padding: 0.35rem 0.85rem 0.4rem 0.65rem;
+  color: var(--club-green);
+  background: var(--club-green-soft);
+  border: 1px solid rgba(31, 90, 76, 0.12);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.65) inset;
+}
+
+@media (min-width: 640px) {
+  .club-status--active {
+    font-size: 0.6875rem;
+    padding: 0.4rem 1rem 0.45rem 0.7rem;
+  }
+}
+
+.club-status__pulse {
+  flex-shrink: 0;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 9999px;
+  background: var(--club-green);
+  box-shadow: 0 0 0 2px rgba(31, 90, 76, 0.2);
+}
+
+.tournament-club-banner__description {
+  margin: 0.35rem 0 0;
+  max-width: 38rem;
+  font-size: 0.8125rem;
+  line-height: 1.65;
+  color: var(--club-muted);
+  text-wrap: pretty;
+}
+
+@media (min-width: 640px) {
+  .tournament-club-banner__description {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.7;
+  }
+}
+
+.tournament-club-banner__description--meta {
+  color: var(--club-muted);
+  font-size: 0.8125rem;
+}
+
+@media (min-width: 640px) {
+  .tournament-club-banner__description--meta {
+    font-size: 0.9375rem;
+  }
+}
+
+/* —— Welcome hero (jugador): misma piel club, jerarquía editorial —— */
+.tournament-club-banner--welcome .tournament-club-banner__content {
+  gap: 0.45rem;
+}
+
+@media (min-width: 640px) {
+  .tournament-club-banner--welcome .tournament-club-banner__content {
+    gap: 0.55rem;
+  }
+}
+
+.tournament-club-banner__greeting {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--club-muted);
+  text-wrap: pretty;
+}
+
+@media (min-width: 640px) {
+  .tournament-club-banner__greeting {
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+}
+
+.tournament-club-banner__greeting-name {
+  font-weight: 600;
+  color: var(--club-ink-soft);
+}
+
+.tournament-club-banner__greeting-tagline {
+  font-weight: 500;
+  font-size: 0.75rem;
+  color: rgba(31, 90, 76, 0.72);
+  letter-spacing: 0.02em;
+}
+
+@media (min-width: 640px) {
+  .tournament-club-banner__greeting-tagline {
+    font-size: 0.8125rem;
+  }
+}
+
+.tournament-club-banner--welcome .tournament-club-banner__title {
+  margin-top: 0.1rem;
+}
+
+.tournament-club-banner__chips--welcome {
+  margin-top: 0.2rem;
+}
+
+.club-status--finished {
+  padding: 0.35rem 0.85rem 0.4rem;
+  color: #5c6570;
+  background: linear-gradient(180deg, #f6f4f0 0%, #eceae4 100%);
+  border: 1px solid rgba(16, 42, 67, 0.08);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+}
+
+.club-status--draft {
+  padding: 0.35rem 0.85rem 0.4rem;
+  color: var(--club-ink-soft);
+  background: linear-gradient(180deg, #fdfcfa 0%, #f5f2ec 100%);
+  border: 1px solid rgba(16, 42, 67, 0.1);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.75) inset;
+}
+
+@media (min-width: 640px) {
+  .club-status--finished,
+  .club-status--draft {
+    padding: 0.4rem 1rem 0.45rem;
+  }
+}
+
+.dark .tdash-root .tournament-club-banner {
+  border-color: oklch(0.38 0.02 260);
+  background: linear-gradient(168deg, oklch(0.24 0.02 260) 0%, oklch(0.21 0.02 260) 100%);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.25),
+    0 12px 40px -8px rgba(0, 0, 0, 0.35);
+}
+
+.dark .tdash-root .tournament-club-banner:hover {
+  border-color: oklch(0.42 0.02 260);
+}
+
+.dark .tdash-root .tournament-club-banner__radial {
+  background: radial-gradient(ellipse 125% 80% at 8% -12%, rgba(80, 180, 140, 0.1), transparent 58%);
+}
+
+.dark .tdash-root .tournament-club-banner__title {
+  color: oklch(0.95 0.02 260);
+}
+
+.dark .tdash-root .tournament-club-banner__eyebrow {
+  color: oklch(0.72 0.08 165);
+}
+
+.dark .tdash-root .tournament-club-banner__description,
+.dark .tdash-root .tournament-club-banner__description--meta {
+  color: oklch(0.72 0.02 260);
+}
+
+.dark .tdash-root .tournament-club-banner__greeting {
+  color: oklch(0.7 0.02 260);
+}
+
+.dark .tdash-root .tournament-club-banner__greeting-name {
+  color: oklch(0.92 0.02 260);
+}
+
+.dark .tdash-root .tournament-club-banner__greeting-tagline {
+  color: oklch(0.72 0.08 165);
+}
+
+.dark .tdash-root .club-status--finished {
+  color: oklch(0.78 0.02 260);
+  background: oklch(0.26 0.02 260);
+  border-color: oklch(0.38 0.02 260);
+  box-shadow: none;
+}
+
+.dark .tdash-root .club-status--draft {
+  color: oklch(0.85 0.02 260);
+  background: oklch(0.25 0.02 260);
+  border-color: oklch(0.36 0.02 260);
+  box-shadow: none;
+}
+
+.dark .tdash-root .club-chip {
+  background: oklch(0.26 0.02 260);
+  border-color: oklch(0.38 0.02 260);
+  color: oklch(0.9 0.02 260);
+  box-shadow: none;
+}
+
+.dark .tdash-root .club-chip__dot {
+  background: oklch(0.65 0.1 165);
+  box-shadow: none;
+}
+
+.dark .tdash-root .club-status--active {
+  background: oklch(0.28 0.05 165);
+  border-color: oklch(0.4 0.06 165);
+  color: oklch(0.82 0.1 165);
+}
+
+.dark .tdash-root .club-status__pulse {
+  background: oklch(0.72 0.12 165);
+  box-shadow: 0 0 0 2px oklch(0.45 0.08 165);
+}
+
+.dark .tdash-root .tournament-club-banner__icon-inner {
+  background: linear-gradient(145deg, oklch(0.32 0.06 165) 0%, oklch(0.28 0.05 165) 100%);
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset;
 }
 
 .dark .tdash-root {

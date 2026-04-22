@@ -2,6 +2,9 @@
 export const TDASH_COPY = {
   heroTitle: 'Mega Varonil 2026',
   heroMeta: 'Torneo por grupos · 90 jugadores · Formato round robin',
+  heroEyebrow: 'Panel oficial del torneo',
+  heroDescriptionClub:
+    'Consulta resultados por grupo, marcadores automáticos y clasificación en tiempo real desde una experiencia clara y profesional.',
   status: 'En curso',
   stats: {
     players: 'Jugadores',

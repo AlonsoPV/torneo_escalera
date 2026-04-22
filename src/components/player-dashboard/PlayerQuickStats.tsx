@@ -13,9 +13,9 @@ export function PlayerQuickStats(props: Props) {
   const { standing, className } = props
   if (!standing) {
     return (
-      <div
+        <div
         className={cn(
-          'grid grid-cols-2 gap-3 md:grid-cols-4',
+          'grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4 md:gap-4',
           className,
         )}
       >
@@ -28,7 +28,7 @@ export function PlayerQuickStats(props: Props) {
   }
 
   return (
-    <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-4', className)}>
+    <div className={cn('grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4 md:gap-4', className)}>
       <MetricCard
         label="Posición"
         value={standing.position}

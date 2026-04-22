@@ -20,30 +20,30 @@ export function PlayerGroupCard(props: Props) {
   return (
     <section
       className={cn(
-        'rounded-2xl border border-[var(--tdash-border)] bg-[var(--tdash-surface)] shadow-[var(--tdash-shadow-lg)]',
+        'rounded-xl border border-[var(--tdash-border)] bg-[var(--tdash-surface)] shadow-[var(--tdash-shadow-lg)] sm:rounded-2xl',
         className,
       )}
     >
-      <div className="border-b border-[var(--tdash-border)] bg-gradient-to-br from-[var(--tdash-surface)] to-[var(--tdash-surface-2)] px-5 py-4">
+      <div className="border-b border-[var(--tdash-border)] bg-gradient-to-br from-[var(--tdash-surface)] to-[var(--tdash-surface-2)] px-4 py-3 sm:px-5 sm:py-4">
         <div className="flex items-center gap-2">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-[var(--tdash-primary)]/10 text-[var(--tdash-primary)]">
-            <Users className="size-4" aria-hidden />
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--tdash-primary)]/10 text-[var(--tdash-primary)] sm:size-9 sm:rounded-xl">
+            <Users className="size-3.5 sm:size-4" aria-hidden />
           </div>
-          <div>
-            <h2 className="text-base font-bold text-[var(--tdash-text)]">{PLY_COPY.yourGroup}</h2>
-            <p className="text-sm text-[var(--tdash-primary)]">{groupName}</p>
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-[var(--tdash-text)] sm:text-base">{PLY_COPY.yourGroup}</h2>
+            <p className="truncate text-xs text-[var(--tdash-primary)] sm:text-sm">{groupName}</p>
           </div>
         </div>
-        <p className="mt-1 text-xs font-medium text-[var(--tdash-muted)]">{PLY_COPY.groupRivals}</p>
+        <p className="mt-1 text-[11px] font-medium text-[var(--tdash-muted)] sm:text-xs">{PLY_COPY.groupRivals}</p>
       </div>
-      <ul className="divide-y divide-[var(--tdash-border)] p-2">
+      <ul className="divide-y divide-[var(--tdash-border)] p-1.5 sm:p-2">
         {ordered.map((p) => {
           const isYou = p.user_id === currentUserId
           return (
             <li
               key={p.id}
               className={cn(
-                'flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 transition-colors',
+                'flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 transition-colors sm:rounded-xl sm:px-3 sm:py-2.5',
                 isYou
                   ? 'bg-[var(--tdash-top1-bg)] ring-1 ring-[var(--tdash-gold)]/25'
                   : 'hover:bg-[var(--tdash-surface-2)]',

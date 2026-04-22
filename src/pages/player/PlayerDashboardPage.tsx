@@ -115,16 +115,16 @@ export function PlayerDashboardPage() {
 
   if (!userId) {
     return (
-      <div className="tdash-root min-h-[40vh] space-y-4 p-4">
-        <Skeleton className="h-32 w-full max-w-3xl rounded-2xl" />
-        <Skeleton className="h-24 w-full max-w-3xl rounded-2xl" />
+      <div className="tdash-root min-h-[40vh] space-y-3 px-0 py-4 sm:space-y-4">
+        <Skeleton className="h-28 w-full max-w-3xl rounded-xl sm:h-32 sm:rounded-2xl" />
+        <Skeleton className="h-20 w-full max-w-3xl rounded-xl sm:h-24 sm:rounded-2xl" />
       </div>
     )
   }
 
   return (
     <div className="tdash-root min-h-screen bg-[var(--tdash-bg)]">
-      <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 md:px-6 md:py-8">
+      <div className="mx-auto w-full max-w-7xl space-y-4 px-0 py-4 sm:space-y-5 sm:py-5 md:space-y-6 md:py-8">
         <PlayerWelcomeHero
           firstName={firstNameFromProfile(profile?.full_name)}
           tournamentName={demo.tournamentName}
@@ -136,12 +136,12 @@ export function PlayerDashboardPage() {
         <PlayerQuickStats standing={standing} />
         <PlayerProgressCard played={playedCount} totalExpected={totalPerPlayer} />
 
-        <section className="space-y-2" aria-label="Grupo completo">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--tdash-muted)]">
+        <section className="space-y-1.5 sm:space-y-2" aria-label="Grupo completo">
+          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-[var(--tdash-muted)] sm:text-sm">
             Tu grupo · {group.name} · demostración
           </h2>
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-            <div className="min-w-0 xl:col-span-8">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-12">
+            <div className="min-w-0 lg:col-span-8">
               <ResultsMatrixCard
                 playerCount={playersForUi.length}
                 matchCount={playedMatchesCount}
@@ -150,20 +150,20 @@ export function PlayerDashboardPage() {
                 standings={groupStandingForMatrix}
               />
             </div>
-            <div className="min-w-0 xl:col-span-4">
-              <div className="xl:sticky xl:top-6">
+            <div className="min-w-0 lg:col-span-4">
+              <div className="lg:sticky lg:top-4 xl:top-6">
                 <GroupRankingCard rows={groupStandingForMatrix} fullGroup />
               </div>
             </div>
           </div>
         </section>
 
-        <section className="space-y-2" aria-label="Tu actividad">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--tdash-muted)]">
+        <section className="space-y-1.5 sm:space-y-2" aria-label="Tu actividad">
+          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-[var(--tdash-muted)] sm:text-sm">
             Tu actividad (demo)
           </h2>
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-            <div className="space-y-6 xl:col-span-8">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-12">
+            <div className="space-y-4 sm:space-y-6 lg:col-span-8">
               <UpcomingMatchesCard
                 groupName={group.name}
                 matches={[]}
@@ -179,7 +179,7 @@ export function PlayerDashboardPage() {
                 players={playersForUi}
               />
             </div>
-            <div className="space-y-6 xl:col-span-4">
+            <div className="space-y-4 sm:space-y-6 lg:col-span-4">
               <PlayerGroupCard
                 groupName={group.name}
                 players={groupPlayersUi}

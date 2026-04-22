@@ -6,7 +6,7 @@ export function AppShell() {
   return (
     <div className="flex min-h-svh flex-col bg-background">
       <AppHeader />
-      <main className="mx-auto w-full max-w-7xl flex-1 px-3 py-4">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-3 py-3 sm:px-4 sm:py-4 md:px-6">
         <Outlet />
       </main>
     </div>

@@ -14,7 +14,7 @@ export function TournamentTopStats(props: Props) {
   const { players, groups, matches, formatLabel = TDASH_COPY.stats.formatValue } = props
 
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+    <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4 md:gap-4">
       <MetricCard label={TDASH_COPY.stats.players} value={players} icon={<Users className="size-4" />} />
       <MetricCard label={TDASH_COPY.stats.groups} value={groups} icon={<Layers className="size-4" />} />
       <MetricCard
@@ -26,7 +26,6 @@ export function TournamentTopStats(props: Props) {
         label={TDASH_COPY.stats.format}
         value={formatLabel}
         icon={<Grid3x3 className="size-4" />}
-        className="col-span-2 md:col-span-1"
       />
     </div>
   )

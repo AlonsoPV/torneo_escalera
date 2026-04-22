@@ -1,5 +1,6 @@
 import { Sparkles } from 'lucide-react'
 
+import { ClubChip, ClubStatusPill, type ClubStatusVariant } from '@/components/tournament-dashboard/ClubBannerPrimitives'
 import { PLY_COPY } from '@/lib/playerDashboardCopy'
 import { cn } from '@/lib/utils'
 import type { TournamentStatus } from '@/types/database'
@@ -8,7 +9,7 @@ type Props = {
   firstName: string
   /** Si no se pasa, se usa un título genérico de panel. */
   tournamentName?: string
-  /** Si no se pasa, no se muestra la fila grupo · estado. */
+  /** Si no se pasa, no se muestra el chip de grupo. */
   groupName?: string
   tournamentStatus?: TournamentStatus
   /** Texto bajo el título; por defecto el copy de bienvenida. */
@@ -16,17 +17,14 @@ type Props = {
   className?: string
 }
 
-function statusPill(t: TournamentStatus) {
+function statusVariant(t: TournamentStatus): { variant: ClubStatusVariant; label: string } {
   switch (t) {
     case 'active':
-      return { label: 'En curso', className: 'bg-[var(--tdash-primary)] text-white' }
+      return { variant: 'active', label: 'En curso' }
     case 'finished':
-      return { label: 'Finalizado', className: 'bg-[var(--tdash-surface-2)] text-[var(--tdash-muted)] ring-1 ring-[var(--tdash-border)]' }
+      return { variant: 'finished', label: 'Finalizado' }
     default:
-      return {
-        label: 'Borrador',
-        className: 'border border-[var(--tdash-border)] bg-[var(--tdash-surface-2)] text-[var(--tdash-text)]',
-      }
+      return { variant: 'draft', label: 'Borrador' }
   }
 }
 
@@ -39,53 +37,57 @@ export function PlayerWelcomeHero(props: Props) {
     subline = PLY_COPY.welcomeSub,
     className,
   } = props
-  const pill = statusPill(tournamentStatus)
-  const showGroupRow = groupName != null && groupName.length > 0
+  const status = statusVariant(tournamentStatus)
+  const showGroupChip = groupName != null && groupName.length > 0
 
   return (
     <header
       className={cn(
-        'overflow-hidden rounded-2xl border border-[var(--tdash-border)] bg-gradient-to-br from-[var(--tdash-surface)] via-[var(--tdash-surface)] to-[#f0f4fa] p-6 shadow-[var(--tdash-shadow-lg)] md:p-8',
+        'tournament-club-banner tournament-club-banner--welcome group relative overflow-hidden',
         className,
       )}
     >
-      <div className="flex min-w-0 gap-4">
-        <div
-          className="flex size-14 shrink-0 items-center justify-center rounded-2xl text-white shadow-md md:size-16"
-          style={{
-            background: 'linear-gradient(135deg, var(--tdash-primary) 0%, var(--tdash-primary-hover) 100%)',
-          }}
-        >
-          <Sparkles className="size-7 md:size-8" aria-hidden />
+      <div className="tournament-club-banner__radial" aria-hidden />
+      <div className="tournament-club-banner__accent" aria-hidden />
+
+      <div className="tournament-club-banner__inner">
+        <div className="tournament-club-banner__icon shrink-0">
+          <div className="tournament-club-banner__icon-inner">
+            <Sparkles
+              className="size-[1.35rem] text-[#faf9f6] drop-shadow-[0_1px_1px_rgba(0,0,0,0.15)] sm:size-7"
+              strokeWidth={1.75}
+              aria-hidden
+            />
+          </div>
         </div>
-        <div className="min-w-0 flex-1 space-y-2">
-          <p className="text-sm text-[var(--tdash-muted)]">
+
+        <div className="tournament-club-banner__content min-w-0">
+          <span className="tournament-club-banner__eyebrow">{PLY_COPY.welcomeEyebrow}</span>
+
+          <p className="tournament-club-banner__greeting">
             Hola,{' '}
-            <span className="font-semibold text-[var(--tdash-text)]">{firstName}</span>
-            <span className="ml-1.5 text-xs font-medium text-[var(--tdash-gold)]">
-              — {PLY_COPY.welcomeTagline}
-            </span>
+            <span className="tournament-club-banner__greeting-name">{firstName}</span>
+            <span className="tournament-club-banner__greeting-tagline"> — {PLY_COPY.welcomeTagline}</span>
           </p>
-          <h1 className="text-balance text-2xl font-bold tracking-tight text-[var(--tdash-text)] md:text-3xl">
-            {tournamentName}
-          </h1>
-          {showGroupRow ? (
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="font-semibold text-[var(--tdash-text)]">{groupName}</span>
-              <span className="text-[var(--tdash-border)]">·</span>
-              <span
-                className={cn(
-                  'rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide',
-                  pill.className,
-                )}
-              >
-                {pill.label}
-              </span>
-            </div>
+
+          <h1 className="tournament-club-banner__title">{tournamentName}</h1>
+
+          {showGroupChip ? (
+            <ul
+              className="tournament-club-banner__chips tournament-club-banner__chips--welcome flex list-none flex-wrap gap-2 p-0 sm:gap-2.5"
+              aria-label="Tu grupo"
+            >
+              <li>
+                <ClubChip>{groupName}</ClubChip>
+              </li>
+            </ul>
           ) : null}
-          <p className="max-w-2xl text-sm leading-relaxed text-[var(--tdash-muted)]">
-            {subline}
-          </p>
+
+          <div className="tournament-club-banner__status-row">
+            <ClubStatusPill variant={status.variant}>{status.label}</ClubStatusPill>
+          </div>
+
+          <p className="tournament-club-banner__description">{subline}</p>
         </div>
       </div>
     </header>
