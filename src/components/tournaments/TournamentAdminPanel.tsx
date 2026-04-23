@@ -18,8 +18,9 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
+import { GroupMatchScheduleList } from '@/components/tournaments/GroupMatchScheduleList'
 import { addGroupPlayer, createGroup, listGroupPlayers } from '@/services/groups'
-import { generateRoundRobinMatches } from '@/services/matches'
+import { generateRoundRobinMatches, type GenerateRrMode } from '@/services/matches'
 import { listProfilesForAdmin } from '@/services/profiles'
 import {
   getTournamentRules,
@@ -33,6 +34,8 @@ const rulesSchema = z.object({
   set_points: z.coerce.number().int().min(1),
   points_per_win: z.coerce.number().int().min(0),
   points_per_loss: z.coerce.number().int().min(0),
+  points_default_win: z.coerce.number().int().min(0),
+  points_default_loss: z.coerce.number().int().min(-10),
   allow_player_score_entry: z.boolean(),
 })
 
@@ -69,6 +72,8 @@ export function TournamentAdminPanel(props: {
           set_points: rulesQ.data.set_points,
           points_per_win: rulesQ.data.points_per_win,
           points_per_loss: rulesQ.data.points_per_loss,
+          points_default_win: rulesQ.data.points_default_win,
+          points_default_loss: rulesQ.data.points_default_loss,
           allow_player_score_entry: rulesQ.data.allow_player_score_entry,
         }
       : {
@@ -76,6 +81,8 @@ export function TournamentAdminPanel(props: {
           set_points: 6,
           points_per_win: 3,
           points_per_loss: 0,
+          points_default_win: 2,
+          points_default_loss: -1,
           allow_player_score_entry: true,
         },
   })
@@ -119,6 +126,8 @@ export function TournamentAdminPanel(props: {
         set_points: values.set_points,
         points_per_win: values.points_per_win,
         points_per_loss: values.points_per_loss,
+        points_default_win: values.points_default_win,
+        points_default_loss: values.points_default_loss,
         allow_player_score_entry: values.allow_player_score_entry,
       })
       toast.success('Reglas actualizadas')
@@ -160,7 +169,7 @@ export function TournamentAdminPanel(props: {
     }
   })
 
-  const onGenerate = async () => {
+  const onGenerate = async (mode: GenerateRrMode) => {
     if (!selectedGroupId) return
     const players = playersQ.data ?? []
     try {
@@ -169,8 +178,11 @@ export function TournamentAdminPanel(props: {
         groupId: selectedGroupId,
         players,
         createdBy: currentUserId,
+        mode,
       })
-      toast.success('Cruces generados')
+      toast.success(
+        mode === 'reset' ? 'Cruces regenerados (se borraron los anteriores)' : 'Cruces: solo pares faltantes',
+      )
       await invalidateAll()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al generar cruces')
@@ -246,6 +258,20 @@ export function TournamentAdminPanel(props: {
                   <Input
                     type="number"
                     {...rulesForm.register('points_per_loss', { valueAsNumber: true })}
+                  />
+                </div>
+                <div>
+                  <Label>Pts. W/O (ganador)</Label>
+                  <Input
+                    type="number"
+                    {...rulesForm.register('points_default_win', { valueAsNumber: true })}
+                  />
+                </div>
+                <div>
+                  <Label>Pts. W/O (perdedor)</Label>
+                  <Input
+                    type="number"
+                    {...rulesForm.register('points_default_loss', { valueAsNumber: true })}
                   />
                 </div>
               </div>
@@ -367,9 +393,28 @@ export function TournamentAdminPanel(props: {
             )}
           </div>
 
-          <Button type="button" variant="secondary" onClick={onGenerate}>
-            Generar / regenerar cruces
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="secondary" onClick={() => onGenerate('fill')}>
+              Generar faltantes
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onGenerate('reset')}
+            >
+              Regenerar (borra partidos)
+            </Button>
+          </div>
+          {selectedGroupId ? (
+            <div className="mt-6">
+              <p className="mb-2 text-sm font-medium">Agenda (hora de fin para captura)</p>
+              <GroupMatchScheduleList
+                groupId={selectedGroupId}
+                tournamentId={tournamentId}
+                currentUserId={currentUserId}
+              />
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </div>

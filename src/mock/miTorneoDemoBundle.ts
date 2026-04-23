@@ -1,6 +1,6 @@
 /**
  * Grupo demo fijo (5 jugadores) para la pantalla «Mi torneo».
- * Marcadores alineados con la tabla de demostración (Zaiah, Edgar A.P.V., Edgar, Jugador 4–5).
+ * Marcadores alineados con la tabla de demostración (Zaiah, Alonso Vazquez, Edgar, Jugador 4–5).
  */
 import type { GroupPlayer } from '@/types/database'
 import type {
@@ -21,7 +21,7 @@ import type { RankingRow } from '@/utils/ranking'
 
 export const MI_TORNEO_DEMO_GROUP_ID = 'mi-torneo-demo-group'
 
-/** Seed 3: usuario real en Supabase (`display_name` demo: Edgar); 4–5 ficticios. */
+/** Seed 3: usuario real en Supabase (`display_name` demo: nombre corto); 4–5 ficticios. */
 export const MI_TORNEO_DEMO_PLAYER3_ID = '6c0d9322-048c-4426-84d8-1a8312b23edf'
 const P3 = MI_TORNEO_DEMO_PLAYER3_ID
 const P4 = 'a0000004-0000-4000-8000-000000000004'
@@ -32,7 +32,7 @@ const E = DEMO_SIM_USER_EDGAR_ID
 
 export const miTorneoDemoPlayers: SimPlayer[] = [
   { id: Z, full_name: 'Zaiah', seed_order: 1, group_id: MI_TORNEO_DEMO_GROUP_ID },
-  { id: E, full_name: 'Edgar Alonso Pérez Vázquez', seed_order: 2, group_id: MI_TORNEO_DEMO_GROUP_ID },
+  { id: E, full_name: 'Alonso Vazquez', seed_order: 2, group_id: MI_TORNEO_DEMO_GROUP_ID },
   { id: P3, full_name: 'Edgar', seed_order: 3, group_id: MI_TORNEO_DEMO_GROUP_ID },
   { id: P4, full_name: 'Jugador 4', seed_order: 4, group_id: MI_TORNEO_DEMO_GROUP_ID },
   { id: P5, full_name: 'Jugador 5', seed_order: 5, group_id: MI_TORNEO_DEMO_GROUP_ID },
@@ -166,7 +166,7 @@ export function groupStandingToRankingRow(row: GroupStandingRow): RankingRow {
   }
 }
 
-/** Fila del usuario autenticado (Zaiah / Edgar A.P.V. / Edgar seed 3) o, si no coincide, la de Zaiah como ejemplo. */
+/** Fila del usuario autenticado (Zaiah / Alonso Vazquez / Edgar seed 3) o, si no coincide, la de Zaiah como ejemplo. */
 export function getMiTorneoDemoStandingForUser(authUserId: string | null): GroupStandingRow | null {
   const rows = miTorneoDemoBundle.standingsByGroupId[MI_TORNEO_DEMO_GROUP_ID] ?? []
   if (rows.length === 0) return null

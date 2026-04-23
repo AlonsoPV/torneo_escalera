@@ -1,5 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
+import {
+  ClipboardList,
+  Grid3x3,
+  Settings2,
+  Trophy,
+} from 'lucide-react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
@@ -22,6 +28,18 @@ import { computeGroupRanking } from '@/utils/ranking'
 
 import { TournamentMatrixMock } from '@/components/tournaments/TournamentMatrixMock'
 import { cn } from '@/lib/utils'
+
+function statusBadgeClass(status: string) {
+  switch (status) {
+    case 'active':
+      return 'border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200'
+    case 'finished':
+      return 'border-sky-500/40 bg-sky-500/10 text-sky-900 dark:text-sky-100'
+    case 'draft':
+    default:
+      return 'border-amber-500/40 bg-amber-500/10 text-amber-950 dark:text-amber-100'
+  }
+}
 
 export function TournamentDetailPage() {
   const { id } = useParams()
@@ -125,143 +143,262 @@ export function TournamentDetailPage() {
 
   if (tq.isLoading || gq.isLoading) {
     return (
-      <div className="space-y-3">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-40 w-full" />
+      <div className="mx-auto max-w-5xl space-y-6">
+        <div className="space-y-3">
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-10 w-2/3 max-w-md" />
+          <Skeleton className="h-4 w-full max-w-lg" />
+        </div>
+        <Skeleton className="h-11 w-full max-w-xl rounded-lg" />
+        <Skeleton className="h-72 w-full rounded-xl" />
       </div>
     )
   }
 
   if (tq.isError || !tq.data) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>No disponible</CardTitle>
-          <CardDescription>
-            No pudimos cargar este torneo. Puede que no exista o no tengas permisos.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Link className="text-sm font-medium text-primary underline-offset-4 hover:underline" to="/tournaments">
-            Volver a torneos
-          </Link>
-        </CardContent>
-      </Card>
+      <div className="mx-auto max-w-lg">
+        <Card className="border-dashed">
+          <CardHeader>
+            <CardTitle>No disponible</CardTitle>
+            <CardDescription>
+              No pudimos cargar este torneo. Puede que no exista o no tengas permisos.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link
+              className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+              to="/tournaments"
+            >
+              Volver a torneos
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
   const tournament = tq.data
+  const selectedGroup = groups.find((g) => g.id === effectiveGroupId)
+
+  const tabTriggerClass =
+    'gap-2 rounded-none border-0 border-b-2 border-transparent bg-transparent px-3 py-2.5 text-muted-foreground shadow-none data-active:border-primary data-active:bg-transparent data-active:text-foreground data-active:shadow-none sm:px-4'
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-1">
+    <div className="mx-auto max-w-5xl space-y-6 pb-10">
+      <header className="space-y-4 border-b border-border/80 pb-6">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary" className="uppercase">
+          <Badge
+            variant="outline"
+            className={cn('uppercase tracking-wide', statusBadgeClass(tournament.status))}
+          >
             {tournament.status}
           </Badge>
           {tournament.category ? (
-            <Badge variant="outline">{tournament.category}</Badge>
+            <Badge variant="secondary" className="font-normal">
+              {tournament.category}
+            </Badge>
+          ) : null}
+          {tournament.season ? (
+            <span className="text-xs text-muted-foreground">Temporada {tournament.season}</span>
           ) : null}
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight">{tournament.name}</h1>
-        {tournament.description ? (
-          <p className="text-sm text-muted-foreground">{tournament.description}</p>
-        ) : null}
-      </div>
+        <div className="space-y-2">
+          <h1 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+            {tournament.name}
+          </h1>
+          {tournament.description ? (
+            <p className="max-w-3xl text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
+              {tournament.description}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Matriz de resultados, ranking y reglas del formato de juego.
+            </p>
+          )}
+        </div>
+      </header>
 
-      <Tabs defaultValue="vista">
+      <Tabs defaultValue="vista" className="w-full">
         <TabsList
+          variant="line"
           className={cn(
-            'grid w-full',
-            isAdmin ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3',
+            'mb-0 flex h-auto min-h-11 w-full flex-wrap justify-start gap-0 rounded-none border-b border-border bg-transparent p-0',
+            isAdmin ? 'sm:grid sm:grid-cols-4 sm:flex-none' : 'sm:grid sm:grid-cols-3 sm:flex-none',
           )}
         >
-          <TabsTrigger value="vista">Vista</TabsTrigger>
-          <TabsTrigger value="ranking">Ranking</TabsTrigger>
-          <TabsTrigger value="reglas">Reglas</TabsTrigger>
-          {isAdmin ? <TabsTrigger value="admin">Admin</TabsTrigger> : null}
+          <TabsTrigger value="vista" className={tabTriggerClass}>
+            <Grid3x3 className="size-4 shrink-0 opacity-70" aria-hidden />
+            Vista
+          </TabsTrigger>
+          <TabsTrigger value="ranking" className={tabTriggerClass}>
+            <Trophy className="size-4 shrink-0 opacity-70" aria-hidden />
+            Ranking
+          </TabsTrigger>
+          <TabsTrigger value="reglas" className={tabTriggerClass}>
+            <ClipboardList className="size-4 shrink-0 opacity-70" aria-hidden />
+            Reglas
+          </TabsTrigger>
+          {isAdmin ? (
+            <TabsTrigger value="admin" className={tabTriggerClass}>
+              <Settings2 className="size-4 shrink-0 opacity-70" aria-hidden />
+              Admin
+            </TabsTrigger>
+          ) : null}
         </TabsList>
 
-        <TabsContent value="vista" className="space-y-4 pt-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Grupos</CardTitle>
-              <CardDescription>Un grupo a la vez · desplaza horizontal la matriz</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <GroupVerticalPicker
-                groups={groups}
-                selectedId={effectiveGroupId}
-                onSelect={(gid) => setPickedGroupId(gid)}
-              />
-
-              {groups.length === 0 ? (
-                <TournamentMatrixMock />
-              ) : pq.isLoading || mq.isLoading ? (
-                <Skeleton className="h-56 w-full" />
-              ) : (
-                <GroupMatrix players={players} matches={matches} onOpenMatch={onOpenMatch} />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="ranking" className="pt-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Ranking del grupo</CardTitle>
+        <TabsContent value="vista" className="mt-6 space-y-4 outline-none">
+          <Card className="overflow-hidden shadow-sm">
+            <CardHeader className="border-b border-border/60 bg-muted/20 pb-4">
+              <CardTitle className="text-lg">Matriz del grupo</CardTitle>
               <CardDescription>
-                Orden: puntos, PG, diferencia de sets, diferencia de games.
+                Elige un grupo y toca una celda para ver o registrar el marcador. Desplaza la tabla
+                en horizontal si hay muchos jugadores.
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <GroupVerticalPicker
-                groups={groups}
-                selectedId={effectiveGroupId}
-                onSelect={(gid) => setPickedGroupId(gid)}
-              />
-              <div className="mt-4 overflow-x-auto">
-                <RankingTable rows={rankingRows} />
+            <CardContent className="space-y-6 p-4 sm:p-6">
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+                <aside className="lg:w-56 lg:shrink-0">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Grupo
+                  </p>
+                  <GroupVerticalPicker
+                    groups={groups}
+                    selectedId={effectiveGroupId}
+                    onSelect={(gid) => setPickedGroupId(gid)}
+                    layout="chips"
+                    responsive
+                  />
+                  {selectedGroup ? (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Mostrando <span className="font-medium text-foreground">{selectedGroup.name}</span>
+                      {selectedGroup.max_players != null ? (
+                        <> · hasta {selectedGroup.max_players} jugadores</>
+                      ) : null}
+                    </p>
+                  ) : null}
+                </aside>
+                <div className="min-w-0 flex-1">
+                  {groups.length === 0 ? (
+                    <TournamentMatrixMock />
+                  ) : pq.isLoading || mq.isLoading ? (
+                    <Skeleton className="h-64 w-full rounded-xl" />
+                  ) : (
+                    <div className="rounded-xl border bg-card/30 p-1 sm:p-2">
+                      <GroupMatrix players={players} matches={matches} onOpenMatch={onOpenMatch} />
+                    </div>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="reglas" className="pt-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Reglas del torneo</CardTitle>
+        <TabsContent value="ranking" className="mt-6 outline-none">
+          <Card className="overflow-hidden shadow-sm">
+            <CardHeader className="border-b border-border/60 bg-muted/20 pb-4">
+              <CardTitle className="text-lg">Clasificación</CardTitle>
+              <CardDescription>
+                Orden: puntos, partidos ganados, diferencia de sets y de games. Cambia de grupo con
+                el mismo selector que en Vista.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <CardContent className="space-y-6 p-4 sm:p-6">
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+                <aside className="lg:w-56 lg:shrink-0">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Grupo
+                  </p>
+                  <GroupVerticalPicker
+                    groups={groups}
+                    selectedId={effectiveGroupId}
+                    onSelect={(gid) => setPickedGroupId(gid)}
+                    layout="chips"
+                    responsive
+                  />
+                </aside>
+                <div className="min-w-0 flex-1">
+                  <RankingTable rows={rankingRows} />
+                  <p className="mt-3 text-center text-[11px] text-muted-foreground sm:text-left">
+                    PJ partidos jugados · PG ganados · PP perdidos · SF/SC sets · JF/JC games
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="reglas" className="mt-6 outline-none">
+          <Card className="overflow-hidden shadow-sm">
+            <CardHeader className="border-b border-border/60 bg-muted/20 pb-4">
+              <CardTitle className="text-lg">Reglas del torneo</CardTitle>
+              <CardDescription>
+                Parámetros usados para validar marcadores y calcular puntos en el ranking.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6">
               {rq.isLoading ? (
-                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-40 w-full rounded-xl" />
               ) : rq.data ? (
-                <ul className="space-y-1">
-                  <li>Mejor de: {rq.data.best_of_sets} sets</li>
-                  <li>Games por set: {rq.data.set_points}</li>
-                  <li>Tiebreak (MVP simplificado): {rq.data.tiebreak_enabled ? 'sí' : 'no'}</li>
-                  <li>Puntos por victoria: {rq.data.points_per_win}</li>
-                  <li>Puntos por derrota: {rq.data.points_per_loss}</li>
-                  <li>
-                    Jugadores capturan marcador:{' '}
-                    {rq.data.allow_player_score_entry ? 'sí' : 'no'}
-                  </li>
-                </ul>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <RuleTile
+                    label="Formato"
+                    value={`Mejor de ${rq.data.best_of_sets} sets`}
+                    hint="Número máximo de sets por partido"
+                  />
+                  <RuleTile
+                    label="Games por set"
+                    value={String(rq.data.set_points)}
+                    hint="Mínimo de games para ganar un set (MVP)"
+                  />
+                  <RuleTile
+                    label="Tiebreak"
+                    value={rq.data.tiebreak_enabled ? 'Activado' : 'Desactivado'}
+                    hint="Desempate entre sets (simplificado en MVP)"
+                  />
+                  <RuleTile
+                    label="Puntos · victoria"
+                    value={`+${rq.data.points_per_win}`}
+                    hint="Por partido normal contabilizado en ranking"
+                  />
+                  <RuleTile
+                    label="Puntos · derrota"
+                    value={String(rq.data.points_per_loss)}
+                    hint="Suma al perder un partido normal"
+                  />
+                  <RuleTile
+                    label="Puntos · W/O ganador"
+                    value={`+${rq.data.points_default_win ?? 2}`}
+                    hint="Victoria por no presentación o default"
+                  />
+                  <RuleTile
+                    label="Puntos · W/O perdedor"
+                    value={String(rq.data.points_default_loss ?? -1)}
+                    hint="Derrota por default"
+                  />
+                  <RuleTile
+                    label="Captura por jugadores"
+                    value={rq.data.allow_player_score_entry ? 'Permitida' : 'No'}
+                    hint="Si está permitida, tras la hora de fin agendada pueden enviar resultado"
+                  />
+                </div>
               ) : (
-                <p>No hay reglas cargadas.</p>
+                <p className="text-sm text-muted-foreground">No hay reglas cargadas.</p>
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
         {isAdmin ? (
-          <TabsContent value="admin" className="pt-2">
-            <TournamentAdminPanel
-              tournamentId={tournamentId}
-              groups={groups}
-              currentUserId={userId}
-              onRefresh={refreshGroup}
-            />
+          <TabsContent value="admin" className="mt-6 outline-none">
+            <div className="rounded-xl border border-dashed border-primary/25 bg-primary/5 p-1 sm:p-2">
+              <TournamentAdminPanel
+                tournamentId={tournamentId}
+                groups={groups}
+                currentUserId={userId}
+                onRefresh={refreshGroup}
+              />
+            </div>
           </TabsContent>
         ) : null}
       </Tabs>
@@ -276,6 +413,19 @@ export function TournamentDetailPage() {
         isAdmin={isAdmin}
         onSave={onSaveScore}
       />
+    </div>
+  )
+}
+
+function RuleTile(props: { label: string; value: string; hint: string }) {
+  const { label, value, hint } = props
+  return (
+    <div className="rounded-xl border border-border/80 bg-card p-4 shadow-sm transition-colors hover:border-primary/20 hover:bg-muted/20">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-2 text-xl font-semibold tracking-tight text-foreground">{value}</p>
+      <p className="mt-1.5 text-xs leading-snug text-muted-foreground">{hint}</p>
     </div>
   )
 }

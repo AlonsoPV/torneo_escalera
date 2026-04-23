@@ -23,7 +23,7 @@ const SPOTLIGHT_PLAYERS: Record<string, { id: string; full_name: string }> = {
   'sim-player-1': { id: DEMO_SIM_USER_ZAIAH_ID, full_name: 'Zaiah' },
   'sim-player-2': {
     id: DEMO_SIM_USER_EDGAR_ID,
-    full_name: 'Edgar Alonso Pérez Vázquez',
+    full_name: 'Alonso Vazquez',
   },
 }
 

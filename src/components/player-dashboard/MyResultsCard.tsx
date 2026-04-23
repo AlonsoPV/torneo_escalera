@@ -15,7 +15,10 @@ type Props = {
   matches: MatchRow[]
   playersById: Map<string, GroupPlayer>
   myGroupPlayerId: string
-  rules: Pick<TournamentRules, 'points_per_win' | 'points_per_loss'>
+  rules: Pick<
+    TournamentRules,
+    'points_per_win' | 'points_per_loss' | 'points_default_win' | 'points_default_loss'
+  >
   className?: string
 }
 

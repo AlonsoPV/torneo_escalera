@@ -13,15 +13,20 @@ export function RankingTable(props: { rows: RankingRow[] }) {
 
   if (rows.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">Sin datos de ranking aún.</p>
+      <div className="rounded-xl border border-dashed bg-muted/20 px-6 py-10 text-center">
+        <p className="text-sm font-medium text-foreground">Sin datos de ranking aún</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Aparecerá cuando haya partidos con resultado en este grupo.
+        </p>
+      </div>
     )
   }
 
   return (
-    <div className="rounded-xl border bg-card">
+    <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
       <Table>
         <TableHeader>
-          <TableRow>
+          <TableRow className="bg-muted/40 hover:bg-muted/40">
             <TableHead className="w-10">#</TableHead>
             <TableHead>Jugador</TableHead>
             <TableHead className="text-right">PJ</TableHead>
@@ -36,8 +41,21 @@ export function RankingTable(props: { rows: RankingRow[] }) {
         </TableHeader>
         <TableBody>
           {rows.map((r) => (
-            <TableRow key={r.groupPlayerId}>
-              <TableCell className="font-medium">{r.position}</TableCell>
+            <TableRow
+              key={r.groupPlayerId}
+              className={
+                r.position === 1
+                  ? 'bg-amber-500/5'
+                  : r.position === 2
+                    ? 'bg-zinc-500/5'
+                    : r.position === 3
+                      ? 'bg-orange-700/5'
+                      : undefined
+              }
+            >
+              <TableCell className="font-semibold tabular-nums text-muted-foreground">
+                {r.position}
+              </TableCell>
               <TableCell className="font-medium">{r.displayName}</TableCell>
               <TableCell className="text-right tabular-nums">{r.played}</TableCell>
               <TableCell className="text-right tabular-nums">{r.won}</TableCell>

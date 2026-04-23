@@ -8,7 +8,7 @@ join public.groups g on g.tournament_id = t.id and g.name = 'Grupo A'
 cross join (
   values
     ('6042f4d5-8ceb-4e3b-9f88-674a330fc777'::uuid, 'Zaiah', 1),
-    ('de10029f-061d-48c2-8aeb-cd43f4c437a3'::uuid, 'Edgar Alonso Pérez Vázquez', 2)
+    ('de10029f-061d-48c2-8aeb-cd43f4c437a3'::uuid, 'Alonso Vazquez', 2)
 ) as u(uid, dname, seed)
 inner join public.profiles p on p.id = u.uid
 where t.name = 'Torneo Mega Varonil'

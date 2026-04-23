@@ -1,16 +1,17 @@
-import type { UserRole } from '@/types/database'
+import type { MatchRow, UserRole } from '@/types/database'
+
+import { canPlayerSubmitResult } from '@/lib/matchStatus'
 
 export function isAdminRole(role: UserRole | null | undefined): boolean {
-  return role === 'admin'
+  return role === 'admin' || role === 'super_admin'
 }
 
 export function canEditMatchAsPlayer(params: {
-  status: string
+  match: MatchRow
   isParticipant: boolean
   allowPlayerScoreEntry: boolean
 }): boolean {
-  if (!params.allowPlayerScoreEntry || !params.isParticipant) return false
-  return params.status === 'pending'
+  return canPlayerSubmitResult(params)
 }
 
 export function canEditMatchAsAdmin(isAdmin: boolean): boolean {

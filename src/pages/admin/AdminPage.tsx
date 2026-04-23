@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { getAdminDashboardStats } from '@/services/dashboardAdmin'
 import { adminSetUserRole, listProfilesForAdmin } from '@/services/profiles'
 import { createTournament, listTournaments } from '@/services/tournaments'
 import { useAuthStore } from '@/stores/authStore'
@@ -36,6 +37,10 @@ export function AdminPage() {
 
   const tq = useQuery({ queryKey: ['tournaments'], queryFn: listTournaments })
   const pq = useQuery({ queryKey: ['profiles-admin'], queryFn: listProfilesForAdmin })
+  const statsQ = useQuery({
+    queryKey: ['adminStats'],
+    queryFn: getAdminDashboardStats,
+  })
 
   const form = useForm<CreateForm>({
     resolver: zodResolver(createSchema),
@@ -74,7 +79,7 @@ export function AdminPage() {
           Crear torneos y gestionar roles. Los admins se pueden promover manualmente en SQL
           si lo prefieres:{' '}
           <code className="rounded bg-muted px-1 text-xs">
-            update profiles set role = &apos;admin&apos; where email = &apos;...&apos;;
+            update profiles set role = &apos;admin&apos; or &apos;super_admin&apos; where email = &apos;...&apos;;
           </code>
         </p>
       </div>
@@ -102,6 +107,43 @@ export function AdminPage() {
               Crear torneo
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Resumen operativo</CardTitle>
+          <CardDescription>Contadores globos (MVP) para agendar y dar seguimiento a resultados.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {statsQ.isLoading ? (
+            <Skeleton className="h-16 w-full" />
+          ) : statsQ.data ? (
+            <ul className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+              <li>
+                <span className="text-muted-foreground">Torneos / activos: </span>
+                {statsQ.data.tournamentCount} / {statsQ.data.activeTournamentCount}
+              </li>
+              <li>
+                <span className="text-muted-foreground">Grupos: </span>
+                {statsQ.data.groupCount}
+              </li>
+              <li>
+                <span className="text-muted-foreground">Partidos totales: </span>
+                {statsQ.data.matchCount}
+              </li>
+              <li>
+                <span className="text-muted-foreground">Sin hora de fin: </span>
+                {statsQ.data.matchesWithoutEndTime}
+              </li>
+              <li>
+                <span className="text-muted-foreground">Pend. confirmar (enviado por jugador): </span>
+                {statsQ.data.resultSubmittedCount}
+              </li>
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">No se pudieron cargar métricas.</p>
+          )}
         </CardContent>
       </Card>
 
@@ -169,6 +211,7 @@ export function AdminPage() {
                       <SelectContent>
                         <SelectItem value="player">player</SelectItem>
                         <SelectItem value="admin">admin</SelectItem>
+                        <SelectItem value="super_admin">super_admin</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

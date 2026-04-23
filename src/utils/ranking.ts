@@ -1,4 +1,4 @@
-import type { GroupPlayer, MatchRow, ScoreSet, TournamentRules } from '@/types/database'
+import type { GroupPlayer, MatchResultType, MatchRow, ScoreSet, TournamentRules } from '@/types/database'
 
 import { invertScoreSets, setsWonForA, setsWonForB } from '@/utils/score'
 import { idsEqual } from '@/utils/tournamentInvert'
@@ -40,53 +40,75 @@ function sumGames(sets: ScoreSet[], forA: boolean): number {
   return sets.reduce((acc, s) => acc + (forA ? s.a : s.b), 0)
 }
 
-export function computeGroupRanking(
-  players: GroupPlayer[],
-  matches: MatchRow[],
-  rules: Pick<TournamentRules, 'points_per_win' | 'points_per_loss'>,
-): RankingRow[] {
+type RulesPoints = Pick<
+  TournamentRules,
+  'points_per_win' | 'points_per_loss' | 'points_default_win' | 'points_default_loss'
+>
+
+function isDefaultType(rt: MatchResultType | null | undefined): boolean {
+  return rt === 'default_win_a' || rt === 'default_win_b'
+}
+
+function matchCountsForGroupRanking(m: MatchRow): boolean {
+  if (!m.winner_id || m.status === 'cancelled') return false
+  return m.status === 'result_submitted' || m.status === 'confirmed' || m.status === 'corrected'
+}
+
+export function computeGroupRanking(players: GroupPlayer[], matches: MatchRow[], rules: RulesPoints): RankingRow[] {
   const byId = new Map<string, MutableStats>()
   for (const p of players) {
     byId.set(p.id, emptyStats(p))
   }
 
   for (const m of matches) {
-    if (!m.score_raw || m.score_raw.length === 0 || !m.winner_id) continue
+    if (!m.winner_id) continue
+    if (!matchCountsForGroupRanking(m)) continue
 
-    const sets = m.score_raw
     const aId = m.player_a_id
     const bId = m.player_b_id
     const statsA = byId.get(aId)
     const statsB = byId.get(bId)
     if (!statsA || !statsB) continue
 
+    const isDefault = isDefaultType(m.result_type)
+    if (!isDefault) {
+      if (!m.score_raw || m.score_raw.length === 0) continue
+    }
+
+    const sets: ScoreSet[] = isDefault ? [] : m.score_raw!
+
     statsA.played += 1
     statsB.played += 1
 
-    const aSets = setsWonForA(sets)
-    const bSets = setsWonForB(sets)
-    const aGames = sumGames(sets, true)
-    const bGames = sumGames(sets, false)
+    if (sets.length > 0) {
+      const aSets = setsWonForA(sets)
+      const bSets = setsWonForB(sets)
+      const aGames = sumGames(sets, true)
+      const bGames = sumGames(sets, false)
 
-    statsA.setsFor += aSets
-    statsA.setsAgainst += bSets
-    statsB.setsFor += bSets
-    statsB.setsAgainst += aSets
-    statsA.gamesFor += aGames
-    statsA.gamesAgainst += bGames
-    statsB.gamesFor += bGames
-    statsB.gamesAgainst += aGames
+      statsA.setsFor += aSets
+      statsA.setsAgainst += bSets
+      statsB.setsFor += bSets
+      statsB.setsAgainst += aSets
+      statsA.gamesFor += aGames
+      statsA.gamesAgainst += bGames
+      statsB.gamesFor += bGames
+      statsB.gamesAgainst += aGames
+    }
+
+    const pWin = isDefault ? rules.points_default_win : rules.points_per_win
+    const pLoss = isDefault ? rules.points_default_loss : rules.points_per_loss
 
     if (m.winner_id === aId) {
       statsA.won += 1
       statsB.lost += 1
-      statsA.points += rules.points_per_win
-      statsB.points += rules.points_per_loss
+      statsA.points += pWin
+      statsB.points += pLoss
     } else if (m.winner_id === bId) {
       statsB.won += 1
       statsA.lost += 1
-      statsB.points += rules.points_per_win
-      statsA.points += rules.points_per_loss
+      statsB.points += pWin
+      statsA.points += pLoss
     }
   }
 

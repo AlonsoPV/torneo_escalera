@@ -68,7 +68,15 @@ export function GroupMatrix(props: {
                     !isDiag && match
                       ? perspectiveSetsForCell(row.id, col.id, match)
                       : null
-                  const label = sets && sets.length > 0 ? formatScoreCompact(sets) : null
+                  const isDefault = match
+                    ? match.result_type === 'default_win_a' || match.result_type === 'default_win_b'
+                    : false
+                  const label =
+                    isDefault && !sets?.length
+                      ? 'W/O'
+                      : sets && sets.length > 0
+                        ? formatScoreCompact(sets)
+                        : null
 
                   return (
                     <td key={col.id} className="p-0.5 align-middle">
@@ -84,8 +92,12 @@ export function GroupMatrix(props: {
                               'border-emerald-500/40 bg-emerald-500/10',
                             match?.status === 'corrected' &&
                               'border-amber-500/40 bg-amber-500/10',
-                            match?.status === 'pending' &&
+                            (match?.status === 'pending' || match?.status === 'scheduled') &&
                               'border-dashed border-primary/40 bg-background hover:bg-muted/60',
+                            match?.status === 'result_submitted' &&
+                              'border-sky-500/30 bg-sky-500/5',
+                            match?.status === 'ready_for_result' &&
+                              'border-violet-500/30 bg-violet-500/5',
                             !match && 'border-dashed border-muted-foreground/30 bg-muted/20',
                           )}
                         >

@@ -75,12 +75,38 @@ export async function findGroupPlayerInTournament(
   return null
 }
 
+function mapGroupPlayerError(
+  e: { message: string; code?: string; details?: string; hint?: string },
+): string {
+  const m = e.message
+  if (m.includes('El jugador ya está inscrito') || m.includes('otro grupo')) return m
+  if (m.includes('máximo') || m.includes('máx')) return m
+  if (e.code === '23505') {
+    return 'Ese usuario ya está en el grupo o duplicó la inscripción.'
+  }
+  return m
+}
+
 export async function addGroupPlayer(input: {
   groupId: string
   userId: string
   displayName: string
   seedOrder?: number
 }): Promise<GroupPlayer> {
+  const { data: g, error: gErr } = await supabase
+    .from('groups')
+    .select('id, max_players')
+    .eq('id', input.groupId)
+    .single()
+  if (gErr) throw gErr
+  const current = await listGroupPlayers(input.groupId)
+  const cap = g?.max_players ?? 5
+  if (current.length >= cap) {
+    throw new Error(`El grupo alcanzó el máximo de ${cap} jugadores`)
+  }
+  if (current.some((p) => p.user_id === input.userId)) {
+    throw new Error('Ese usuario ya está en el grupo')
+  }
   const { data, error } = await supabase
     .from('group_players')
     .insert({
@@ -91,7 +117,7 @@ export async function addGroupPlayer(input: {
     })
     .select('*')
     .single()
-  if (error) throw error
+  if (error) throw new Error(mapGroupPlayerError(error))
   return data as GroupPlayer
 }
 

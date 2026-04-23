@@ -9,6 +9,10 @@ type Props = {
   matches: SimMatch[]
   players: SimPlayer[]
   className?: string
+  /** Por defecto "Demo" */
+  listSubtitle?: string
+  /** Puntos a mostrar (p.ej. reglas reales). Por defecto +3 / +1 como la demo. */
+  getPointsText?: (m: SimMatch, won: boolean) => string
 }
 
 function opponentName(match: SimMatch, myId: string, byId: Map<string, SimPlayer>): string {
@@ -17,7 +21,7 @@ function opponentName(match: SimMatch, myId: string, byId: Map<string, SimPlayer
 }
 
 export function SimMyResultsCard(props: Props) {
-  const { myPlayerId, matches, players, className } = props
+  const { myPlayerId, matches, players, className, listSubtitle = 'Demo', getPointsText } = props
   const byId = new Map(players.map((p) => [p.id, p]))
   const mine = matches.filter((m) => m.playerAId === myPlayerId || m.playerBId === myPlayerId)
 
@@ -30,7 +34,9 @@ export function SimMyResultsCard(props: Props) {
     >
       <div className="border-b border-[var(--tdash-border)] bg-gradient-to-br from-[var(--tdash-surface)] to-[var(--tdash-surface-2)] px-4 py-3 sm:px-5 sm:py-4">
         <h2 className="text-base font-bold text-[var(--tdash-text)] sm:text-lg">{PLY_COPY.resultsTitle}</h2>
-        <p className="mt-0.5 text-xs text-[var(--tdash-muted)] sm:text-sm">Demo · {PLY_COPY.resultsSub}</p>
+        <p className="mt-0.5 text-xs text-[var(--tdash-muted)] sm:text-sm">
+          {listSubtitle} · {PLY_COPY.resultsSub}
+        </p>
       </div>
       <div className="max-h-[min(70vh,28rem)] overflow-y-auto p-2 sm:p-4 [scrollbar-width:thin]">
         {mine.length === 0 ? (
@@ -41,7 +47,11 @@ export function SimMyResultsCard(props: Props) {
               const rival = opponentName(m, myPlayerId, byId)
               const { label, title } = getCellLabelAndTitle(myPlayerId, m)
               const won = m.winnerId === myPlayerId
-              const pts = won ? 3 : 1
+              const pts = getPointsText
+                ? getPointsText(m, won)
+                : won
+                  ? `+3 pts`
+                  : `+1 pt`
 
               return (
                 <li
@@ -59,7 +69,7 @@ export function SimMyResultsCard(props: Props) {
                     >
                       {label}
                     </span>
-                    <span className="text-sm font-bold text-[var(--tdash-primary)]">+{pts} pts</span>
+                    <span className="text-sm font-bold text-[var(--tdash-primary)]">{pts}</span>
                   </div>
                 </li>
               )

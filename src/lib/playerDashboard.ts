@@ -4,11 +4,14 @@ import { perspectiveSetsForCell } from '@/utils/ranking'
 import { formatScoreCompact } from '@/utils/score'
 
 export function isMatchCompleted(m: MatchRow): boolean {
-  return Boolean(m.winner_id && m.score_raw && m.score_raw.length > 0)
+  if (!m.winner_id || m.status === 'cancelled') return false
+  if (m.result_type && m.result_type !== 'normal') return true
+  return Boolean(m.score_raw && m.score_raw.length > 0)
 }
 
 export function isMatchPending(m: MatchRow): boolean {
-  return !isMatchCompleted(m)
+  if (m.status === 'cancelled') return false
+  return m.winner_id == null
 }
 
 export function getPlayerMatches(membershipId: string, matches: MatchRow[]): MatchRow[] {
@@ -61,9 +64,16 @@ export function getOpponentName(
 export function getPointsForPlayerInMatch(
   match: MatchRow,
   myGroupPlayerId: string,
-  rules: Pick<TournamentRules, 'points_per_win' | 'points_per_loss'>,
+  rules: Pick<
+    TournamentRules,
+    'points_per_win' | 'points_per_loss' | 'points_default_win' | 'points_default_loss'
+  >,
 ): number {
   if (!match.winner_id) return 0
+  if (match.result_type && match.result_type !== 'normal') {
+    if (match.winner_id === myGroupPlayerId) return rules.points_default_win
+    return rules.points_default_loss
+  }
   if (match.winner_id === myGroupPlayerId) return rules.points_per_win
   return rules.points_per_loss
 }

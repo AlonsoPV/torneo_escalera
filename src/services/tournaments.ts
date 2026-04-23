@@ -24,6 +24,7 @@ export async function createTournament(input: {
   name: string
   description?: string
   category?: string
+  season?: string
   status?: TournamentStatus
   createdBy: string
 }): Promise<Tournament> {
@@ -33,6 +34,7 @@ export async function createTournament(input: {
       name: input.name,
       description: input.description ?? null,
       category: input.category ?? null,
+      season: input.season ?? null,
       status: input.status ?? 'draft',
       created_by: input.createdBy,
     })
@@ -52,7 +54,7 @@ export async function createTournament(input: {
 export async function updateTournament(
   id: string,
   patch: Partial<
-    Pick<Tournament, 'name' | 'description' | 'category' | 'status'>
+    Pick<Tournament, 'name' | 'description' | 'category' | 'status' | 'season'>
   >,
 ): Promise<void> {
   const { error } = await supabase.from('tournaments').update(patch).eq('id', id)
@@ -82,6 +84,8 @@ export async function updateTournamentRules(
       | 'super_tiebreak_final_set'
       | 'points_per_win'
       | 'points_per_loss'
+      | 'points_default_win'
+      | 'points_default_loss'
       | 'allow_player_score_entry'
       | 'tiebreak_criteria'
     >
