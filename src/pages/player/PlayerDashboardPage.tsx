@@ -212,6 +212,35 @@ export function PlayerDashboardPage() {
               subline={PLY_COPY.welcomeSubLive}
             />
 
+            <section
+              id="player-group-matrix"
+              aria-labelledby="heading-group-matrix"
+              className="space-y-4 sm:space-y-5"
+            >
+              <DashboardSectionHeader
+                headingId="heading-group-matrix"
+                eyebrow={PLY_COPY.matrixSectionEyebrow}
+                title={`${PLY_COPY.matrixSectionTitle} · ${data.group.name}`}
+                description={PLY_COPY.matrixSectionSub}
+              />
+              <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-12">
+                <div className="min-w-0 xl:col-span-8">
+                  <ResultsMatrixCard
+                    playerCount={data.players.length}
+                    matchCount={data.matches.filter((m) => m.winner_id).length}
+                    players={simPlayers}
+                    matches={simMatches}
+                    standings={tableStand}
+                  />
+                </div>
+                <div className="min-w-0 xl:col-span-4">
+                  <div className="lg:sticky lg:top-4 xl:top-6">
+                    <GroupRankingCard rows={tableStand} fullGroup />
+                  </div>
+                </div>
+              </div>
+            </section>
+
             <PlayerMarcadorHub
               tournamentId={data.tournament.id}
               groupId={gId}
@@ -284,35 +313,6 @@ export function PlayerDashboardPage() {
             </div>
           </section>
 
-          <section
-            id="player-group-matrix"
-            aria-labelledby="heading-group-matrix"
-            className="space-y-4 sm:space-y-5"
-          >
-            <DashboardSectionHeader
-              headingId="heading-group-matrix"
-              eyebrow={PLY_COPY.matrixSectionEyebrow}
-              title={`${PLY_COPY.matrixSectionTitle} · ${data.group.name}`}
-              description={PLY_COPY.matrixSectionSub}
-            />
-            <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-12">
-              <div className="min-w-0 xl:col-span-8">
-                <ResultsMatrixCard
-                  playerCount={data.players.length}
-                  matchCount={data.matches.filter((m) => m.winner_id).length}
-                  players={simPlayers}
-                  matches={simMatches}
-                  standings={tableStand}
-                />
-              </div>
-              <div className="min-w-0 xl:col-span-4">
-                <div className="lg:sticky lg:top-4 xl:top-6">
-                  <GroupRankingCard rows={tableStand} fullGroup />
-                </div>
-              </div>
-            </div>
-          </section>
-
           {showEmbeddedDemo && (
             <p className="text-center text-xs text-[var(--tdash-muted)]">
               <Link className="text-primary underline-offset-2 hover:underline" to="/simulation">
@@ -368,6 +368,34 @@ export function PlayerDashboardPage() {
                 tournamentStatus="active"
                 subline="Vista de demostración: grupo fijo; tu usuario real no participa aún."
               />
+              <section
+                id="player-group-matrix"
+                aria-labelledby="heading-group-matrix-demo"
+                className="space-y-4 sm:space-y-5"
+              >
+                <DashboardSectionHeader
+                  headingId="heading-group-matrix-demo"
+                  eyebrow="Demostración"
+                  title="Matriz y clasificación de grupo"
+                  description={`${dGroup.name}: vista de matriz y tabla con datos de la demo en memoria.`}
+                />
+                <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-12">
+                  <div className="min-w-0 xl:col-span-8">
+                    <ResultsMatrixCard
+                      playerCount={playersForUi.length}
+                      matchCount={dMatches.length}
+                      players={playersForUi}
+                      matches={dMatches}
+                      standings={groupStandingForMatrix}
+                    />
+                  </div>
+                  <div className="min-w-0 xl:col-span-4">
+                    <div className="lg:sticky lg:top-4 xl:top-6">
+                      <GroupRankingCard rows={groupStandingForMatrix} fullGroup />
+                    </div>
+                  </div>
+                </div>
+              </section>
               <PlayerQuickStats standing={standingDemo} />
               <PlayerProgressCard played={playedCountDemo} totalExpected={totalPerPlayer} />
             </section>
@@ -410,34 +438,6 @@ export function PlayerDashboardPage() {
                       <MyStandingCard standing={standingDemo} leader={leaderDemo} />
                       <PerformanceInsightCard lines={insightLinesDemo} />
                     </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-            <section
-              id="player-group-matrix"
-              aria-labelledby="heading-group-matrix-demo"
-              className="space-y-4 sm:space-y-5"
-            >
-              <DashboardSectionHeader
-                headingId="heading-group-matrix-demo"
-                eyebrow="Demostración"
-                title="Matriz y clasificación de grupo"
-                description={`${dGroup.name}: vista de matriz y tabla con datos de la demo en memoria.`}
-              />
-              <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-12">
-                <div className="min-w-0 xl:col-span-8">
-                  <ResultsMatrixCard
-                    playerCount={playersForUi.length}
-                    matchCount={dMatches.length}
-                    players={playersForUi}
-                    matches={dMatches}
-                    standings={groupStandingForMatrix}
-                  />
-                </div>
-                <div className="min-w-0 xl:col-span-4">
-                  <div className="lg:sticky lg:top-4 xl:top-6">
-                    <GroupRankingCard rows={groupStandingForMatrix} fullGroup />
                   </div>
                 </div>
               </div>
