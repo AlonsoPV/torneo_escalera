@@ -1,4 +1,4 @@
-import { CalendarClock, ChevronRight } from 'lucide-react'
+import { CalendarClock, ChevronRight, LayoutGrid } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import { buttonVariants } from '@/components/ui/button'
@@ -17,6 +17,8 @@ type Props = {
   tournamentId: string
   groupId: string
   allowScoreEntry: boolean
+  /** Misma URL que la matriz (Vista); botón en cabecera si hay captura por jugadores. */
+  matrixHref?: string
   className?: string
 }
 
@@ -29,8 +31,11 @@ export function UpcomingMatchesCard(props: Props) {
     tournamentId,
     groupId,
     allowScoreEntry,
+    matrixHref,
     className,
   } = props
+
+  const matrixPath = matrixHref ?? `/tournaments/${tournamentId}?group=${groupId}`
 
   return (
     <section
@@ -40,8 +45,25 @@ export function UpcomingMatchesCard(props: Props) {
       )}
     >
       <div className="border-b border-[var(--tdash-border)] bg-gradient-to-br from-[var(--tdash-surface)] to-[var(--tdash-surface-2)] px-4 py-3 sm:px-5 sm:py-4">
-        <h2 className="text-base font-bold text-[var(--tdash-text)] sm:text-lg">{PLY_COPY.upcomingTitle}</h2>
-        <p className="mt-0.5 text-xs text-[var(--tdash-muted)] sm:text-sm">{PLY_COPY.upcomingSub}</p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-base font-bold text-[var(--tdash-text)] sm:text-lg">{PLY_COPY.upcomingTitle}</h2>
+            <p className="mt-0.5 text-xs text-[var(--tdash-muted)] sm:text-sm">{PLY_COPY.upcomingSub}</p>
+          </div>
+          {allowScoreEntry ? (
+            <Link
+              to={matrixPath}
+              className={buttonVariants({
+                variant: 'default',
+                size: 'sm',
+                className: 'h-9 w-full shrink-0 gap-1.5 sm:w-auto',
+              })}
+            >
+              <LayoutGrid className="size-3.5" aria-hidden />
+              {PLY_COPY.upcomingCtaMatrix}
+            </Link>
+          ) : null}
+        </div>
       </div>
       <div className="p-2 sm:p-4">
         {matches.length === 0 ? (

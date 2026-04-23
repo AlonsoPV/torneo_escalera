@@ -2,11 +2,13 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useMemo } from 'react'
 
+import { DashboardSectionHeader } from '@/components/player-dashboard/DashboardSectionHeader'
 import { MyStandingCard } from '@/components/player-dashboard/MyStandingCard'
 import { PerformanceInsightCard } from '@/components/player-dashboard/PerformanceInsightCard'
 import { PlayerGroupCard } from '@/components/player-dashboard/PlayerGroupCard'
 import { PlayerProgressCard } from '@/components/player-dashboard/PlayerProgressCard'
 import { PlayerQuickStats } from '@/components/player-dashboard/PlayerQuickStats'
+import { PlayerMarcadorHub } from '@/components/player-dashboard/PlayerMarcadorHub'
 import { PlayerWelcomeHero } from '@/components/player-dashboard/PlayerWelcomeHero'
 import { SimMyResultsCard } from '@/components/player-dashboard/SimMyResultsCard'
 import { UpcomingMatchesCard } from '@/components/player-dashboard/UpcomingMatchesCard'
@@ -15,9 +17,10 @@ import { ResultsMatrixCard } from '@/components/tournament-dashboard/ResultsMatr
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   getPlayerStanding,
-  getUpcomingMatches,
+  getPlayerMatchesOpenForScoreEntry,
   roundRobinMatchesPerPlayer,
 } from '@/lib/playerDashboard'
+import { PLY_COPY } from '@/lib/playerDashboardCopy'
 import {
   groupPlayersToSimPlayers,
   matchRowsToSimMatches,
@@ -142,13 +145,13 @@ export function PlayerDashboardPage() {
     if (!standingDemo) return []
     return [
       `Has sumado ${standingDemo.points} puntos en el grupo (demo: +3 victoria, +1 derrota).`,
-      `Round robin: ${totalPerPlayer} partidos por jugador; todos cerrados en esta demostración.`,
+      `Round robin: ${totalPerPlayer} partidos por jugador; en la demo los de Alonso Vazquez siguen por jugar.`,
     ]
   }, [standingDemo, totalPerPlayer])
 
   if (!userId) {
     return (
-      <div className="tdash-root min-h-[40vh] space-y-3 px-0 py-4 sm:space-y-4">
+      <div className="tdash-root min-h-[40vh] space-y-3 px-4 py-4 sm:space-y-4 md:px-6">
         <Skeleton className="h-28 w-full max-w-3xl rounded-xl sm:h-32 sm:rounded-2xl" />
         <Skeleton className="h-20 w-full max-w-3xl rounded-xl sm:h-24 sm:rounded-2xl" />
       </div>
@@ -157,8 +160,8 @@ export function PlayerDashboardPage() {
 
   if (liveQ.isLoading) {
     return (
-      <div className="tdash-root min-h-screen bg-[var(--tdash-bg)] px-0 py-4 sm:py-5">
-        <div className="mx-auto w-full max-w-7xl space-y-3">
+      <div className="tdash-root min-h-screen bg-[var(--tdash-bg)] py-4 sm:py-5">
+        <div className="mx-auto w-full max-w-7xl space-y-3 px-4 md:px-6">
           <Skeleton className="h-32 w-full rounded-2xl" />
           <Skeleton className="h-20 w-full rounded-2xl" />
         </div>
@@ -177,7 +180,10 @@ export function PlayerDashboardPage() {
     const leaderRow = data.ranking[0] ?? null
     const myGp = data.membership
     const playersById = new Map((data.players as GroupPlayer[]).map((p) => [p.id, p] as const))
-    const upcoming = getUpcomingMatches(myGp.id, data.matches as MatchRow[])
+    const scoreEntryMatches = getPlayerMatchesOpenForScoreEntry(
+      myGp.id,
+      data.matches as MatchRow[],
+    )
     const rr = roundRobinMatchesPerPlayer(data.players.length)
     const insightLinesLive = meRow
       ? [
@@ -185,26 +191,112 @@ export function PlayerDashboardPage() {
         ]
       : ['Sin datos de ranking todavía.']
 
+    const matrixHref = `/tournaments/${data.tournament.id}?group=${gId}`
+
     return (
       <div className="tdash-root min-h-screen bg-[var(--tdash-bg)]">
-        <div className="mx-auto w-full max-w-7xl space-y-4 px-0 py-4 sm:space-y-5 sm:py-5 md:space-y-6 md:py-8">
-          <PlayerWelcomeHero
-            firstName={firstNameFromProfile(profile?.full_name)}
-            tournamentName={data.tournament.name}
-            groupName={data.group.name}
-            tournamentStatus={data.tournament.status}
-            subline="Vista conectada a tu torneo y grupo reales (Supabase)."
-          />
-
-          <PlayerQuickStats standing={meRow} />
-          <PlayerProgressCard played={meRow?.played ?? 0} totalExpected={rr} />
-
-          <section className="space-y-1.5 sm:space-y-2" aria-label="Grupo completo">
-            <h2 className="text-[11px] font-semibold uppercase tracking-wide text-[var(--tdash-muted)] sm:text-sm">
-              Tu grupo · {data.group.name}
+        <main className="mx-auto max-w-7xl space-y-8 px-4 py-6 md:space-y-10 md:px-6 md:py-8">
+          <section
+            id="player-overview"
+            aria-labelledby="heading-player-overview"
+            className="space-y-4 sm:space-y-5 md:space-y-6"
+          >
+            <h2 id="heading-player-overview" className="sr-only">
+              {PLY_COPY.overviewSectionSrLabel}
             </h2>
-            <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-12">
-              <div className="min-w-0 lg:col-span-8">
+            <PlayerWelcomeHero
+              firstName={firstNameFromProfile(profile?.full_name)}
+              tournamentName={data.tournament.name}
+              groupName={data.group.name}
+              tournamentStatus={data.tournament.status}
+              subline={PLY_COPY.welcomeSubLive}
+            />
+
+            <PlayerMarcadorHub
+              tournamentId={data.tournament.id}
+              groupId={gId}
+              allowScoreEntry={data.rules.allow_player_score_entry}
+            />
+
+            <PlayerQuickStats standing={meRow} />
+            <PlayerProgressCard played={meRow?.played ?? 0} totalExpected={rr} />
+          </section>
+
+          <section
+            id="player-activity"
+            aria-labelledby="heading-activity-lists"
+            className="space-y-4 sm:space-y-5"
+          >
+            <DashboardSectionHeader
+              headingId="heading-activity-lists"
+              eyebrow={PLY_COPY.activitySectionEyebrow}
+              title={PLY_COPY.activitySectionTitle}
+              description={PLY_COPY.activitySectionSub}
+              action={
+                <Link
+                  to={matrixHref}
+                  className="text-sm font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  {PLY_COPY.marcadorHubCtaMatrix} →
+                </Link>
+              }
+            />
+            <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-12">
+              <div className="space-y-4 sm:space-y-6 xl:col-span-8">
+                <div id="panel-partidos-marcador" className="scroll-mt-24">
+                  <UpcomingMatchesCard
+                    groupName={data.group.name}
+                    matches={scoreEntryMatches as MatchRow[]}
+                    playersById={playersById as Map<string, GroupPlayer>}
+                    myGroupPlayerId={myGp.id}
+                    tournamentId={data.tournament.id}
+                    groupId={gId}
+                    allowScoreEntry={data.rules.allow_player_score_entry}
+                    matrixHref={matrixHref}
+                  />
+                </div>
+                <div id="panel-resultados-marcador" className="scroll-mt-24">
+                  <SimMyResultsCard
+                    myPlayerId={myGp.id}
+                    matches={simMatches}
+                    players={simPlayers}
+                    listSubtitle="Torneo real"
+                    getPointsText={buildPointsText(data.rules)}
+                    matrixHref={
+                      data.rules.allow_player_score_entry ? matrixHref : undefined
+                    }
+                  />
+                </div>
+              </div>
+              <div className="space-y-4 sm:space-y-6 xl:col-span-4">
+                <div className="lg:sticky lg:top-4 xl:top-6">
+                  <div className="space-y-4 sm:space-y-6">
+                    <PlayerGroupCard
+                      groupName={data.group.name}
+                      players={data.players as GroupPlayer[]}
+                      currentUserId={userId}
+                    />
+                    <MyStandingCard standing={meRow} leader={leaderRow} />
+                    <PerformanceInsightCard lines={insightLinesLive} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section
+            id="player-group-matrix"
+            aria-labelledby="heading-group-matrix"
+            className="space-y-4 sm:space-y-5"
+          >
+            <DashboardSectionHeader
+              headingId="heading-group-matrix"
+              eyebrow={PLY_COPY.matrixSectionEyebrow}
+              title={`${PLY_COPY.matrixSectionTitle} · ${data.group.name}`}
+              description={PLY_COPY.matrixSectionSub}
+            />
+            <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-12">
+              <div className="min-w-0 xl:col-span-8">
                 <ResultsMatrixCard
                   playerCount={data.players.length}
                   matchCount={data.matches.filter((m) => m.winner_id).length}
@@ -213,45 +305,10 @@ export function PlayerDashboardPage() {
                   standings={tableStand}
                 />
               </div>
-              <div className="min-w-0 lg:col-span-4">
+              <div className="min-w-0 xl:col-span-4">
                 <div className="lg:sticky lg:top-4 xl:top-6">
                   <GroupRankingCard rows={tableStand} fullGroup />
                 </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="space-y-1.5 sm:space-y-2" aria-label="Tu actividad">
-            <h2 className="text-[11px] font-semibold uppercase tracking-wide text-[var(--tdash-muted)] sm:text-sm">
-              Tu actividad
-            </h2>
-            <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-12">
-              <div className="space-y-4 sm:space-y-6 lg:col-span-8">
-                <UpcomingMatchesCard
-                  groupName={data.group.name}
-                  matches={upcoming as MatchRow[]}
-                  playersById={playersById as Map<string, GroupPlayer>}
-                  myGroupPlayerId={myGp.id}
-                  tournamentId={data.tournament.id}
-                  groupId={gId}
-                  allowScoreEntry={data.rules.allow_player_score_entry}
-                />
-                <SimMyResultsCard
-                  myPlayerId={myGp.id}
-                  matches={simMatches}
-                  players={simPlayers}
-                  listSubtitle="Torneo real"
-                  getPointsText={buildPointsText(data.rules)}
-                />
-              </div>
-              <div className="space-y-4 sm:space-y-6 lg:col-span-4">
-                <PlayerGroupCard
-                  groupName={data.group.name}
-                  players={data.players as GroupPlayer[]}
-                  currentUserId={userId}
-                />
-                <MyStandingCard standing={meRow} leader={leaderRow} />
-                <PerformanceInsightCard lines={insightLinesLive} />
               </div>
             </div>
           </section>
@@ -263,7 +320,7 @@ export function PlayerDashboardPage() {
               </Link>
             </p>
           )}
-        </div>
+        </main>
       </div>
     )
   }
@@ -271,7 +328,7 @@ export function PlayerDashboardPage() {
   // Sin grupo activo: vacío + demo opcional
   return (
     <div className="tdash-root min-h-screen bg-[var(--tdash-bg)]">
-      <div className="mx-auto w-full max-w-7xl space-y-6 px-0 py-6 sm:py-8">
+      <main className="mx-auto max-w-7xl space-y-8 px-4 py-6 md:space-y-10 md:px-6 md:py-8">
         <div className="space-y-2 rounded-2xl border border-dashed border-[var(--tdash-border)] bg-[var(--tdash-surface)] p-6 text-center sm:p-8">
           <h2 className="text-lg font-semibold text-[var(--tdash-text)]">Aún no estás en un torneo activo</h2>
           <p className="text-sm text-[var(--tdash-muted)]">
@@ -296,42 +353,37 @@ export function PlayerDashboardPage() {
 
         {showEmbeddedDemo ? (
           <>
-            <PlayerWelcomeHero
-              firstName={firstNameFromProfile(profile?.full_name)}
-              tournamentName={demo.tournamentName}
-              groupName={dGroup.name}
-              tournamentStatus="active"
-              subline="Vista de demostración: grupo fijo; tu usuario real no participa aún."
-            />
-            <PlayerQuickStats standing={standingDemo} />
-            <PlayerProgressCard played={playedCountDemo} totalExpected={totalPerPlayer} />
-            <section className="space-y-1.5 sm:space-y-2" aria-label="Grupo de demostración">
-              <h2 className="text-[11px] font-semibold uppercase tracking-wide text-[var(--tdash-muted)] sm:text-sm">
-                Grupo de demostración
+            <section
+              id="player-overview"
+              aria-labelledby="heading-player-overview-demo"
+              className="space-y-4 sm:space-y-5 md:space-y-6"
+            >
+              <h2 id="heading-player-overview-demo" className="sr-only">
+                {PLY_COPY.overviewSectionSrLabel} (demostración)
               </h2>
-              <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-12">
-                <div className="min-w-0 lg:col-span-8">
-                  <ResultsMatrixCard
-                    playerCount={playersForUi.length}
-                    matchCount={dMatches.length}
-                    players={playersForUi}
-                    matches={dMatches}
-                    standings={groupStandingForMatrix}
-                  />
-                </div>
-                <div className="min-w-0 lg:col-span-4">
-                  <div className="lg:sticky lg:top-4 xl:top-6">
-                    <GroupRankingCard rows={groupStandingForMatrix} fullGroup />
-                  </div>
-                </div>
-              </div>
+              <PlayerWelcomeHero
+                firstName={firstNameFromProfile(profile?.full_name)}
+                tournamentName={demo.tournamentName}
+                groupName={dGroup.name}
+                tournamentStatus="active"
+                subline="Vista de demostración: grupo fijo; tu usuario real no participa aún."
+              />
+              <PlayerQuickStats standing={standingDemo} />
+              <PlayerProgressCard played={playedCountDemo} totalExpected={totalPerPlayer} />
             </section>
-            <section className="space-y-1.5 sm:space-y-2" aria-label="Actividad demo">
-              <h2 className="text-[11px] font-semibold uppercase tracking-wide text-[var(--tdash-muted)] sm:text-sm">
-                Actividad (demo)
-              </h2>
-              <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-12">
-                <div className="space-y-4 sm:space-y-6 lg:col-span-8">
+            <section
+              id="player-activity"
+              aria-labelledby="heading-activity-lists-demo"
+              className="space-y-4 sm:space-y-5"
+            >
+              <DashboardSectionHeader
+                headingId="heading-activity-lists-demo"
+                eyebrow="Demostración"
+                title="Tus partidos y resultados"
+                description="Misma disposición que con un torneo real; los partidos y lista son de ejemplo en memoria."
+              />
+              <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-12">
+                <div className="space-y-4 sm:space-y-6 xl:col-span-8">
                   <UpcomingMatchesCard
                     groupName={dGroup.name}
                     matches={[]}
@@ -347,20 +399,52 @@ export function PlayerDashboardPage() {
                     players={playersForUi}
                   />
                 </div>
-                <div className="space-y-4 sm:space-y-6 lg:col-span-4">
-                  <PlayerGroupCard
-                    groupName={dGroup.name}
-                    players={groupPlayersUi}
-                    currentUserId={userId}
+                <div className="space-y-4 sm:space-y-6 xl:col-span-4">
+                  <div className="lg:sticky lg:top-4 xl:top-6">
+                    <div className="space-y-4 sm:space-y-6">
+                      <PlayerGroupCard
+                        groupName={dGroup.name}
+                        players={groupPlayersUi}
+                        currentUserId={userId}
+                      />
+                      <MyStandingCard standing={standingDemo} leader={leaderDemo} />
+                      <PerformanceInsightCard lines={insightLinesDemo} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section
+              id="player-group-matrix"
+              aria-labelledby="heading-group-matrix-demo"
+              className="space-y-4 sm:space-y-5"
+            >
+              <DashboardSectionHeader
+                headingId="heading-group-matrix-demo"
+                eyebrow="Demostración"
+                title="Matriz y clasificación de grupo"
+                description={`${dGroup.name}: vista de matriz y tabla con datos de la demo en memoria.`}
+              />
+              <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-12">
+                <div className="min-w-0 xl:col-span-8">
+                  <ResultsMatrixCard
+                    playerCount={playersForUi.length}
+                    matchCount={dMatches.length}
+                    players={playersForUi}
+                    matches={dMatches}
+                    standings={groupStandingForMatrix}
                   />
-                  <MyStandingCard standing={standingDemo} leader={leaderDemo} />
-                  <PerformanceInsightCard lines={insightLinesDemo} />
+                </div>
+                <div className="min-w-0 xl:col-span-4">
+                  <div className="lg:sticky lg:top-4 xl:top-6">
+                    <GroupRankingCard rows={groupStandingForMatrix} fullGroup />
+                  </div>
                 </div>
               </div>
             </section>
           </>
         ) : null}
-      </div>
+      </main>
     </div>
   )
 }

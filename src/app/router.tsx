@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, Navigate } from 'react-router-dom'
 
 import { AppShell } from '@/components/layout/AppShell'
 import { IndexRedirect } from '@/components/layout/IndexRedirect'
@@ -23,6 +23,11 @@ export const router = createBrowserRouter([
       { index: true, element: <IndexRedirect /> },
       { path: 'dashboard', element: <DashboardPage /> },
       { path: 'simulation', element: <TournamentSimulationPage /> },
+      // /profile/* (p. ej. /profile/academy/edit): enlaces legacy → panel jugador
+      {
+        path: 'profile/*',
+        element: <Navigate to="/player" replace />,
+      },
       {
         element: <RequireAuth />,
         children: [

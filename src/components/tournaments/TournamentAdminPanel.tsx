@@ -96,6 +96,9 @@ export function TournamentAdminPanel(props: {
     groups[0]?.id ?? null,
   )
 
+  const selectedGroup = groups.find((g) => g.id === selectedGroupId) ?? null
+  const bestOfSets = rulesForm.watch('best_of_sets')
+
   useEffect(() => {
     if (!selectedGroupId && groups[0]?.id) setSelectedGroupId(groups[0].id)
   }, [groups, selectedGroupId])
@@ -109,6 +112,13 @@ export function TournamentAdminPanel(props: {
   const assignForm = useForm<{ userId: string; displayName: string; seed: number }>({
     defaultValues: { userId: '', displayName: '', seed: 0 },
   })
+
+  const assignUserId = assignForm.watch('userId')
+  const selectedAssignProfile = profilesQ.data?.find((x) => x.id === assignUserId)
+  const assignUserLabel =
+    assignUserId && selectedAssignProfile
+      ? (selectedAssignProfile.full_name ?? selectedAssignProfile.email ?? assignUserId)
+      : null
 
   const invalidateAll = async () => {
     await qc.invalidateQueries({ queryKey: ['tournament', tournamentId] })
@@ -233,7 +243,7 @@ export function TournamentAdminPanel(props: {
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue>{String(bestOfSets)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="1">1</SelectItem>
@@ -324,8 +334,10 @@ export function TournamentAdminPanel(props: {
               value={selectedGroupId ?? ''}
               onValueChange={(v) => setSelectedGroupId(v)}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecciona grupo" />
+              <SelectTrigger className="w-full min-w-0 max-w-md">
+                <SelectValue placeholder="Selecciona grupo">
+                  {selectedGroup ? selectedGroup.name : null}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {groups.map((g) => (
@@ -343,7 +355,7 @@ export function TournamentAdminPanel(props: {
             <div>
               <Label>Usuario</Label>
               <Select
-                value={assignForm.watch('userId')}
+                value={assignUserId}
                 onValueChange={(id) => {
                   if (!id) return
                   assignForm.setValue('userId', id)
@@ -351,8 +363,8 @@ export function TournamentAdminPanel(props: {
                   if (p) assignForm.setValue('displayName', p.full_name ?? p.email ?? '')
                 }}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona usuario" />
+                <SelectTrigger className="w-full min-w-0 max-w-md">
+                  <SelectValue placeholder="Selecciona usuario">{assignUserLabel}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {(profilesQ.data ?? []).map((p) => (

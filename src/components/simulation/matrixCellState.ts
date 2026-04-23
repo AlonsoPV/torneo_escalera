@@ -16,6 +16,7 @@ export function getMatrixCellKind(
 ): MatrixCellKind {
   if (rowId === colId) return 'diagonal'
   if (!match) return 'empty'
+  if (match.winnerId == null) return 'empty'
   if (match.resultType === 'default') {
     const rowIsA = idsEqual(rowId, match.playerAId)
     const winnerIsA = match.defaultWinner === 'a'

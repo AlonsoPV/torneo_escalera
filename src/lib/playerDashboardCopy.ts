@@ -1,17 +1,42 @@
 export const PLY_COPY = {
+  /** Título accesible (solo lector de pantalla) de la sección resumen. */
+  overviewSectionSrLabel: 'Resumen y progreso',
   welcomeEyebrow: 'Espacio del jugador',
-  welcomeTagline: 'Tu torneo está en juego',
+  welcomeTagline: 'Tu torneo en juego',
+  /** Subtítulo hero con datos reales (sin tecnicismos). */
+  welcomeSubLive:
+    'Consulta tu grupo, tus próximos cruces y tu posición actual.',
   welcomeSub: 'Consulta tu grupo, resultados y próximos partidos.',
   yourGroup: 'Tu grupo',
   groupRivals: 'Rivales del grupo',
   youBadge: 'Tú',
-  upcomingTitle: 'Tus próximos partidos',
-  upcomingSub: 'Aún por jugar',
+  upcomingTitle: 'Tus partidos (marcador)',
+  upcomingSub: 'Pendientes de resultado o con envío aún no confirmado por el staff',
+  upcomingCtaMatrix: 'Abrir matriz',
   noUpcoming: 'No tienes partidos pendientes',
-  allGroupDone: 'Ya completaste todos tus partidos de grupo',
+  allGroupDone:
+    'No hay partidos abiertos para captura: o ya están confirmados, o no participas en cruces de este grupo.',
   scheduleTbd: 'Pendiente por programar',
+  marcadorHubEyebrow: 'Acceso rápido',
+  marcadorHubTitle: 'Marcador del torneo',
+  marcadorHubSub:
+    'La matriz está en la pestaña Vista del torneo. Desde ahí toca la celda del cruce, o baja a las listas de partidos y resultados.',
+  marcadorHubCtaMatrix: 'Ir a la matriz',
+  marcadorHubCtaPartidos: 'Lista de partidos',
+  marcadorHubCtaResultados: 'Mis resultados',
+  marcadorHubDisabled:
+    'En este torneo la captura por jugadores no está activa en las reglas; el staff registra los resultados.',
+  activitySectionEyebrow: 'Actividad',
+  activitySectionTitle: 'Tus partidos y resultados',
+  activitySectionSub:
+    'Revisa lo pendiente, registra el marcador cuando corresponda y mira tu historial reciente.',
+  matrixSectionEyebrow: 'Análisis',
+  matrixSectionTitle: 'Matriz del grupo',
+  matrixSectionSub: 'Consulta todos los enfrentamientos, marcadores registrados y la clasificación actual del grupo.',
   resultsTitle: 'Tus resultados',
-  resultsSub: 'Partidos jugados',
+  resultsSub: 'Historial de tus cruces',
+  resultsCtaMatrix: 'Abrir matriz',
+  resultsRowCtaMark: 'Marcar',
   noResults: 'Aún no registras resultados',
   standingTitle: 'Tu posición actual',
   groupPreviewTitle: 'Resumen del grupo',
@@ -20,6 +45,8 @@ export const PLY_COPY = {
   ctaMatrix: 'Ver cuadro de resultados',
   ctaRanking: 'Consultar ranking',
   progressLabel: 'Progreso en el grupo',
+  progressCompleteMessage: (played: number, total: number) =>
+    `Has completado ${played} de ${total} partidos de grupo`,
   nextRival: 'Tu próximo rival',
   insightsTitle: 'Lectura rápida',
   notInGroup: 'Aún no has sido asignado a un grupo',

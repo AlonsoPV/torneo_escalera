@@ -27,8 +27,9 @@ export type SimMatch = {
   resultType: 'normal' | 'default'
   score?: ScoreSet[]
   defaultWinner?: 'a' | 'b'
-  winnerId: string
-  status: 'confirmed'
+  /** null = partido aún sin resultado (matriz / listados). */
+  winnerId: string | null
+  status: 'pending' | 'confirmed'
 }
 
 export type SimTournamentBundle = {

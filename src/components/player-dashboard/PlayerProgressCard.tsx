@@ -11,6 +11,7 @@ export function PlayerProgressCard(props: Props) {
   const { played, totalExpected, className } = props
   const total = Math.max(1, totalExpected)
   const pct = Math.min(100, Math.round((played / total) * 100))
+  const progressCopy = PLY_COPY.progressCompleteMessage(played, total)
 
   return (
     <div
@@ -19,15 +20,10 @@ export function PlayerProgressCard(props: Props) {
         className,
       )}
     >
-      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-        <p className="text-xs font-semibold text-[var(--tdash-text)] sm:text-sm">{PLY_COPY.progressLabel}</p>
-        <p className="text-xs tabular-nums text-[var(--tdash-muted)] sm:text-sm">
-          <span className="font-mono font-bold text-[var(--tdash-primary)]">{played}</span>
-          <span> de </span>
-          <span className="font-mono font-semibold text-[var(--tdash-text)]">{total}</span>
-          <span> partidos</span>
-        </p>
-      </div>
+      <p className="text-xs font-semibold text-[var(--tdash-text)] sm:text-sm">{PLY_COPY.progressLabel}</p>
+      <p className="mt-1 text-xs leading-snug text-[var(--tdash-muted)] sm:text-sm">
+        {progressCopy}
+      </p>
       <div
         className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-[var(--tdash-surface-2)] ring-1 ring-inset ring-[var(--tdash-border)]/80 sm:mt-3 sm:h-2.5"
         role="progressbar"

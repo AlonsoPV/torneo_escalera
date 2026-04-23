@@ -22,6 +22,23 @@ export function getUpcomingMatches(membershipId: string, matches: MatchRow[]): M
   return getPlayerMatches(membershipId, matches).filter(isMatchPending)
 }
 
+/** Partidos donde el jugador aún puede enviar o corregir marcador (antes de confirmación del staff). */
+export function isMatchOpenForPlayerScoreEntry(m: MatchRow): boolean {
+  return (
+    m.status === 'pending' ||
+    m.status === 'scheduled' ||
+    m.status === 'ready_for_result' ||
+    m.status === 'result_submitted'
+  )
+}
+
+export function getPlayerMatchesOpenForScoreEntry(
+  membershipId: string,
+  matches: MatchRow[],
+): MatchRow[] {
+  return getPlayerMatches(membershipId, matches).filter(isMatchOpenForPlayerScoreEntry)
+}
+
 export function getCompletedMatches(membershipId: string, matches: MatchRow[]): MatchRow[] {
   return getPlayerMatches(membershipId, matches).filter(isMatchCompleted)
 }

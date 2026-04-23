@@ -43,6 +43,8 @@ export function calculateGroupStandings(
   }
 
   for (const m of matches) {
+    if (m.winnerId == null) continue
+
     const sa = byId.get(m.playerAId)
     const sb = byId.get(m.playerBId)
     if (!sa || !sb) continue

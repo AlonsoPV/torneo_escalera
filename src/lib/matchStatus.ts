@@ -13,8 +13,9 @@ export function isMatchInRankingWindow(
   )
 }
 
+/** Sin hora de fin agendada = ventana abierta (alineado con RPC submit_player_match_result). */
 export function isMatchReadyForTimeWindow(m: MatchRow, now: Date = new Date()): boolean {
-  if (!m.scheduled_end_at) return false
+  if (!m.scheduled_end_at) return true
   return new Date(m.scheduled_end_at) < now
 }
 

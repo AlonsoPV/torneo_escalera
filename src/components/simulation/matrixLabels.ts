@@ -11,6 +11,10 @@ export function getCellLabelAndTitle(rowId: string, match: SimMatch | undefined)
     return { label: '—', title: 'Sin resultado' }
   }
 
+  if (match.winnerId == null) {
+    return { label: '—', title: 'Por jugar' }
+  }
+
   if (match.resultType === 'default') {
     const rowIsA = idsEqual(rowId, match.playerAId)
     const winnerIsA = match.defaultWinner === 'a'

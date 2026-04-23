@@ -101,6 +101,7 @@ export function DashboardPage() {
   })
 
   const selectedTournamentName = tournaments.find((t) => t.id === effectiveTournamentId)?.name
+  const selectedGroupLabel = groups.find((g) => g.id === effectiveGroupId)?.name ?? null
 
   return (
     <div className="space-y-8">
@@ -227,8 +228,10 @@ export function DashboardPage() {
                         setPickedGroupId(null)
                       }}
                     >
-                      <SelectTrigger id="dash-tournament" className="w-full">
-                        <SelectValue placeholder="Torneo" />
+                      <SelectTrigger id="dash-tournament" className="w-full min-w-0">
+                        <SelectValue placeholder="Torneo">
+                          {selectedTournamentName ?? null}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         {tournaments.map((t) => (
@@ -246,8 +249,8 @@ export function DashboardPage() {
                       onValueChange={(v) => setPickedGroupId(v)}
                       disabled={!effectiveTournamentId || groups.length === 0}
                     >
-                      <SelectTrigger id="dash-group" className="w-full">
-                        <SelectValue placeholder="Grupo" />
+                      <SelectTrigger id="dash-group" className="w-full min-w-0">
+                        <SelectValue placeholder="Grupo">{selectedGroupLabel}</SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         {groups.map((g) => (

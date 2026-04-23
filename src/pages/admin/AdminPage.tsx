@@ -205,8 +205,16 @@ export function AdminPage() {
                         }
                       }}
                     >
-                      <SelectTrigger className="w-36">
-                        <SelectValue />
+                      <SelectTrigger className="w-36 min-w-0">
+                        <SelectValue>
+                          {p.role === 'super_admin'
+                            ? 'Super admin'
+                            : p.role === 'admin'
+                              ? 'Admin'
+                              : p.role === 'player'
+                                ? 'Jugador'
+                                : p.role}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="player">player</SelectItem>

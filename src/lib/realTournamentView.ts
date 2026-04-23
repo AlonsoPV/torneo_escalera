@@ -11,27 +11,34 @@ export function groupPlayersToSimPlayers(players: GroupPlayer[], groupId: string
   }))
 }
 
-/**
- * Sólo partidos con ganador: las celdas sin resultado siguen "vacías" en la matriz.
- */
+/** Convierte filas Supabase a celdas de matriz demo (incluye pendientes sin ganador). */
 export function matchRowsToSimMatches(matches: MatchRow[], groupId: string): SimMatch[] {
-  return matches
-    .filter((m) => m.winner_id)
-    .map((m) => {
-      const isDef = m.result_type === 'default_win_a' || m.result_type === 'default_win_b'
+  return matches.map((m) => {
+    if (!m.winner_id) {
       return {
         id: m.id,
         groupId,
         playerAId: m.player_a_id,
         playerBId: m.player_b_id,
-        resultType: isDef ? 'default' : 'normal',
-        score: m.score_raw ?? undefined,
-        defaultWinner:
-          m.result_type === 'default_win_a' ? 'a' : m.result_type === 'default_win_b' ? 'b' : undefined,
-        winnerId: m.winner_id!,
-        status: 'confirmed',
+        resultType: 'normal',
+        winnerId: null,
+        status: 'pending',
       } satisfies SimMatch
-    })
+    }
+    const isDef = m.result_type === 'default_win_a' || m.result_type === 'default_win_b'
+    return {
+      id: m.id,
+      groupId,
+      playerAId: m.player_a_id,
+      playerBId: m.player_b_id,
+      resultType: isDef ? 'default' : 'normal',
+      score: m.score_raw ?? undefined,
+      defaultWinner:
+        m.result_type === 'default_win_a' ? 'a' : m.result_type === 'default_win_b' ? 'b' : undefined,
+      winnerId: m.winner_id,
+      status: 'confirmed',
+    } satisfies SimMatch
+  })
 }
 
 export function rankingRowsToGroupStandings(

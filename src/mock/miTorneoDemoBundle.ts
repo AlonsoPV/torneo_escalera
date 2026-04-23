@@ -1,6 +1,7 @@
 /**
  * Grupo demo fijo (5 jugadores) para la pantalla «Mi torneo».
- * Marcadores alineados con la tabla de demostración (Zaiah, Alonso Vazquez, Edgar, Jugador 4–5).
+ * Zaiah, Alonso Vazquez (perfil Edgar Pérez, mismo UUID demo), Edgar seed 3, Jugador 4–5.
+ * Los cruces de Alonso Vazquez (E) y del jugador seed 3 (6c0d9322-…) quedan sin jugar para probar captura en la UI demo.
  */
 import type { GroupPlayer } from '@/types/database'
 import type {
@@ -65,6 +66,20 @@ function matchNormal(
   }
 }
 
+/** Partido sin resultado (p. ej. fila del perfil Edgar Pérez / Alonso Vazquez en demo). */
+function matchTbd(id: string, low: SimPlayer, high: SimPlayer): SimMatch {
+  const { a: ca, b: cb } = orderPlayersCanonically(low, high)
+  return {
+    id,
+    groupId: MI_TORNEO_DEMO_GROUP_ID,
+    playerAId: ca.id,
+    playerBId: cb.id,
+    resultType: 'normal',
+    winnerId: null,
+    status: 'pending',
+  }
+}
+
 /** Construye los 10 partidos del round robin con resultados fijos. */
 function buildDemoMatches(): SimMatch[] {
   const z = byId(Z)
@@ -73,14 +88,8 @@ function buildDemoMatches(): SimMatch[] {
   const p4 = byId(P4)
   const p5 = byId(P5)
   return [
-    matchNormal('mtd-m-0', z, e, [
-      { a: 3, b: 6 },
-      { a: 3, b: 6 },
-    ], E),
-    matchNormal('mtd-m-1', z, p3, [
-      { a: 6, b: 4 },
-      { a: 6, b: 1 },
-    ], Z),
+    matchTbd('mtd-m-0', z, e),
+    matchTbd('mtd-m-1', z, p3),
     matchNormal('mtd-m-2', z, p4, [
       { a: 6, b: 0 },
       { a: 6, b: 2 },
@@ -89,26 +98,11 @@ function buildDemoMatches(): SimMatch[] {
       { a: 6, b: 2 },
       { a: 6, b: 3 },
     ], Z),
-    matchNormal('mtd-m-4', e, p3, [
-      { a: 1, b: 6 },
-      { a: 5, b: 7 },
-    ], P3),
-    matchNormal('mtd-m-5', e, p4, [
-      { a: 6, b: 0 },
-      { a: 6, b: 4 },
-    ], E),
-    matchNormal('mtd-m-6', e, p5, [
-      { a: 3, b: 6 },
-      { a: 0, b: 6 },
-    ], P5),
-    matchNormal('mtd-m-7', p3, p4, [
-      { a: 4, b: 6 },
-      { a: 1, b: 6 },
-    ], P4),
-    matchNormal('mtd-m-8', p3, p5, [
-      { a: 6, b: 7 },
-      { a: 0, b: 6 },
-    ], P5),
+    matchTbd('mtd-m-4', e, p3),
+    matchTbd('mtd-m-5', e, p4),
+    matchTbd('mtd-m-6', e, p5),
+    matchTbd('mtd-m-7', p3, p4),
+    matchTbd('mtd-m-8', p3, p5),
     matchNormal('mtd-m-9', p4, p5, [
       { a: 6, b: 1 },
       { a: 6, b: 1 },
