@@ -6,7 +6,7 @@ import {
   Settings2,
   Trophy,
 } from 'lucide-react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { TournamentAdminPanel } from '@/components/tournaments/TournamentAdminPanel'
@@ -27,6 +27,7 @@ import type { MatchRow } from '@/types/database'
 import { computeGroupRanking } from '@/utils/ranking'
 
 import { TournamentMatrixMock } from '@/components/tournaments/TournamentMatrixMock'
+import { pathnamesTournamentEqual, tournamentPath } from '@/lib/tournamentUrl'
 import { cn } from '@/lib/utils'
 
 function statusBadgeClass(status: string) {
@@ -42,10 +43,15 @@ function statusBadgeClass(status: string) {
 }
 
 export function TournamentDetailPage() {
-  const { id } = useParams()
+  const { tournamentId: tournamentIdParam } = useParams<{
+    tournamentId: string
+    tournamentSlug?: string
+  }>()
+  const location = useLocation()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const groupFromQuery = searchParams.get('group')
-  const tournamentId = id ?? ''
+  const tournamentId = tournamentIdParam ?? ''
   const qc = useQueryClient()
   const profile = useAuthStore((s) => s.profile)
   const userId = useAuthStore((s) => s.user?.id ?? null)
@@ -56,6 +62,17 @@ export function TournamentDetailPage() {
     queryFn: () => getTournament(tournamentId),
     enabled: Boolean(tournamentId),
   })
+
+  useEffect(() => {
+    if (!tq.data) return
+    const canonical = tournamentPath(tq.data)
+    if (!pathnamesTournamentEqual(location.pathname, canonical)) {
+      navigate(
+        { pathname: canonical, search: location.search, hash: location.hash },
+        { replace: true },
+      )
+    }
+  }, [tq.data, location.pathname, location.search, location.hash, navigate])
 
   const gq = useQuery({
     queryKey: ['groups', tournamentId],

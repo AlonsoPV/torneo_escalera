@@ -4,7 +4,17 @@ import { AppShell } from '@/components/layout/AppShell'
 import { IndexRedirect } from '@/components/layout/IndexRedirect'
 import { RequireAdmin } from '@/components/layout/RequireAdmin'
 import { RequireAuth } from '@/components/layout/RequireAuth'
-import { AdminPage } from '@/pages/admin/AdminPage'
+import { AdminDashboardPage } from '@/pages/admin/AdminDashboardPage'
+import { AdminExportsPage } from '@/pages/admin/AdminExportsPage'
+import { AdminGroupsPage } from '@/pages/admin/AdminGroupsPage'
+import { AdminMatchesPage } from '@/pages/admin/AdminMatchesPage'
+import { AdminNotificationsPage } from '@/pages/admin/AdminNotificationsPage'
+import { AdminOverviewPage } from '@/pages/admin/AdminOverviewPage'
+import { AdminResultsPage } from '@/pages/admin/AdminResultsPage'
+import { AdminRulesPage } from '@/pages/admin/AdminRulesPage'
+import { AdminSettingsPage } from '@/pages/admin/AdminSettingsPage'
+import { AdminTournamentsPage } from '@/pages/admin/AdminTournamentsPage'
+import { AdminUsersPage } from '@/pages/admin/AdminUsersPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { RegisterPage } from '@/pages/auth/RegisterPage'
 import { DashboardPage } from '@/pages/dashboard/DashboardPage'
@@ -33,11 +43,29 @@ export const router = createBrowserRouter([
         children: [
           { path: 'player', element: <PlayerDashboardPage /> },
           { path: 'tournaments', element: <TournamentsListPage /> },
-          { path: 'tournaments/:id', element: <TournamentDetailPage /> },
+          { path: 'tournaments/:tournamentId/:tournamentSlug', element: <TournamentDetailPage /> },
+          { path: 'tournaments/:tournamentId', element: <TournamentDetailPage /> },
           {
             path: 'admin',
             element: <RequireAdmin />,
-            children: [{ index: true, element: <AdminPage /> }],
+            children: [
+              {
+                element: <AdminDashboardPage />,
+                children: [
+                  { index: true, element: <Navigate to="/admin/overview" replace /> },
+                  { path: 'overview', element: <AdminOverviewPage /> },
+                  { path: 'tournaments', element: <AdminTournamentsPage /> },
+                  { path: 'rules', element: <AdminRulesPage /> },
+                  { path: 'groups', element: <AdminGroupsPage /> },
+                  { path: 'matches', element: <AdminMatchesPage /> },
+                  { path: 'results', element: <AdminResultsPage /> },
+                  { path: 'users', element: <AdminUsersPage /> },
+                  { path: 'notifications', element: <AdminNotificationsPage /> },
+                  { path: 'exports', element: <AdminExportsPage /> },
+                  { path: 'settings', element: <AdminSettingsPage /> },
+                ],
+              },
+            ],
           },
         ],
       },

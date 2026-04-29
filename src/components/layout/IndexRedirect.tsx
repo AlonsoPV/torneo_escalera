@@ -1,13 +1,15 @@
 import { Navigate } from 'react-router-dom'
 
 import { Skeleton } from '@/components/ui/skeleton'
+import { isAdminRole } from '@/lib/permissions'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 
-/** Entrada /: con sesión → panel del jugador; sin sesión → inicio general. */
+/** Con sesión: admin/super_admin → /admin; resto → /player. Sin sesión → demo. */
 export function IndexRedirect() {
   const initialized = useAuthStore((s) => s.initialized)
   const session = useAuthStore((s) => s.session)
+  const profile = useAuthStore((s) => s.profile)
 
   if (!isSupabaseConfigured) {
     return <Navigate to="/simulation" replace />
@@ -23,6 +25,9 @@ export function IndexRedirect() {
   }
 
   if (session) {
+    if (profile && isAdminRole(profile.role)) {
+      return <Navigate to="/admin" replace />
+    }
     return <Navigate to="/player" replace />
   }
 

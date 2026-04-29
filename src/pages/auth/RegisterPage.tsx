@@ -41,7 +41,7 @@ export function RegisterPage() {
   })
 
   if (initialized && session) {
-    return <Navigate to="/player" replace />
+    return <Navigate to="/" replace />
   }
 
   if (!isSupabaseConfigured) {

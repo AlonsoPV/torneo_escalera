@@ -6,6 +6,7 @@ import { PLY_COPY } from '@/lib/playerDashboardCopy'
 import {
   getOpponentName,
 } from '@/lib/playerDashboard'
+import { tournamentGroupPathFromIdAndName } from '@/lib/tournamentUrl'
 import { cn } from '@/lib/utils'
 import type { GroupPlayer, MatchRow } from '@/types/database'
 
@@ -15,6 +16,8 @@ type Props = {
   playersById: Map<string, GroupPlayer>
   myGroupPlayerId: string
   tournamentId: string
+  /** Para URL canónica `/tournaments/{id}/{slug}`. */
+  tournamentName?: string
   groupId: string
   allowScoreEntry: boolean
   /** Misma URL que la matriz (Vista); botón en cabecera si hay captura por jugadores. */
@@ -29,13 +32,15 @@ export function UpcomingMatchesCard(props: Props) {
     playersById,
     myGroupPlayerId,
     tournamentId,
+    tournamentName,
     groupId,
     allowScoreEntry,
     matrixHref,
     className,
   } = props
 
-  const matrixPath = matrixHref ?? `/tournaments/${tournamentId}?group=${groupId}`
+  const defaultGroupPath = tournamentGroupPathFromIdAndName(tournamentId, tournamentName, groupId)
+  const matrixPath = matrixHref ?? defaultGroupPath
 
   return (
     <section
@@ -88,7 +93,7 @@ export function UpcomingMatchesCard(props: Props) {
                   <div className="flex flex-wrap items-center gap-2">
                     {allowScoreEntry ? (
                       <Link
-                        to={`/tournaments/${tournamentId}?group=${groupId}`}
+                        to={defaultGroupPath}
                         className={buttonVariants({ variant: 'default', size: 'sm' })}
                       >
                         Ver / registrar
@@ -96,7 +101,7 @@ export function UpcomingMatchesCard(props: Props) {
                       </Link>
                     ) : (
                       <Link
-                        to={`/tournaments/${tournamentId}?group=${groupId}`}
+                        to={defaultGroupPath}
                         className={buttonVariants({ variant: 'outline', size: 'sm' })}
                       >
                         Ver detalle

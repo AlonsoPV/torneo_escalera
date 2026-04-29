@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { buttonVariants } from '@/components/ui/button'
 import { PLY_COPY } from '@/lib/playerDashboardCopy'
 import { getOpponentName } from '@/lib/playerDashboard'
+import { tournamentGroupPathFromIdAndName } from '@/lib/tournamentUrl'
 import { cn } from '@/lib/utils'
 import type { GroupPlayer, MatchRow } from '@/types/database'
 
@@ -12,12 +13,13 @@ type Props = {
   playersById: Map<string, GroupPlayer>
   myGroupPlayerId: string
   tournamentId: string
+  tournamentName?: string
   groupId: string
   className?: string
 }
 
 export function NextOpponentHighlight(props: Props) {
-  const { match, playersById, myGroupPlayerId, tournamentId, groupId, className } = props
+  const { match, playersById, myGroupPlayerId, tournamentId, tournamentName, groupId, className } = props
   if (!match) return null
   const rival = getOpponentName(match, myGroupPlayerId, playersById)
 
@@ -39,7 +41,7 @@ export function NextOpponentHighlight(props: Props) {
           <p className="mt-0.5 text-xl font-bold text-[var(--tdash-text)]">{rival}</p>
           <p className="mt-1 text-sm text-[var(--tdash-muted)]">{PLY_COPY.scheduleTbd}</p>
           <Link
-            to={`/tournaments/${tournamentId}?group=${groupId}`}
+            to={tournamentGroupPathFromIdAndName(tournamentId, tournamentName, groupId)}
             className={cn(
               buttonVariants({ variant: 'default', size: 'sm' }),
               'mt-3 inline-flex w-full sm:w-auto',

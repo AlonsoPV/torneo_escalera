@@ -28,6 +28,15 @@ export async function createTournament(input: {
   status?: TournamentStatus
   createdBy: string
 }): Promise<Tournament> {
+  const { count, error: openError } = await supabase
+    .from('tournaments')
+    .select('id', { count: 'exact', head: true })
+    .neq('status', 'finished')
+  if (openError) throw openError
+  if ((count ?? 0) > 0) {
+    throw new Error('Ya existe un torneo activo o en borrador. Ciérralo antes de crear otro.')
+  }
+
   const { data, error } = await supabase
     .from('tournaments')
     .insert({

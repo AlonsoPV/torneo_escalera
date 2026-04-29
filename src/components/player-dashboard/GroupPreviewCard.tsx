@@ -3,6 +3,7 @@ import { ChevronRight, Trophy } from 'lucide-react'
 
 import { buttonVariants } from '@/components/ui/button'
 import { PLY_COPY } from '@/lib/playerDashboardCopy'
+import { tournamentGroupPathFromIdAndName } from '@/lib/tournamentUrl'
 import { cn } from '@/lib/utils'
 import type { RankingRow } from '@/utils/ranking'
 
@@ -10,6 +11,7 @@ type Props = {
   rows: RankingRow[]
   currentUserId: string
   tournamentId: string
+  tournamentName?: string
   groupId: string
   className?: string
 }
@@ -22,7 +24,7 @@ function rowBg(position: number) {
 }
 
 export function GroupPreviewCard(props: Props) {
-  const { rows, currentUserId, tournamentId, groupId, className } = props
+  const { rows, currentUserId, tournamentId, tournamentName, groupId, className } = props
   const ordered = [...rows].sort((a, b) => a.position - b.position)
 
   return (
@@ -72,7 +74,7 @@ export function GroupPreviewCard(props: Props) {
       <div className="border-t border-[var(--tdash-border)] p-3">
         <div className="flex flex-col gap-2 sm:flex-row">
           <Link
-            to={`/tournaments/${tournamentId}?group=${groupId}`}
+            to={tournamentGroupPathFromIdAndName(tournamentId, tournamentName, groupId)}
             className={cn(buttonVariants({ variant: 'default', size: 'sm' }), 'w-full justify-center sm:flex-1')}
           >
             {PLY_COPY.ctaFullGroup}

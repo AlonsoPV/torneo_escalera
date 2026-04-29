@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { isAdminRole } from '@/lib/permissions'
+import { tournamentPath, tournamentPathFromIdAndName } from '@/lib/tournamentUrl'
 import { buildGlobalLeaderboard, getRecentMatchResults } from '@/services/home'
 import { listGroupPlayers, listGroups } from '@/services/groups'
 import { listMatchesForGroup } from '@/services/matches'
@@ -100,7 +101,8 @@ export function DashboardPage() {
     queryFn: buildGlobalLeaderboard,
   })
 
-  const selectedTournamentName = tournaments.find((t) => t.id === effectiveTournamentId)?.name
+  const selectedTournament = tournaments.find((t) => t.id === effectiveTournamentId) ?? null
+  const selectedTournamentName = selectedTournament?.name
   const selectedGroupLabel = groups.find((g) => g.id === effectiveGroupId)?.name ?? null
 
   return (
@@ -169,7 +171,7 @@ export function DashboardPage() {
                 {recentQ.data?.map((r) => (
                   <li key={r.matchId}>
                     <Link
-                      to={`/tournaments/${r.tournamentId}`}
+                      to={tournamentPathFromIdAndName(r.tournamentId, r.tournamentName)}
                       className="flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="min-w-0 space-y-1">
@@ -262,13 +264,13 @@ export function DashboardPage() {
                     </Select>
                   </div>
                 </div>
-                {effectiveTournamentId && selectedTournamentName ? (
+                {selectedTournament ? (
                   <p className="text-xs text-muted-foreground">
                     <Link
                       className="font-medium text-primary underline-offset-4 hover:underline"
-                      to={`/tournaments/${effectiveTournamentId}`}
+                      to={tournamentPath(selectedTournament)}
                     >
-                      Abrir {selectedTournamentName}
+                      Abrir {selectedTournament.name}
                     </Link>
                   </p>
                 ) : null}

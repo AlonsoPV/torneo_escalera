@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { tournamentPath } from '@/lib/tournamentUrl'
 import { getAdminDashboardStats } from '@/services/dashboardAdmin'
 import { adminSetUserRole, listProfilesForAdmin } from '@/services/profiles'
 import { createTournament, listTournaments } from '@/services/tournaments'
@@ -62,7 +63,7 @@ export function AdminPage() {
       toast.success('Torneo creado')
       form.reset({ name: '', description: '', category: '' })
       await qc.invalidateQueries({ queryKey: ['tournaments'] })
-      window.location.href = `/tournaments/${t.id}`
+      window.location.href = tournamentPath(t)
     },
     onError: (e) => {
       toast.error(e instanceof Error ? e.message : 'Error al crear torneo')
@@ -159,7 +160,7 @@ export function AdminPage() {
             <ul className="space-y-1 text-sm">
               {(tq.data ?? []).map((t) => (
                 <li key={t.id}>
-                  <Link className="text-primary underline-offset-4 hover:underline" to={`/tournaments/${t.id}`}>
+                  <Link className="text-primary underline-offset-4 hover:underline" to={tournamentPath(t)}>
                     {t.name}
                   </Link>{' '}
                   <span className="text-xs text-muted-foreground">({t.status})</span>

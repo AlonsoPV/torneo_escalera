@@ -3,18 +3,20 @@ import { Link } from 'react-router-dom'
 
 import { buttonVariants } from '@/components/ui/button'
 import { PLY_COPY } from '@/lib/playerDashboardCopy'
+import { tournamentGroupPathFromIdAndName } from '@/lib/tournamentUrl'
 import { cn } from '@/lib/utils'
 
 type Props = {
   tournamentId: string
+  tournamentName?: string
   groupId: string
   allowScoreEntry: boolean
   className?: string
 }
 
 export function PlayerMarcadorHub(props: Props) {
-  const { tournamentId, groupId, allowScoreEntry, className } = props
-  const matrixPath = `/tournaments/${tournamentId}?group=${groupId}`
+  const { tournamentId, tournamentName, groupId, allowScoreEntry, className } = props
+  const matrixPath = tournamentGroupPathFromIdAndName(tournamentId, tournamentName, groupId)
 
   return (
     <section

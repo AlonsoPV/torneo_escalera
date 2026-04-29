@@ -28,7 +28,7 @@ export function LoginPage() {
   const initialized = useAuthStore((s) => s.initialized)
   const location = useLocation()
   const navigate = useNavigate()
-  const from = (location.state as { from?: string } | null)?.from ?? '/player'
+  const from = (location.state as { from?: string } | null)?.from ?? '/'
 
   const form = useForm<Form>({ resolver: zodResolver(schema), defaultValues: { email: '', password: '' } })
 
