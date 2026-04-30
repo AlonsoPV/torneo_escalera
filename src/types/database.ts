@@ -3,12 +3,13 @@ export type UserRole = 'player' | 'admin' | 'super_admin' | 'captain' | 'referee
 export type TournamentStatus = 'draft' | 'active' | 'finished'
 
 export type MatchStatus =
-  | 'pending'
   | 'scheduled'
-  | 'ready_for_result'
-  | 'result_submitted'
-  | 'confirmed'
-  | 'corrected'
+  | 'ready_for_score'
+  | 'score_submitted'
+  | 'score_disputed'
+  | 'player_confirmed'
+  | 'admin_validated'
+  | 'closed'
   | 'cancelled'
 
 export type MatchResultType = 'normal' | 'default_win_a' | 'default_win_b'
@@ -92,6 +93,24 @@ export interface Database {
           tiebreak_criteria: Json | null
           allow_player_score_entry: boolean
           created_at: string
+          updated_at: string
+          updated_by: string | null
+          defaults_enabled: boolean
+          default_requires_admin_review: boolean
+          player_can_report_default: boolean
+          admin_can_set_default_manual: boolean
+          result_submission_window_hours: number
+          auto_penalty_no_show: boolean
+          allow_7_6: boolean
+          allow_7_5: boolean
+          ranking_criteria: Json
+          match_format: string
+          set_type: string
+          games_per_set: number
+          min_game_difference: number
+          tiebreak_at: number | null
+          final_set_format: string
+          sudden_death_points: number
         }
         Insert: {
           id?: string
@@ -107,6 +126,24 @@ export interface Database {
           tiebreak_criteria?: Json | null
           allow_player_score_entry?: boolean
           created_at?: string
+          updated_at?: string
+          updated_by?: string | null
+          defaults_enabled?: boolean
+          default_requires_admin_review?: boolean
+          player_can_report_default?: boolean
+          admin_can_set_default_manual?: boolean
+          result_submission_window_hours?: number
+          auto_penalty_no_show?: boolean
+          allow_7_6?: boolean
+          allow_7_5?: boolean
+          ranking_criteria?: Json
+          match_format?: string
+          set_type?: string
+          games_per_set?: number
+          min_game_difference?: number
+          tiebreak_at?: number | null
+          final_set_format?: string
+          sudden_death_points?: number
         }
         Update: {
           best_of_sets?: number
@@ -119,6 +156,44 @@ export interface Database {
           points_default_loss?: number
           tiebreak_criteria?: Json | null
           allow_player_score_entry?: boolean
+          updated_at?: string
+          updated_by?: string | null
+          defaults_enabled?: boolean
+          default_requires_admin_review?: boolean
+          player_can_report_default?: boolean
+          admin_can_set_default_manual?: boolean
+          result_submission_window_hours?: number
+          auto_penalty_no_show?: boolean
+          allow_7_6?: boolean
+          allow_7_5?: boolean
+          ranking_criteria?: Json
+          match_format?: string
+          set_type?: string
+          games_per_set?: number
+          min_game_difference?: number
+          tiebreak_at?: number | null
+          final_set_format?: string
+          sudden_death_points?: number
+        }
+      }
+      group_categories: {
+        Row: {
+          id: string
+          tournament_id: string
+          name: string
+          order_index: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          tournament_id: string
+          name: string
+          order_index?: number
+          created_at?: string
+        }
+        Update: {
+          name?: string
+          order_index?: number
         }
       }
       groups: {
@@ -128,6 +203,7 @@ export interface Database {
           name: string
           order_index: number
           max_players: number
+          group_category_id: string | null
           created_at: string
         }
         Insert: {
@@ -136,12 +212,14 @@ export interface Database {
           name: string
           order_index?: number
           max_players?: number
+          group_category_id?: string | null
           created_at?: string
         }
         Update: {
           name?: string
           order_index?: number
           max_players?: number
+          group_category_id?: string | null
         }
       }
       group_players: {
@@ -185,6 +263,15 @@ export interface Database {
           location: string | null
           confirmed_at: string | null
           confirmed_by: string | null
+          score_submitted_by: string | null
+          score_submitted_at: string | null
+          opponent_confirmed_by: string | null
+          opponent_confirmed_at: string | null
+          admin_validated_by: string | null
+          admin_validated_at: string | null
+          closed_at: string | null
+          dispute_reason: string | null
+          admin_notes: string | null
           created_by: string | null
           updated_by: string | null
           created_at: string
@@ -209,6 +296,15 @@ export interface Database {
           location?: string | null
           confirmed_at?: string | null
           confirmed_by?: string | null
+          score_submitted_by?: string | null
+          score_submitted_at?: string | null
+          opponent_confirmed_by?: string | null
+          opponent_confirmed_at?: string | null
+          admin_validated_by?: string | null
+          admin_validated_at?: string | null
+          closed_at?: string | null
+          dispute_reason?: string | null
+          admin_notes?: string | null
           created_by?: string | null
           updated_by?: string | null
           created_at?: string
@@ -226,6 +322,15 @@ export interface Database {
           location?: string | null
           confirmed_at?: string | null
           confirmed_by?: string | null
+          score_submitted_by?: string | null
+          score_submitted_at?: string | null
+          opponent_confirmed_by?: string | null
+          opponent_confirmed_at?: string | null
+          admin_validated_by?: string | null
+          admin_validated_at?: string | null
+          closed_at?: string | null
+          dispute_reason?: string | null
+          admin_notes?: string | null
           updated_by?: string | null
           updated_at?: string
           locked_at?: string | null
@@ -295,6 +400,7 @@ export type Tournament = Database['public']['Tables']['tournaments']['Row']
 export type TournamentRules =
   Database['public']['Tables']['tournament_rules']['Row']
 export type Group = Database['public']['Tables']['groups']['Row']
+export type GroupCategory = Database['public']['Tables']['group_categories']['Row']
 export type GroupPlayer = Database['public']['Tables']['group_players']['Row']
 export type MatchRow = Database['public']['Tables']['matches']['Row']
 export type MatchScoreLog = Database['public']['Tables']['match_score_logs']['Row']

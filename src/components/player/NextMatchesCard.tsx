@@ -2,18 +2,20 @@ import { Calendar, ChevronRight, MapPin, Clock } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import { buttonVariants } from '@/components/ui/button'
-import { canPlayerSubmitResult } from '@/lib/matchStatus'
-import { getOpponentInMatch } from '@/lib/matchStatus'
+import { canPlayerACaptureScore, canPlayerBRespondToScore, getOpponentInMatch } from '@/lib/matchStatus'
 import type { GroupPlayer, MatchRow, TournamentRules } from '@/types/database'
 import { tournamentPathWithGroup } from '@/lib/tournamentUrl'
 import { cn } from '@/lib/utils'
 
 function statusLine(m: MatchRow): string {
   if (m.status === 'cancelled') return 'Cancelado'
-  if (m.status === 'pending') return 'Pendiente por jugar'
   if (m.status === 'scheduled') return 'Programado'
-  if (m.status === 'ready_for_result') return 'Listo para marcador'
-  if (m.status === 'result_submitted') return 'Resultado enviado'
+  if (m.status === 'ready_for_score') return 'Listo para marcador'
+  if (m.status === 'score_submitted') return 'Marcador enviado (revisión del rival)'
+  if (m.status === 'score_disputed') return 'Marcador en disputa'
+  if (m.status === 'player_confirmed') return 'Aceptado por rival · pendiente admin'
+  if (m.status === 'admin_validated') return 'Validado por admin'
+  if (m.status === 'closed') return 'Cerrado'
   return 'En seguimiento'
 }
 
@@ -88,11 +90,17 @@ export function NextMatchesCard({
             {matches.map((m) => {
               const rival = getOpponentInMatch(m, myGroupPlayerId, players)
               const { date, time } = whenLabel(m)
-              const canMark = canPlayerSubmitResult({
+              const canRespond = canPlayerBRespondToScore({
                 match: m,
-                isParticipant: m.player_a_user_id === userId || m.player_b_user_id === userId,
+                userId,
                 allowPlayerScoreEntry: rules.allow_player_score_entry,
               })
+              const canCaptureA = canPlayerACaptureScore({
+                match: m,
+                userId,
+                allowPlayerScoreEntry: rules.allow_player_score_entry,
+              })
+              const canMark = canCaptureA || canRespond
 
               return (
                 <li
@@ -127,7 +135,7 @@ export function NextMatchesCard({
                         to={matrixPath}
                         className={buttonVariants({ size: 'sm', className: 'w-full justify-center sm:w-auto' })}
                       >
-                        Registrar marcador
+                        {canRespond ? 'Revisar marcador' : 'Registrar marcador'}
                         <ChevronRight className="size-4" />
                       </Link>
                     ) : (

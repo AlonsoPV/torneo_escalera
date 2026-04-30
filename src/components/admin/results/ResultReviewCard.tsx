@@ -18,6 +18,7 @@ export function ResultReviewCard({
   onConfirm: (match: AdminMatchRecord) => void
   onCorrect: (match: AdminMatchRecord) => void
 }) {
+  const canValidateClose = match.status === 'player_confirmed'
   return (
     <Card className="border-[#E2E8F0] bg-white shadow-sm">
       <CardContent className="space-y-5 p-5 sm:p-6">
@@ -41,24 +42,42 @@ export function ResultReviewCard({
             </p>
           </div>
           <div className="rounded-2xl bg-[#F8FAFC] p-3">
-            <p className="text-xs text-[#64748B]">Registrado por</p>
+            <p className="text-xs text-[#64748B]">Registrado / revisión</p>
             <p className="mt-1 break-all font-semibold text-[#102A43]">
-              {match.updated_by ?? match.confirmed_by ?? 'Pendiente'}
+              {match.score_submitted_at
+                ? `Enviado ${match.score_submitted_at.slice(0, 10)}`
+                : match.updated_by ?? '—'}
+              {match.opponent_confirmed_at ? (
+                <span className="mt-1 block text-xs font-normal text-[#64748B]">
+                  Rival: {match.opponent_confirmed_at.slice(0, 10)}
+                </span>
+              ) : null}
             </p>
           </div>
           <div className="rounded-2xl bg-[#F8FAFC] p-3">
-            <p className="text-xs text-[#64748B]">Fecha registro</p>
+            <p className="text-xs text-[#64748B]">Última actividad</p>
             <p className="mt-1 font-semibold text-[#102A43]">{match.updated_at?.slice(0, 10) ?? '-'}</p>
           </div>
         </div>
+        {match.dispute_reason ? (
+          <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-3 text-sm text-[#92400E]">
+            <p className="text-xs font-semibold uppercase tracking-wide">Disputa</p>
+            <p className="mt-1">{match.dispute_reason}</p>
+          </div>
+        ) : null}
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <Button
             className="w-full justify-center gap-1.5"
-            disabled={match.status !== 'result_submitted'}
+            disabled={!canValidateClose}
+            title={
+              canValidateClose
+                ? undefined
+                : 'Solo tras aceptación del rival (estado «Aceptado por rival»).'
+            }
             onClick={() => onConfirm(match)}
           >
             <CheckCircle2 className="size-4" />
-            Confirmar resultado
+            Validar y cerrar oficialmente
           </Button>
           <Button className="w-full justify-center gap-1.5" variant="outline" onClick={() => onCorrect(match)}>
             <Pencil className="size-4" />

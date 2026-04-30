@@ -49,19 +49,11 @@ export async function saveMatchScore(input: {
   const pScore = input.sets as unknown as Json
 
   if (input.isAdmin) {
-    let nextStatus: MatchStatus
-    if (input.match.status === 'result_submitted') {
-      nextStatus = 'confirmed'
-    } else if (input.match.status === 'confirmed' || input.match.status === 'corrected') {
-      nextStatus = 'corrected'
-    } else {
-      nextStatus = 'confirmed'
-    }
     const { error } = await supabase.rpc('admin_set_match_result', {
       p_match_id: input.match.id,
       p_score: pScore,
       p_winner_id: winnerId,
-      p_status: nextStatus,
+      p_status: 'closed',
       p_result_type: 'normal',
     })
     if (error) throw new Error(mapPostgresError(error))
@@ -73,6 +65,26 @@ export async function saveMatchScore(input: {
     p_score: pScore,
     p_result_type: 'normal',
     p_winner_group_player_id: winnerId,
+  })
+  if (error) throw new Error(mapPostgresError(error))
+}
+
+export async function respondOpponentMatchScore(input: {
+  matchId: string
+  accept: boolean
+  disputeReason?: string | null
+}): Promise<void> {
+  const { error } = await supabase.rpc('opponent_respond_match_score', {
+    p_match_id: input.matchId,
+    p_accept: input.accept,
+    p_dispute_reason: input.disputeReason ?? null,
+  })
+  if (error) throw new Error(mapPostgresError(error))
+}
+
+export async function adminReopenMatchResult(matchId: string): Promise<void> {
+  const { error } = await supabase.rpc('admin_reopen_match_result', {
+    p_match_id: matchId,
   })
   if (error) throw new Error(mapPostgresError(error))
 }
@@ -161,9 +173,11 @@ export async function updateMatchSchedule(
     patch.scheduled_date ?? patch.scheduled_start_at ?? patch.scheduled_end_at,
   )
   const keepStatus = [
-    'result_submitted',
-    'confirmed',
-    'corrected',
+    'score_submitted',
+    'score_disputed',
+    'player_confirmed',
+    'admin_validated',
+    'closed',
     'cancelled',
   ].includes(row.status)
   const nextStatus: MatchStatus | undefined = keepStatus

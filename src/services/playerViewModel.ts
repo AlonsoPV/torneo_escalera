@@ -39,8 +39,7 @@ function sortUpcomingChronological(matches: MatchRow[]): MatchRow[] {
 function filterUpcomingForPlayer(matches: MatchRow[], membershipId: string): MatchRow[] {
   const mine = getPlayerMatches(membershipId, matches)
   return mine.filter((m) => {
-    if (m.status === 'cancelled') return false
-    if (m.status === 'confirmed' || m.status === 'corrected') return false
+    if (m.status === 'cancelled' || m.status === 'closed') return false
     return true
   })
 }

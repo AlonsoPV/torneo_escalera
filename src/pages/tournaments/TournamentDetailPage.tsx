@@ -429,6 +429,7 @@ export function TournamentDetailPage() {
         currentUserId={userId}
         isAdmin={isAdmin}
         onSave={onSaveScore}
+        onAfterScoreFlow={refreshGroup}
       />
     </div>
   )

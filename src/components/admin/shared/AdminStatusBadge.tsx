@@ -5,12 +5,13 @@ import type { MatchStatus, TournamentStatus, UserRole } from '@/types/database'
 type StatusValue = MatchStatus | TournamentStatus | UserRole | 'complete' | 'incomplete' | 'empty' | 'generated'
 
 const labels: Record<string, string> = {
-  pending: 'Pendiente',
   scheduled: 'Programado',
-  ready_for_result: 'Listo para marcador',
-  result_submitted: 'Resultado enviado',
-  confirmed: 'Confirmado',
-  corrected: 'Corregido',
+  ready_for_score: 'Listo para marcador',
+  score_submitted: 'Marcador enviado',
+  score_disputed: 'Marcador en disputa',
+  player_confirmed: 'Aceptado por rival',
+  admin_validated: 'Validado por admin',
+  closed: 'Cerrado',
   cancelled: 'Cancelado',
   draft: 'Borrador',
   active: 'Activo',
@@ -28,10 +29,12 @@ const labels: Record<string, string> = {
 
 const tones: Record<string, string> = {
   scheduled: 'border-blue-200 bg-blue-50 text-blue-700',
-  ready_for_result: 'border-amber-200 bg-amber-50 text-amber-700',
-  result_submitted: 'border-blue-200 bg-blue-50 text-blue-700',
-  confirmed: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  corrected: 'border-purple-200 bg-purple-50 text-purple-700',
+  ready_for_score: 'border-amber-200 bg-amber-50 text-amber-700',
+  score_submitted: 'border-blue-200 bg-blue-50 text-blue-700',
+  score_disputed: 'border-rose-200 bg-rose-50 text-rose-800',
+  player_confirmed: 'border-violet-200 bg-violet-50 text-violet-800',
+  admin_validated: 'border-teal-200 bg-teal-50 text-teal-800',
+  closed: 'border-emerald-200 bg-emerald-50 text-emerald-700',
   cancelled: 'border-red-200 bg-red-50 text-red-700',
   active: 'border-emerald-200 bg-emerald-50 text-emerald-700',
   finished: 'border-slate-200 bg-slate-50 text-slate-700',
@@ -53,4 +56,3 @@ export function AdminStatusBadge({ status, className }: { status: StatusValue; c
     </Badge>
   )
 }
-

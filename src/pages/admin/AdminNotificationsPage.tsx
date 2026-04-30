@@ -15,9 +15,9 @@ export function AdminNotificationsPage() {
   })
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="space-y-8 sm:space-y-10">
       <AdminPageHeader
-        eyebrow="Notificaciones"
+        eyebrow="Administración"
         title="Notificaciones"
         description="Pendientes operativos detectados con la información actual de Supabase."
         actions={

@@ -4,9 +4,8 @@ import { perspectiveSetsForCell } from '@/utils/ranking'
 import { formatScoreCompact } from '@/utils/score'
 
 export function isMatchCompleted(m: MatchRow): boolean {
-  if (!m.winner_id || m.status === 'cancelled') return false
-  if (m.result_type && m.result_type !== 'normal') return true
-  return Boolean(m.score_raw && m.score_raw.length > 0)
+  if (m.status === 'cancelled' || !m.winner_id) return false
+  return m.status === 'closed'
 }
 
 export function isMatchPending(m: MatchRow): boolean {
@@ -22,14 +21,9 @@ export function getUpcomingMatches(membershipId: string, matches: MatchRow[]): M
   return getPlayerMatches(membershipId, matches).filter(isMatchPending)
 }
 
-/** Partidos donde el jugador aún puede enviar o corregir marcador (antes de confirmación del staff). */
+/** Partidos donde el jugador puede tener acción (captura A, revisión B) o seguimiento. */
 export function isMatchOpenForPlayerScoreEntry(m: MatchRow): boolean {
-  return (
-    m.status === 'pending' ||
-    m.status === 'scheduled' ||
-    m.status === 'ready_for_result' ||
-    m.status === 'result_submitted'
-  )
+  return ['scheduled', 'ready_for_score', 'score_submitted', 'score_disputed'].includes(m.status)
 }
 
 export function getPlayerMatchesOpenForScoreEntry(
@@ -86,7 +80,7 @@ export function getPointsForPlayerInMatch(
     'points_per_win' | 'points_per_loss' | 'points_default_win' | 'points_default_loss'
   >,
 ): number {
-  if (!match.winner_id) return 0
+  if (match.status !== 'closed' || !match.winner_id) return 0
   if (match.result_type && match.result_type !== 'normal') {
     if (match.winner_id === myGroupPlayerId) return rules.points_default_win
     return rules.points_default_loss
@@ -101,7 +95,7 @@ export function getMatchOutcome(
   match: MatchRow,
   myGroupPlayerId: string,
 ): Outcome | null {
-  if (!match.winner_id) return null
+  if (match.status !== 'closed' || !match.winner_id) return null
   if (match.winner_id === myGroupPlayerId) return 'win'
   return 'loss'
 }

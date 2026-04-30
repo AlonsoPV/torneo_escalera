@@ -54,13 +54,13 @@ export function AdminMatchTable({
 
   return (
     <>
-      <div className="hidden lg:block">
+      <div className="hidden md:block">
         <AdminDataTable rows={matches} columns={columns} getRowKey={(match) => match.id} />
       </div>
-      <div className="grid gap-3 lg:hidden">
+      <div className="grid gap-3 md:hidden">
         {matches.map((match) => (
-          <Card key={match.id} className="border-[#E2E8F0] bg-white shadow-sm">
-            <CardContent className="space-y-4 p-4">
+          <Card key={match.id} className="rounded-2xl border border-slate-200/70 bg-white shadow-sm">
+            <CardContent className="space-y-4 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-pretty text-sm font-semibold text-[#102A43]">

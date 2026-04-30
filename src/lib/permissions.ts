@@ -10,8 +10,12 @@ export function canEditMatchAsPlayer(params: {
   match: MatchRow
   isParticipant: boolean
   allowPlayerScoreEntry: boolean
+  currentUserId?: string | null
 }): boolean {
-  return canPlayerSubmitResult(params)
+  return canPlayerSubmitResult({
+    ...params,
+    userId: params.currentUserId,
+  })
 }
 
 export function canEditMatchAsAdmin(isAdmin: boolean): boolean {

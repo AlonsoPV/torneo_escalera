@@ -51,7 +51,7 @@ function isDefaultType(rt: MatchResultType | null | undefined): boolean {
 
 function matchCountsForGroupRanking(m: MatchRow): boolean {
   if (!m.winner_id || m.status === 'cancelled') return false
-  return m.status === 'result_submitted' || m.status === 'confirmed' || m.status === 'corrected'
+  return m.status === 'closed'
 }
 
 export function computeGroupRanking(players: GroupPlayer[], matches: MatchRow[], rules: RulesPoints): RankingRow[] {

@@ -22,7 +22,7 @@ export function matchRowsToSimMatches(matches: MatchRow[], groupId: string): Sim
         playerBId: m.player_b_id,
         resultType: 'normal',
         winnerId: null,
-        status: 'pending',
+        status: 'scheduled',
       } satisfies SimMatch
     }
     const isDef = m.result_type === 'default_win_a' || m.result_type === 'default_win_b'
@@ -36,7 +36,7 @@ export function matchRowsToSimMatches(matches: MatchRow[], groupId: string): Sim
       defaultWinner:
         m.result_type === 'default_win_a' ? 'a' : m.result_type === 'default_win_b' ? 'b' : undefined,
       winnerId: m.winner_id,
-      status: 'confirmed',
+      status: 'closed',
     } satisfies SimMatch
   })
 }

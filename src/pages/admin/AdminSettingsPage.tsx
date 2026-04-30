@@ -5,9 +5,9 @@ import { Card, CardContent } from '@/components/ui/card'
 
 export function AdminSettingsPage() {
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="space-y-8 sm:space-y-10">
       <AdminPageHeader
-        eyebrow="Configuración"
+        eyebrow="Administración"
         title="Configuración del panel"
         description="Estado de seguridad, permisos y preparación de módulos administrativos."
       />

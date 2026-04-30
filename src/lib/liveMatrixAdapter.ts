@@ -23,7 +23,7 @@ export function matchRowToSimMatch(m: MatchRow): SimMatch | null {
       resultType: 'normal',
       score: sets,
       winnerId: m.winner_id,
-      status: 'confirmed',
+      status: 'closed',
     }
   }
   const winnerIsA = m.winner_id === m.player_a_id
@@ -35,7 +35,7 @@ export function matchRowToSimMatch(m: MatchRow): SimMatch | null {
     resultType: 'default',
     defaultWinner: winnerIsA ? 'a' : 'b',
     winnerId: m.winner_id,
-    status: 'confirmed',
+    status: 'closed',
   }
 }
 

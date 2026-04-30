@@ -26,7 +26,8 @@ export const adminNavItems = [
 ] as const
 
 export function getAdminRouteTitle(pathname: string): string {
-  return adminNavItems.find((item) => pathname.startsWith(item.href))?.label ?? 'Admin'
+  const sorted = [...adminNavItems].sort((a, b) => b.href.length - a.href.length)
+  return sorted.find((item) => pathname.startsWith(item.href))?.label ?? 'Admin'
 }
 
 export const AdminBrandIcon = ShieldCheck

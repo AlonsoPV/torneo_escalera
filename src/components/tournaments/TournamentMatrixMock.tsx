@@ -52,7 +52,7 @@ const mockMatches: MatchRow[] = [
       { a: 6, b: 4 },
     ],
     winner_id: 'mock-1',
-    status: 'confirmed',
+    status: 'closed',
     result_type: 'normal',
     scheduled_date: null,
     scheduled_start_at: null,
@@ -60,6 +60,15 @@ const mockMatches: MatchRow[] = [
     location: null,
     confirmed_at: null,
     confirmed_by: null,
+    score_submitted_by: null,
+    score_submitted_at: null,
+    opponent_confirmed_by: null,
+    opponent_confirmed_at: null,
+    admin_validated_by: null,
+    admin_validated_at: null,
+    closed_at: null,
+    dispute_reason: null,
+    admin_notes: null,
     created_by: null,
     updated_by: null,
     created_at: new Date().toISOString(),
@@ -141,7 +150,7 @@ function MockMatrixInner(props: { players: GroupPlayer[]; matches: MatchRow[] })
                       <div
                         className={cn(
                           'flex h-12 flex-col items-center justify-center rounded-md border px-1 text-[10px]',
-                          match?.status === 'confirmed' && 'border-emerald-500/40 bg-emerald-500/10',
+                          match?.status === 'closed' && 'border-emerald-500/40 bg-emerald-500/10',
                         )}
                       >
                         {sets && sets.length > 0 ? (

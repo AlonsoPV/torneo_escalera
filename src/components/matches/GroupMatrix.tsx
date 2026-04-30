@@ -88,16 +88,18 @@ export function GroupMatrix(props: {
                           onClick={() => onOpenMatch(match)}
                           className={cn(
                             'flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-md border px-1 text-[11px] font-medium transition-colors sm:h-16 sm:text-xs',
-                            match?.status === 'confirmed' &&
+                            match?.status === 'closed' &&
                               'border-emerald-500/40 bg-emerald-500/10',
-                            match?.status === 'corrected' &&
-                              'border-amber-500/40 bg-amber-500/10',
-                            (match?.status === 'pending' || match?.status === 'scheduled') &&
+                            match?.status === 'admin_validated' &&
+                              'border-teal-500/35 bg-teal-500/10',
+                            match?.status === 'player_confirmed' &&
+                              'border-violet-500/35 bg-violet-500/10',
+                            (match?.status === 'scheduled' || match?.status === 'ready_for_score') &&
                               'border-dashed border-primary/40 bg-background hover:bg-muted/60',
-                            match?.status === 'result_submitted' &&
+                            match?.status === 'score_submitted' &&
                               'border-sky-500/30 bg-sky-500/5',
-                            match?.status === 'ready_for_result' &&
-                              'border-violet-500/30 bg-violet-500/5',
+                            match?.status === 'score_disputed' &&
+                              'border-rose-500/35 bg-rose-500/10',
                             !match && 'border-dashed border-muted-foreground/30 bg-muted/20',
                           )}
                         >

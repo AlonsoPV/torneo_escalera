@@ -1,13 +1,15 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useFieldArray, useForm, type Resolver } from 'react-hook-form'
 import { Minus, Plus } from 'lucide-react'
+import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Sheet,
   SheetContent,
@@ -15,8 +17,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { canEditMatchAsAdmin, canEditMatchAsPlayer } from '@/lib/permissions'
+import { canPlayerACaptureScore, canPlayerBRespondToScore } from '@/lib/matchStatus'
+import { canEditMatchAsAdmin } from '@/lib/permissions'
+import { isSuddenDeathRowIndex, maxSetsFromRules, validateTennisScore } from '@/lib/tournamentRulesEngine'
 import { cn } from '@/lib/utils'
+import { respondOpponentMatchScore } from '@/services/matches'
 import type { GroupPlayer, MatchRow, TournamentRules } from '@/types/database'
 import { formatScoreCompact, invertScoreSets } from '@/utils/score'
 
@@ -65,9 +70,13 @@ export function MatchScoreSheet(props: {
   currentUserId: string | null
   isAdmin: boolean
   onSave: (sets: { a: number; b: number }[]) => Promise<void>
+  onAfterScoreFlow?: () => Promise<void>
 }) {
-  const { open, onOpenChange, match, players, rules, currentUserId, isAdmin, onSave } =
+  const { open, onOpenChange, match, players, rules, currentUserId, isAdmin, onSave, onAfterScoreFlow } =
     props
+  const [rejectOpen, setRejectOpen] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
+  const [responding, setResponding] = useState(false)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema) as Resolver<FormValues>,
@@ -94,29 +103,91 @@ export function MatchScoreSheet(props: {
     form.reset(defaults)
   }, [open, matchId, scoreKey, match, form])
 
+  useEffect(() => {
+    if (!open) {
+      setRejectOpen(false)
+      setRejectReason('')
+      setResponding(false)
+    }
+  }, [open, matchId])
+
   if (!match || !rules) return null
 
-  const bestOf = rules.best_of_sets ?? 3
+  const maxSets = maxSetsFromRules(rules)
+  const hasPointsDecider =
+    maxSets >= 3 &&
+    (rules.final_set_format === 'sudden_death' || rules.final_set_format === 'super_tiebreak')
   const { a: nameA, b: nameB } = namesForMatch(match, players)
   const participant =
     currentUserId === match.player_a_user_id ||
     currentUserId === match.player_b_user_id
 
-  const editable =
-    canEditMatchAsAdmin(isAdmin) ||
-    canEditMatchAsPlayer({
+  const allowEntry = rules.allow_player_score_entry
+  const canACapture = canPlayerACaptureScore({
+    match,
+    userId: currentUserId,
+    allowPlayerScoreEntry: allowEntry,
+  })
+  const showOpponentPanel =
+    !isAdmin &&
+    canPlayerBRespondToScore({
       match,
-      isParticipant: participant,
-      allowPlayerScoreEntry: rules.allow_player_score_entry,
+      userId: currentUserId,
+      allowPlayerScoreEntry: allowEntry,
     })
+  const formEditable = canEditMatchAsAdmin(isAdmin) || canACapture
 
   const watched = form.watch('sets')
   const preview = formatScoreCompact(invertScoreSets(watched ?? []))
 
   const submit = form.handleSubmit(async (values) => {
+    const v = validateTennisScore(values.sets, rules)
+    if (!v.ok) {
+      toast.error(v.errors[0] ?? 'Marcador no válido para este torneo')
+      return
+    }
     await onSave(values.sets)
+    await onAfterScoreFlow?.()
     onOpenChange(false)
   })
+
+  const flowAfter = async () => {
+    await onAfterScoreFlow?.()
+    onOpenChange(false)
+  }
+
+  const handleAcceptOpponent = async () => {
+    setResponding(true)
+    try {
+      await respondOpponentMatchScore({ matchId: match.id, accept: true })
+      toast.success('Marcador aceptado')
+      await flowAfter()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo registrar la aceptación')
+    } finally {
+      setResponding(false)
+    }
+  }
+
+  const handleRejectOpponent = async () => {
+    const reason = rejectReason.trim()
+    if (reason.length < 3) {
+      toast.error('Escribe el motivo del rechazo (mín. 3 caracteres).')
+      return
+    }
+    setResponding(true)
+    try {
+      await respondOpponentMatchScore({ matchId: match.id, accept: false, disputeReason: reason })
+      toast.message('Marcador rechazado', { description: 'El Jugador A podrá corregir y reenviar.' })
+      setRejectOpen(false)
+      setRejectReason('')
+      await flowAfter()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo registrar el rechazo')
+    } finally {
+      setResponding(false)
+    }
+  }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -128,15 +199,28 @@ export function MatchScoreSheet(props: {
           <div className="mx-auto h-1 w-10 rounded-full bg-muted-foreground/25 sm:hidden" aria-hidden />
           <SheetHeader className="space-y-1.5 p-0 text-left">
             <SheetTitle className="text-lg">Marcador</SheetTitle>
-            <SheetDescription className="line-clamp-2 text-balance sm:text-sm">
-              Mejor de {bestOf} sets · Ajusta los games por set. Los nombres se muestran arriba una
-              sola vez.
+            <SheetDescription className="line-clamp-4 text-balance sm:text-sm">
+              {showOpponentPanel
+                ? `${nameA} registró el marcador. Revísalo y acéptalo o recházalo con un comentario. No puedes editar los números directamente.`
+                : isAdmin
+                  ? `Como staff puedes ajustar el marcador. Al guardar se cierra oficialmente el partido (ranking).`
+                  : hasPointsDecider
+                    ? `Eres el Jugador A: hasta ${maxSets} sets; los primeros van por games y el decisivo por puntos si aplica. Tras la hora de fin puedes enviar.`
+                    : `Eres el Jugador A: introduce games por set (hasta ${maxSets} sets). Tras la hora de fin puedes enviar.`}
             </SheetDescription>
           </SheetHeader>
         </div>
 
         <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-4 py-3 sm:px-5">
+            {match.status === 'score_disputed' && match.dispute_reason ? (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-foreground">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/80">
+                  Motivo del rechazo del rival
+                </p>
+                <p className="mt-1 leading-relaxed text-amber-950/90">{match.dispute_reason}</p>
+              </div>
+            ) : null}
             <div className="rounded-2xl border border-border/80 bg-gradient-to-b from-card to-muted/20 p-3 shadow-sm sm:p-4">
               <div className="mb-3 grid grid-cols-[1fr_auto_1fr] items-end gap-2 sm:gap-3">
                 <p
@@ -159,7 +243,7 @@ export function MatchScoreSheet(props: {
               <div className="w-full min-w-0 overflow-x-auto">
                 <table
                   className="w-full min-w-[280px] table-fixed border-separate border-spacing-0"
-                  aria-label="Juegos por set"
+                  aria-label={hasPointsDecider ? 'Games o puntos por set' : 'Games por set'}
                 >
                   <colgroup>
                     <col className="w-12 sm:w-14" />
@@ -195,25 +279,39 @@ export function MatchScoreSheet(props: {
                     </tr>
                   </thead>
                   <tbody>
-                    {fields.map((field, index) => (
+                    {fields.map((field, index) => {
+                      const sudden = isSuddenDeathRowIndex(index, rules)
+                      const rowLabel = sudden
+                        ? rules.final_set_format === 'super_tiebreak'
+                          ? `${index + 1} / STB`
+                          : `${index + 1} / MS`
+                        : String(index + 1)
+                      return (
                       <tr key={field.id} className="align-middle">
                         <th
                           scope="row"
-                          className="pr-1 text-center text-sm font-semibold text-foreground sm:text-base"
+                          className="pr-1 text-center text-xs font-semibold leading-tight text-foreground sm:text-sm"
+                          title={
+                            sudden
+                              ? rules.final_set_format === 'super_tiebreak'
+                                ? 'Set decisivo: super tie-break (puntos)'
+                                : 'Set decisivo: muerte súbita (puntos)'
+                              : undefined
+                          }
                         >
-                          {index + 1}
+                          {rowLabel}
                         </th>
                         <td className="px-1.5 py-1.5">
                           <div className="flex justify-center">
                             <Label className="sr-only" htmlFor={`set-${index}-a`}>
-                              {`${nameA}, set ${index + 1}`}
+                              {sudden ? `${nameA}, puntos (set decisivo)` : `${nameA}, games · set ${index + 1}`}
                             </Label>
                             <Input
                               id={`set-${index}-a`}
                               type="number"
                               inputMode="numeric"
                               min={0}
-                              disabled={!editable}
+                              disabled={!formEditable}
                               className={scoreInputClass}
                               {...form.register(`sets.${index}.a`, { valueAsNumber: true })}
                             />
@@ -222,21 +320,21 @@ export function MatchScoreSheet(props: {
                         <td className="px-1.5 py-1.5">
                           <div className="flex justify-center">
                             <Label className="sr-only" htmlFor={`set-${index}-b`}>
-                              {`${nameB}, set ${index + 1}`}
+                              {sudden ? `${nameB}, puntos (set decisivo)` : `${nameB}, games · set ${index + 1}`}
                             </Label>
                             <Input
                               id={`set-${index}-b`}
                               type="number"
                               inputMode="numeric"
                               min={0}
-                              disabled={!editable}
+                              disabled={!formEditable}
                               className={scoreInputClass}
                               {...form.register(`sets.${index}.b`, { valueAsNumber: true })}
                             />
                           </div>
                         </td>
                         <td className="py-1.5 pl-1 text-right">
-                          {editable ? (
+                          {formEditable ? (
                             <Button
                               type="button"
                               variant="ghost"
@@ -251,13 +349,14 @@ export function MatchScoreSheet(props: {
                           ) : null}
                         </td>
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
             </div>
 
-            {editable && fields.length < bestOf ? (
+            {formEditable && fields.length < maxSets ? (
               <Button
                 type="button"
                 variant="outline"
@@ -277,26 +376,24 @@ export function MatchScoreSheet(props: {
               <p className="font-mono text-base text-foreground">{preview || '—'}</p>
               {!isAdmin ? (
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  {match?.status === 'result_submitted' ? (
+                  {showOpponentPanel ? (
+                    <>Comprueba que el marcador cuadra con lo jugado. Si no estás de acuerdo, rechaza con un comentario claro.</>
+                  ) : match?.status === 'score_disputed' && canACapture ? (
                     <>
-                      Puedes <span className="font-medium text-foreground">corregir</span> el
-                      marcador mientras un administrador no lo haya confirmado. Cumple el formato
-                      del torneo; tras la hora de fin puedes reenviar.
+                      Tu rival rechazó el marcador. Ajusta los valores y vuelve a{' '}
+                      <span className="font-medium text-foreground">enviar</span> para que pueda revisarlo de nuevo.
                     </>
                   ) : (
                     <>
-                      Al guardar, el partido pasa a{' '}
-                      <span className="font-medium text-foreground">resultado enviado</span>. Solo
-                      tras la hora de fin y con marcador válido.
+                      Al guardar, el marcador se envía a tu rival para revisión (no cuenta en el ranking hasta que un
+                      administrador cierre el partido).
                     </>
                   )}
                 </p>
               ) : (
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  Al guardar fijas el partido como{' '}
-                  <span className="font-medium text-foreground">confirmed</span> o{' '}
-                  <span className="font-medium text-foreground">corrected</span> según
-                  corresponda.
+                  Como administrador, al guardar cierras el partido de forma oficial (<span className="font-medium">Cerrado</span>)
+                  y el resultado entra en el ranking.
                 </p>
               )}
             </div>
@@ -306,9 +403,75 @@ export function MatchScoreSheet(props: {
             className="shrink-0 border-t border-border/80 bg-background/90 px-4 py-3 backdrop-blur-sm sm:px-5"
             style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
           >
-            {!editable ? (
+            {showOpponentPanel ? (
+              <div className="space-y-3">
+                <Button
+                  type="button"
+                  size="lg"
+                  className="h-12 w-full text-base font-semibold shadow-sm"
+                  disabled={responding}
+                  onClick={() => void handleAcceptOpponent()}
+                >
+                  Aceptar marcador
+                </Button>
+                {!rejectOpen ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="h-12 w-full"
+                    disabled={responding}
+                    onClick={() => setRejectOpen(true)}
+                  >
+                    Rechazar marcador…
+                  </Button>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="dispute-reason" className="text-sm">
+                      Motivo del rechazo (obligatorio)
+                    </Label>
+                    <Textarea
+                      id="dispute-reason"
+                      value={rejectReason}
+                      onChange={(e) => setRejectReason(e.target.value)}
+                      placeholder="Ej.: El tercer set no fue a muerte súbita…"
+                      className="min-h-[5rem] resize-y"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="flex-1"
+                        disabled={responding}
+                        onClick={() => {
+                          setRejectOpen(false)
+                          setRejectReason('')
+                        }}
+                      >
+                        Volver
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        className="flex-1"
+                        disabled={responding}
+                        onClick={() => void handleRejectOpponent()}
+                      >
+                        Enviar rechazo
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : !formEditable ? (
               <p className="text-center text-sm text-muted-foreground">
-                No tienes permiso para editar este resultado.
+                {!participant
+                  ? 'No participas en este partido.'
+                  : match.status === 'score_submitted' && currentUserId === match.player_a_user_id
+                    ? 'Enviaste el marcador. Espera a que tu rival lo revise.'
+                    : match.status === 'player_confirmed'
+                      ? 'El rival aceptó el marcador. Un administrador cerrará el resultado oficialmente.'
+                      : 'No puedes editar el marcador en este estado.'}
               </p>
             ) : (
               <Button
@@ -317,7 +480,7 @@ export function MatchScoreSheet(props: {
                 className="h-12 w-full text-base font-semibold shadow-sm"
                 disabled={form.formState.isSubmitting}
               >
-                Guardar marcador
+                {match.status === 'score_disputed' ? 'Guardar y reenviar a tu rival' : 'Enviar marcador a tu rival'}
               </Button>
             )}
           </div>

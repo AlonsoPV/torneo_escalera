@@ -37,6 +37,11 @@ export function GroupAdminCard({
         <div className="flex flex-wrap gap-2">
           <AdminStatusBadge status={getGroupStatus(group)} />
           {generated ? <AdminStatusBadge status="generated" /> : null}
+          {group.category?.name ? (
+            <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-[#475569]">
+              {group.category.name}
+            </span>
+          ) : null}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">

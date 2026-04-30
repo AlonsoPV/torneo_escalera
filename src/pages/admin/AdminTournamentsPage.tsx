@@ -1,4 +1,16 @@
-import { Eye, Lock, Plus, Trophy } from 'lucide-react'
+import {
+  AlertTriangle,
+  CalendarClock,
+  CalendarDays,
+  CheckCircle2,
+  ChevronDown,
+  Eye,
+  Flag,
+  Lock,
+  Plus,
+  Trophy,
+  Users,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -8,14 +20,18 @@ import { AdminDataTable, type AdminDataTableColumn } from '@/components/admin/sh
 import { AdminConfirmDialog } from '@/components/admin/shared/AdminConfirmDialog'
 import { AdminEmptyState } from '@/components/admin/shared/AdminEmptyState'
 import { AdminFormModal } from '@/components/admin/shared/AdminFormModal'
+import { AdminMetricCard, ADMIN_METRIC_GRID_4 } from '@/components/admin/shared/AdminMetricCard'
 import { AdminPageHeader } from '@/components/admin/shared/AdminPageHeader'
+import { AdminSectionTitle } from '@/components/admin/shared/AdminSectionTitle'
 import { AdminStatusBadge } from '@/components/admin/shared/AdminStatusBadge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import { tournamentPath } from '@/lib/tournamentUrl'
+import { computeAdminMatchBreakdown, getAdminMatches, getAdminOverviewData } from '@/services/admin'
 import { createTournament, listTournaments, updateTournament } from '@/services/tournaments'
 import { useAuthStore } from '@/stores/authStore'
 import type { Tournament } from '@/types/database'
@@ -34,6 +50,8 @@ function CreateTournamentModal({
     <AdminFormModal
       trigger={
         <Button
+          id="admin-tournaments-btn-open-create"
+          name="open-create-tournament"
           className="w-full sm:w-auto"
           disabled={disabled}
           title={disabled ? 'Cierra el torneo actual antes de crear otro' : undefined}
@@ -50,6 +68,8 @@ function CreateTournamentModal({
       }
     >
       <form
+        id="form-admin-tournament-create"
+        name="createTournament"
         className="space-y-4"
         onSubmit={(event) => {
           event.preventDefault()
@@ -57,14 +77,27 @@ function CreateTournamentModal({
         }}
       >
         <div className="space-y-2">
-          <Label htmlFor="tournament-name">Nombre</Label>
-          <Input id="tournament-name" value={name} onChange={(event) => setName(event.target.value)} required />
+          <Label htmlFor="admin-tournament-create-name">Nombre</Label>
+          <Input
+            id="admin-tournament-create-name"
+            name="tournamentName"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+            autoComplete="off"
+          />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="tournament-category">Categoría</Label>
-          <Input id="tournament-category" value={category} onChange={(event) => setCategory(event.target.value)} />
+          <Label htmlFor="admin-tournament-create-category">Categoría</Label>
+          <Input
+            id="admin-tournament-create-category"
+            name="tournamentCategory"
+            value={category}
+            onChange={(event) => setCategory(event.target.value)}
+            autoComplete="off"
+          />
         </div>
-        <Button type="submit" className="w-full" disabled={disabled}>
+        <Button id="admin-tournament-create-submit" name="submitCreateTournament" type="submit" className="w-full" disabled={disabled}>
           Crear torneo
         </Button>
       </form>
@@ -75,7 +108,12 @@ function CreateTournamentModal({
 export function AdminTournamentsPage() {
   const qc = useQueryClient()
   const userId = useAuthStore((s) => s.user?.id)
+  const [pendingMetricsOpen, setPendingMetricsOpen] = useState(false)
   const tournamentsQ = useQuery({ queryKey: ['admin-tournaments'], queryFn: listTournaments })
+  const overviewQ = useQuery({ queryKey: ['admin-overview'], queryFn: getAdminOverviewData })
+  const matchesQ = useQuery({ queryKey: ['admin-matches'], queryFn: () => getAdminMatches() })
+  const breakdown = useMemo(() => computeAdminMatchBreakdown(matchesQ.data ?? []), [matchesQ.data])
+
   const hasOpenTournament = useMemo(
     () => (tournamentsQ.data ?? []).some((t) => t.status !== 'finished'),
     [tournamentsQ.data],
@@ -93,7 +131,11 @@ export function AdminTournamentsPage() {
     },
     onSuccess: async () => {
       toast.success('Torneo creado')
-      await qc.invalidateQueries({ queryKey: ['admin-tournaments'] })
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['admin-tournaments'] }),
+        qc.invalidateQueries({ queryKey: ['admin-overview'] }),
+        qc.invalidateQueries({ queryKey: ['admin-matches'] }),
+      ])
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Error al crear torneo'),
   })
@@ -132,10 +174,20 @@ export function AdminTournamentsPage() {
       header: 'Acciones',
       render: (tournament) => (
         <div className="flex flex-wrap gap-2">
-          <Link className={buttonVariants({ variant: 'outline', size: 'sm' })} to={tournamentPath(tournament)}>
+          <Link
+            id={`admin-tournament-link-manage-${tournament.id}`}
+            data-name={`manageTournament-${tournament.id}`}
+            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            to={tournamentPath(tournament)}
+          >
             Gestionar torneo
           </Link>
-          <Link className={buttonVariants({ variant: 'ghost', size: 'sm' })} to="/dashboard">
+          <Link
+            id={`admin-tournament-link-dashboard-${tournament.id}`}
+            data-name={`viewDashboard-${tournament.id}`}
+            className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+            to="/dashboard"
+          >
             <Eye className="size-3.5" />
             Ver en inicio
           </Link>
@@ -146,7 +198,13 @@ export function AdminTournamentsPage() {
             disabled={closeMut.isPending || tournament.status === 'finished'}
             onConfirm={() => closeMut.mutate(tournament.id)}
             trigger={
-              <Button variant="destructive" size="sm" disabled={tournament.status === 'finished'}>
+              <Button
+                id={`admin-tournament-btn-close-${tournament.id}`}
+                name={`closeTournament-${tournament.id}`}
+                variant="destructive"
+                size="sm"
+                disabled={tournament.status === 'finished'}
+              >
                 <Lock className="size-3.5" />
                 Cerrar torneo
               </Button>
@@ -157,18 +215,140 @@ export function AdminTournamentsPage() {
     },
   ]
 
+  const overview = overviewQ.data
+
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div id="page-admin-tournaments" className="space-y-5 sm:space-y-8 md:space-y-10">
       <AdminPageHeader
-        eyebrow="Torneos"
-        title="Administración de torneos"
-        description={
-          hasOpenTournament
-            ? 'Solo puedes crear un torneo nuevo cuando el actual esté cerrado (estado finalizado).'
-            : 'Crea torneos y entra al detalle para configurar reglas, grupos y calendarios.'
-        }
+        eyebrow="Administración"
+        title="Torneos"
+        description="Gestiona torneos, revisa el estado operativo (grupos, agenda y resultados) y abre el detalle para reglas y cruces."
         actions={<CreateTournamentModal disabled={hasOpenTournament} onCreate={(values) => createMut.mutate(values)} />}
       />
+
+      {overviewQ.isLoading || matchesQ.isLoading ? (
+        <div id="admin-tournaments-loading" className="space-y-5 sm:space-y-8">
+          <Skeleton className="h-8 max-w-sm rounded-lg" />
+          <div className={ADMIN_METRIC_GRID_4}>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="h-[5.5rem] rounded-2xl sm:h-24" />
+            ))}
+          </div>
+        </div>
+      ) : overview ? (
+        <>
+          <section id="section-admin-tournaments-metrics-op" className="space-y-3 sm:space-y-4" aria-labelledby="tournaments-metrics-op">
+            <AdminSectionTitle
+              id="tournaments-metrics-op"
+              title="Operación general"
+              description="Capacidad actual del sistema y torneos en curso."
+            />
+            <div id="admin-tournaments-metrics-operation" className={ADMIN_METRIC_GRID_4}>
+              <AdminMetricCard
+                label="Torneos activos"
+                value={overview.activeTournaments}
+                icon={Trophy}
+                tone="success"
+                description={`De ${overview.totalTournaments} torneo(s) en total`}
+              />
+              <AdminMetricCard
+                label="Total jugadores"
+                value={overview.totalPlayers}
+                icon={Users}
+                tone="neutral"
+                description="Rol jugador en perfiles"
+              />
+              <AdminMetricCard
+                label="Total grupos"
+                value={overview.totalGroups}
+                icon={Flag}
+                tone="info"
+                description="Grupos creados"
+              />
+              <AdminMetricCard
+                label="Grupos incompletos"
+                value={overview.incompleteGroups}
+                icon={AlertTriangle}
+                tone={overview.incompleteGroups > 0 ? 'warning' : 'neutral'}
+                description="Por debajo del cupo del grupo"
+              />
+            </div>
+          </section>
+
+          <section
+            id="section-admin-tournaments-metrics-pending"
+            className="rounded-xl border border-amber-200/70 bg-gradient-to-b from-amber-50/35 to-white p-3 shadow-sm ring-1 ring-amber-900/[0.04] sm:rounded-2xl sm:p-4 sm:ring-amber-900/[0.03]"
+            aria-label="Agenda y pendientes"
+          >
+            <details onToggle={(event) => setPendingMetricsOpen(event.currentTarget.open)}>
+              <summary className="flex cursor-pointer list-none items-start justify-between gap-3 rounded-lg py-0.5 text-left outline-none [&::-webkit-details-marker]:hidden focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white">
+                <div className="min-w-0 flex-1 pr-1">
+                  <h3 id="tournaments-metrics-pending" className="text-sm font-semibold leading-snug tracking-tight text-slate-900 sm:text-[0.9375rem]">
+                    Agenda y pendientes
+                  </h3>
+                  <p className="mt-0.5 text-[11px] leading-snug text-slate-500 sm:text-xs">
+                    <span className="max-sm:inline sm:hidden">Toca para ver huecos de agenda y revisiones.</span>
+                    <span className="hidden sm:inline">Huecos de calendario y cola de revisión de marcadores.</span>
+                  </p>
+                </div>
+                <ChevronDown
+                  className={cn(
+                    'mt-0.5 size-5 shrink-0 text-amber-800/70 transition-transform duration-200',
+                    pendingMetricsOpen && 'rotate-180',
+                  )}
+                  aria-hidden
+                />
+              </summary>
+
+              <div className="mt-3 border-t border-amber-200/60 pt-3 sm:mt-3 sm:pt-3">
+                <p className="mb-3 hidden text-xs leading-relaxed text-slate-500 sm:block">
+                  Huecos de calendario y cola de revisión de marcadores.
+                </p>
+                <div
+                  id="admin-tournaments-metrics-pending"
+                  className={cn('max-sm:flex max-sm:flex-col max-sm:gap-2', 'sm:grid sm:grid-cols-2 sm:gap-4 xl:grid-cols-4 xl:gap-5')}
+                >
+                  <AdminMetricCard
+                    label="Partidos programados"
+                    value={breakdown.scheduled}
+                    icon={CalendarDays}
+                    tone="info"
+                    description="Estado programado en agenda"
+                  />
+                  <AdminMetricCard
+                    label="Partidos sin fecha"
+                    value={overview.matchesWithoutDate}
+                    icon={CalendarClock}
+                    tone={overview.matchesWithoutDate > 0 ? 'warning' : 'neutral'}
+                    description="Sin día asignado"
+                  />
+                  <AdminMetricCard
+                    label="Resultados pendientes"
+                    value={overview.pendingResults}
+                    icon={AlertTriangle}
+                    tone={overview.pendingResults > 0 ? 'warning' : 'neutral'}
+                    description="Marcador enviado por jugador"
+                  />
+                  <AdminMetricCard
+                    label="Resultados confirmados"
+                    value={overview.confirmedResults}
+                    icon={CheckCircle2}
+                    tone="success"
+                    description="Cerrados por administración"
+                  />
+                </div>
+              </div>
+            </details>
+          </section>
+        </>
+      ) : null}
+
+      <section id="section-admin-tournaments-list" className="space-y-4" aria-labelledby="tournaments-table-heading">
+        <AdminSectionTitle
+          id="tournaments-table-heading"
+          title="Torneos registrados"
+          description="Cerrar un torneo liberará la creación de uno nuevo."
+        />
       {tournamentsQ.isLoading ? (
         <Skeleton className="h-72 rounded-2xl" />
       ) : (tournamentsQ.data ?? []).length === 0 ? (
@@ -179,13 +359,17 @@ export function AdminTournamentsPage() {
         />
       ) : (
         <>
-          <div className="hidden lg:block">
+          <div id="admin-tournaments-table-desktop" className="hidden md:block">
             <AdminDataTable rows={tournamentsQ.data ?? []} columns={columns} getRowKey={(tournament) => tournament.id} />
           </div>
-          <div className="grid grid-cols-1 gap-3 lg:hidden">
+          <div id="admin-tournaments-cards-mobile" className="grid grid-cols-1 gap-4 md:hidden">
             {(tournamentsQ.data ?? []).map((tournament) => (
-              <Card key={tournament.id} className="border-[#E2E8F0] bg-white shadow-sm">
-                <CardContent className="space-y-4 p-4">
+              <Card
+                key={tournament.id}
+                id={`admin-tournament-card-${tournament.id}`}
+                className="rounded-2xl border border-slate-200/70 bg-white shadow-sm"
+              >
+                <CardContent className="space-y-4 p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-[#102A43]">{tournament.name}</p>
@@ -207,12 +391,16 @@ export function AdminTournamentsPage() {
                   </div>
                   <div className="flex flex-col gap-2 border-t border-[#E2E8F0] pt-3 sm:flex-row sm:flex-wrap">
                     <Link
+                      id={`admin-tournament-mobile-link-manage-${tournament.id}`}
+                      data-name={`manageTournamentMobile-${tournament.id}`}
                       className={buttonVariants({ variant: 'outline', size: 'sm', className: 'w-full justify-center sm:w-auto' })}
                       to={tournamentPath(tournament)}
                     >
                       Gestionar torneo
                     </Link>
                     <Link
+                      id={`admin-tournament-mobile-link-dashboard-${tournament.id}`}
+                      data-name={`viewDashboardMobile-${tournament.id}`}
                       className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'w-full justify-center sm:w-auto' })}
                       to="/dashboard"
                     >
@@ -227,6 +415,8 @@ export function AdminTournamentsPage() {
                       onConfirm={() => closeMut.mutate(tournament.id)}
                       trigger={
                         <Button
+                          id={`admin-tournament-mobile-btn-close-${tournament.id}`}
+                          name={`closeTournamentMobile-${tournament.id}`}
                           variant="destructive"
                           size="sm"
                           className="w-full sm:w-auto"
@@ -244,6 +434,7 @@ export function AdminTournamentsPage() {
           </div>
         </>
       )}
+      </section>
     </div>
   )
 }

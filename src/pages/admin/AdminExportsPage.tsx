@@ -22,14 +22,14 @@ export function AdminExportsPage() {
     { title: 'Resultados', count: resultsQ.data?.length ?? 0 },
     {
       title: 'Ranking',
-      count: (matchesQ.data ?? []).filter((match) => ['confirmed', 'corrected'].includes(match.status)).length,
+      count: (matchesQ.data ?? []).filter((match) => match.status === 'closed').length,
     },
   ]
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="space-y-8 sm:space-y-10">
       <AdminPageHeader
-        eyebrow="Exportaciones"
+        eyebrow="Administración"
         title="Exportaciones"
         description="Vista de reportes calculada con datos actuales de Supabase."
         actions={

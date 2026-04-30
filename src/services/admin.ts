@@ -3,6 +3,7 @@ import { addGroupPlayer, removeGroupPlayer as removeGroupMembership } from '@/se
 import { saveMatchScore, updateMatchSchedule, type MatchSchedulePatch } from '@/services/matches'
 import type {
   Group,
+  GroupCategory,
   GroupPlayer,
   MatchRow,
   MatchStatus,
@@ -18,6 +19,7 @@ export type AdminGroupPlayer = GroupPlayer & {
 
 export type AdminGroupRecord = Group & {
   tournament: Tournament | null
+  category: GroupCategory | null
   players: AdminGroupPlayer[]
   matches: MatchRow[]
 }
@@ -65,9 +67,10 @@ export type ChangePasswordInput = {
 }
 
 async function listAllAdminData() {
-  const [tournaments, groups, groupPlayers, matches, profiles] = await Promise.all([
+  const [tournaments, groups, groupCategories, groupPlayers, matches, profiles] = await Promise.all([
     supabase.from('tournaments').select('*').order('created_at', { ascending: false }),
     supabase.from('groups').select('*').order('order_index', { ascending: true }),
+    supabase.from('group_categories').select('*').order('order_index', { ascending: true }),
     supabase.from('group_players').select('*').order('seed_order', { ascending: true }),
     supabase.from('matches').select('*').order('created_at', { ascending: false }),
     supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(500),
@@ -76,9 +79,15 @@ async function listAllAdminData() {
   const error = tournaments.error || groups.error || groupPlayers.error || matches.error
   if (error) throw error
 
+  // `group_categories` puede no existir si la migración aún no se aplicó: no bloquear todo el admin.
+  const groupCategoriesRows = groupCategories.error
+    ? ([] as GroupCategory[])
+    : ((groupCategories.data ?? []) as GroupCategory[])
+
   return {
     tournaments: (tournaments.data ?? []) as Tournament[],
     groups: (groups.data ?? []) as Group[],
+    groupCategories: groupCategoriesRows,
     groupPlayers: (groupPlayers.data ?? []) as GroupPlayer[],
     matches: (matches.data ?? []) as MatchRow[],
     profiles: profiles.error ? [] : ((profiles.data ?? []) as Profile[]),
@@ -122,7 +131,9 @@ export async function getAdminOverviewData(): Promise<AdminOverviewData> {
     playerCounts.set(player.group_id, (playerCounts.get(player.group_id) ?? 0) + 1)
   }
 
-  const pendingResults = data.matches.filter((m) => m.status === 'result_submitted').length
+  const pendingResults = data.matches.filter((m) =>
+    ['player_confirmed', 'score_disputed'].includes(m.status),
+  ).length
   const totalMatches = data.matches.length
   const matchesWithoutDate = data.matches.filter((m) => !m.scheduled_date).length
   const incompleteGroups = data.groups.filter((g) => (playerCounts.get(g.id) ?? 0) < g.max_players).length
@@ -136,9 +147,9 @@ export async function getAdminOverviewData(): Promise<AdminOverviewData> {
     totalGroups: data.groups.length,
     totalMatches,
     matchesWithoutDate,
-    playedMatches: data.matches.filter((m) => ['confirmed', 'corrected'].includes(m.status)).length,
+    playedMatches: data.matches.filter((m) => m.status === 'closed').length,
     pendingResults,
-    confirmedResults: data.matches.filter((m) => m.status === 'confirmed').length,
+    confirmedResults: data.matches.filter((m) => m.status === 'closed').length,
     incompleteGroups,
     activeTournaments: data.tournaments.filter((t) => t.status === 'active').length,
     totalTournaments: data.tournaments.length,
@@ -147,9 +158,59 @@ export async function getAdminOverviewData(): Promise<AdminOverviewData> {
   }
 }
 
+/** Conteos por estado de partido para dashboards admin (matches / results / tournaments). */
+export type AdminMatchBreakdown = {
+  total: number
+  scheduled: number
+  withoutDate: number
+  readyForScore: number
+  scoreSubmitted: number
+  scoreDisputed: number
+  playerConfirmed: number
+  adminValidated: number
+  closed: number
+  cancelled: number
+  /** Marcador en curso o cerrado (excl. cancelados sin juego). */
+  withOutcome: number
+  /** W/O u otros tipos distintos de partido normal. */
+  defaultResults: number
+  /** Cola sugerida para admin (validar / controversia). */
+  needsAdminAttention: number
+}
+
+export function computeAdminMatchBreakdown(matches: MatchRow[]): AdminMatchBreakdown {
+  const needsAdminAttention = matches.filter((m) =>
+    ['player_confirmed', 'score_disputed'].includes(m.status),
+  ).length
+  return {
+    total: matches.length,
+    scheduled: matches.filter((m) => m.status === 'scheduled').length,
+    withoutDate: matches.filter((m) => !m.scheduled_date).length,
+    readyForScore: matches.filter((m) => m.status === 'ready_for_score').length,
+    scoreSubmitted: matches.filter((m) => m.status === 'score_submitted').length,
+    scoreDisputed: matches.filter((m) => m.status === 'score_disputed').length,
+    playerConfirmed: matches.filter((m) => m.status === 'player_confirmed').length,
+    adminValidated: matches.filter((m) => m.status === 'admin_validated').length,
+    closed: matches.filter((m) => m.status === 'closed').length,
+    cancelled: matches.filter((m) => m.status === 'cancelled').length,
+    withOutcome: matches.filter((m) =>
+      [
+        'score_submitted',
+        'score_disputed',
+        'player_confirmed',
+        'admin_validated',
+        'closed',
+      ].includes(m.status),
+    ).length,
+    defaultResults: matches.filter((m) => m.result_type !== 'normal').length,
+    needsAdminAttention,
+  }
+}
+
 export async function getAdminGroups(tournamentId?: string): Promise<AdminGroupRecord[]> {
   const data = await listAllAdminData()
   const tournamentById = new Map(data.tournaments.map((t) => [t.id, t]))
+  const categoryById = new Map(data.groupCategories.map((c) => [c.id, c]))
   const profileById = new Map(data.profiles.map((p) => [p.id, p]))
   const groups = tournamentId
     ? data.groups.filter((group) => group.tournament_id === tournamentId)
@@ -158,6 +219,7 @@ export async function getAdminGroups(tournamentId?: string): Promise<AdminGroupR
   return groups.map((group) => ({
     ...group,
     tournament: tournamentById.get(group.tournament_id) ?? null,
+    category: group.group_category_id ? categoryById.get(group.group_category_id) ?? null : null,
     players: data.groupPlayers
       .filter((player) => player.group_id === group.id)
       .map((player) => ({ ...player, profile: profileById.get(player.user_id) ?? null })),
@@ -167,7 +229,7 @@ export async function getAdminGroups(tournamentId?: string): Promise<AdminGroupR
 
 export async function updateGroup(
   groupId: string,
-  patch: Partial<Pick<Group, 'name' | 'order_index' | 'max_players'>>,
+  patch: Partial<Pick<Group, 'name' | 'order_index' | 'max_players' | 'group_category_id'>>,
 ): Promise<void> {
   const { error } = await supabase.from('groups').update(patch).eq('id', groupId)
   if (error) throw error
@@ -228,6 +290,9 @@ export async function getAdminResults(): Promise<AdminMatchRecord[]> {
 
 export async function confirmResult(match: MatchRow, actorUserId: string): Promise<void> {
   if (!match.score_raw) throw new Error('El partido no tiene marcador para confirmar.')
+  if (match.status !== 'player_confirmed') {
+    throw new Error('Solo puedes cerrar oficialmente partidos aceptados por el rival.')
+  }
   await saveMatchScore({ match, sets: match.score_raw, actorUserId, isAdmin: true })
 }
 

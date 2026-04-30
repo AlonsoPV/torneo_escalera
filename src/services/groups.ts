@@ -15,6 +15,7 @@ export async function createGroup(input: {
   tournamentId: string
   name: string
   orderIndex?: number
+  groupCategoryId?: string | null
 }): Promise<Group> {
   const { data, error } = await supabase
     .from('groups')
@@ -22,6 +23,7 @@ export async function createGroup(input: {
       tournament_id: input.tournamentId,
       name: input.name,
       order_index: input.orderIndex ?? 0,
+      group_category_id: input.groupCategoryId ?? null,
     })
     .select('*')
     .single()

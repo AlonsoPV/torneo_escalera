@@ -123,7 +123,7 @@ export function matchFromSimulation(
       resultType: 'default',
       defaultWinner: data.defaultWinner,
       winnerId,
-      status: 'confirmed',
+      status: 'closed',
     }
   }
   const winnerId = winnerFromNormal(data.score, playerAId, playerBId)
@@ -135,7 +135,7 @@ export function matchFromSimulation(
     resultType: 'normal',
     score: data.score,
     winnerId,
-    status: 'confirmed',
+    status: 'closed',
   }
 }
 
