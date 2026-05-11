@@ -1,9 +1,7 @@
 import {
   AlertTriangle,
   CalendarClock,
-  CalendarDays,
   CheckCircle2,
-  Clock3,
   ListFilter,
   Search,
   Trophy,
@@ -15,12 +13,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 import { AdminMatchTable } from '@/components/admin/matches/AdminMatchTable'
+import { AdminScoreCorrectionModal } from '@/components/admin/results/AdminScoreCorrectionModal'
 import { AdminEmptyState } from '@/components/admin/shared/AdminEmptyState'
 import { AdminMetricCard, ADMIN_METRIC_GRID_4 } from '@/components/admin/shared/AdminMetricCard'
 import { AdminPageHeader } from '@/components/admin/shared/AdminPageHeader'
 import { AdminSectionTitle } from '@/components/admin/shared/AdminSectionTitle'
 import { AdminToolbar } from '@/components/admin/shared/AdminToolbar'
-import { ScoreEditorModal } from '@/components/admin/results/ScoreEditorModal'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -32,7 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { computeAdminMatchBreakdown, correctResult, getAdminGroups, getAdminMatches, type AdminMatchRecord } from '@/services/admin'
+import { cancelResult, computeAdminMatchBreakdown, correctResult, getAdminGroups, getAdminMatches, type AdminMatchRecord } from '@/services/admin'
 import { getTournamentRules } from '@/services/tournaments'
 import { useAuthStore } from '@/stores/authStore'
 import type { MatchStatus, ScoreSet } from '@/types/database'
@@ -55,16 +53,31 @@ export function AdminMatchesPage() {
   const breakdown = useMemo(() => computeAdminMatchBreakdown(matchesQ.data ?? []), [matchesQ.data])
 
   const resultMut = useMutation({
-    mutationFn: async (input: { match: AdminMatchRecord; sets: ScoreSet[] }) => {
+    mutationFn: async (input: { match: AdminMatchRecord; sets: ScoreSet[]; closeAfter: boolean; adminNote: string }) => {
       if (!actorId) throw new Error('No autenticado')
-      await correctResult(input.match, input.sets, actorId)
+      await correctResult(input.match, input.sets, actorId, input.closeAfter, input.adminNote)
     },
-    onSuccess: async () => {
-      toast.success('Resultado actualizado')
+    onSuccess: async (_data, variables) => {
+      toast.success(variables.closeAfter ? 'Resultado confirmado' : 'Corrección guardada')
       setEditingResult(null)
       await qc.invalidateQueries({ queryKey: ['admin-matches'] })
+      await qc.invalidateQueries({ queryKey: ['admin-results'] })
+      await qc.invalidateQueries({ queryKey: ['admin-overview'] })
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Error al editar resultado'),
+  })
+
+  const cancelMut = useMutation({
+    mutationFn: async (match: AdminMatchRecord) => {
+      if (!actorId) throw new Error('No autenticado')
+      await cancelResult(match.id, actorId)
+    },
+    onSuccess: async () => {
+      toast.success('Partido cancelado')
+      await qc.invalidateQueries({ queryKey: ['admin-matches'] })
+      await qc.invalidateQueries({ queryKey: ['admin-results'] })
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Error al cancelar partido'),
   })
 
   const filteredMatches = useMemo(() => {
@@ -84,14 +97,14 @@ export function AdminMatchesPage() {
       <AdminPageHeader
         eyebrow="Administración"
         title="Partidos"
-        description="Agenda, edita y monitorea los partidos del torneo. Filtra por grupo o estado y revisa marcadores."
+        description="Monitorea los cruces del torneo. Filtra por grupo o estado y revisa marcadores."
       />
 
       <section className="space-y-3 sm:space-y-4" aria-labelledby="matches-metrics-heading">
         <AdminSectionTitle
           id="matches-metrics-heading"
           title="Resumen operativo"
-          description="Conteos globales para priorizar agenda, huecos sin fecha y partidos que requieren acción."
+          description="Conteos globales para priorizar marcadores pendientes y partidos que requieren acción."
         />
         {matchesQ.isLoading ? (
           <div className={ADMIN_METRIC_GRID_4}>
@@ -109,32 +122,11 @@ export function AdminMatchesPage() {
               description="Todos los cruces generados"
             />
             <AdminMetricCard
-              label="Programados"
-              value={breakdown.scheduled}
-              icon={CalendarDays}
+              label="Pendientes de marcador"
+              value={breakdown.pendingScore}
+              icon={CalendarClock}
               tone="info"
-              description="Con fecha u hora en agenda"
-            />
-            <AdminMetricCard
-              label="Sin fecha"
-              value={breakdown.withoutDate}
-              icon={AlertTriangle}
-              tone="warning"
-              description="Falta asignar día de juego"
-            />
-            <AdminMetricCard
-              label="Listos para marcador"
-              value={breakdown.readyForScore}
-              icon={Clock3}
-              tone="info"
-              description="Estado listo para captura (según calendario)"
-            />
-            <AdminMetricCard
-              label="Jugados (con resultado)"
-              value={breakdown.withOutcome}
-              icon={CheckCircle2}
-              tone="success"
-              description="En flujo de marcador o cerrado oficialmente"
+              description="Disponibles para captura por Jugador A"
             />
             <AdminMetricCard
               label="Esperando al rival"
@@ -142,6 +134,13 @@ export function AdminMatchesPage() {
               icon={AlertTriangle}
               tone="warning"
               description="Marcador enviado por Jugador A"
+            />
+            <AdminMetricCard
+              label="Jugados (con resultado)"
+              value={breakdown.withOutcome}
+              icon={CheckCircle2}
+              tone="success"
+              description="En flujo de marcador o cerrado oficialmente"
             />
             <AdminMetricCard
               label="Revisión admin"
@@ -220,12 +219,10 @@ export function AdminMatchesPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los estados</SelectItem>
-                  <SelectItem value="scheduled">Programado</SelectItem>
-                  <SelectItem value="ready_for_score">Listo para marcador</SelectItem>
+                  <SelectItem value="pending_score">Pendiente de marcador</SelectItem>
                   <SelectItem value="score_submitted">Marcador enviado</SelectItem>
                   <SelectItem value="score_disputed">Marcador en disputa</SelectItem>
                   <SelectItem value="player_confirmed">Aceptado por rival</SelectItem>
-                  <SelectItem value="admin_validated">Validado por admin</SelectItem>
                   <SelectItem value="closed">Cerrado</SelectItem>
                   <SelectItem value="cancelled">Cancelado</SelectItem>
                 </SelectContent>
@@ -259,18 +256,22 @@ export function AdminMatchesPage() {
             icon={CalendarClock}
           />
         ) : (
-          <AdminMatchTable matches={filteredMatches} onEditResult={(match) => setEditingResult(match)} />
+          <AdminMatchTable
+            matches={filteredMatches}
+            onEditResult={(match) => setEditingResult(match)}
+            onCancel={(match) => cancelMut.mutate(match)}
+          />
         )}
       </section>
 
-      <ScoreEditorModal
+      <AdminScoreCorrectionModal
         match={editingResult}
         rules={rulesForEditor.data ?? null}
         open={Boolean(editingResult)}
         onOpenChange={(open) => {
           if (!open) setEditingResult(null)
         }}
-        onSubmit={(match, sets) => resultMut.mutate({ match, sets })}
+        onSubmit={(input) => resultMut.mutate(input)}
       />
     </div>
   )

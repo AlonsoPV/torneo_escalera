@@ -1,6 +1,7 @@
 import { ChevronRight, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
+import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { GroupPlayer } from '@/types/database'
@@ -42,6 +43,8 @@ export function PlayerGroupCard({
 
   return (
     <section
+      id="player-section-group"
+      data-name="player-section-group"
       className={cn(
         'overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white shadow-sm',
         className,
@@ -53,8 +56,8 @@ export function PlayerGroupCard({
             <Users className="size-4" />
           </span>
           <div>
-            <h2 className="text-lg font-semibold text-[#102A43]">Mi grupo</h2>
-            <p className="text-sm text-[#64748B]">{groupName}</p>
+            <h2 className="text-lg font-semibold text-[#102A43]">{groupName}</h2>
+            <p className="text-sm text-[#64748B]">Jugadores del grupo</p>
           </div>
         </div>
       </div>
@@ -74,12 +77,15 @@ export function PlayerGroupCard({
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#F6F3EE] text-xs font-semibold text-[#64748B]">
                   {pos}
                 </span>
-                <span
-                  className={cn('truncate text-sm', isYou ? 'font-semibold text-[#102A43]' : 'text-[#102A43]')}
-                >
-                  {isYou ? `Tú — ${p.display_name}` : p.display_name}
+                <span className={cn('truncate text-sm', isYou ? 'font-semibold text-[#102A43]' : 'text-[#102A43]')}>
+                  {p.display_name}
                 </span>
               </div>
+              {isYou ? (
+                <Badge variant="outline" className="shrink-0 border-[#1F5A4C]/25 bg-[#1F5A4C]/8 text-[#1F5A4C]">
+                  Tú
+                </Badge>
+              ) : null}
             </li>
           )
         })}

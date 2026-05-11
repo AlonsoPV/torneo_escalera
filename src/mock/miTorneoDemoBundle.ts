@@ -76,7 +76,7 @@ function matchTbd(id: string, low: SimPlayer, high: SimPlayer): SimMatch {
     playerBId: cb.id,
     resultType: 'normal',
     winnerId: null,
-    status: 'scheduled',
+    status: 'pending_score',
   }
 }
 

@@ -72,10 +72,10 @@ export function computeGroupRanking(players: GroupPlayer[], matches: MatchRow[],
 
     const isDefault = isDefaultType(m.result_type)
     if (!isDefault) {
-      if (!m.score_raw || m.score_raw.length === 0) continue
+      if (m.game_type !== 'sudden_death' && (!m.score_raw || m.score_raw.length === 0)) continue
     }
 
-    const sets: ScoreSet[] = isDefault ? [] : m.score_raw!
+    const sets: ScoreSet[] = isDefault || m.game_type === 'sudden_death' ? [] : m.score_raw!
 
     statsA.played += 1
     statsB.played += 1

@@ -82,7 +82,7 @@ export function GroupPlayerManager({
         <DialogHeader className="shrink-0 space-y-2 border-b border-slate-200/80 px-5 pb-4 pt-5 sm:px-7 sm:pb-5 sm:pt-6">
           <DialogTitle className="pr-8 text-lg text-[#102A43] sm:text-xl">Gestionar {group.name}</DialogTitle>
           <DialogDescription className="text-sm leading-relaxed">
-            Edita datos del grupo, jugadores, cruces round-robin y la ventana de captura en un solo panel.
+            Edita datos del grupo, jugadores y cruces round-robin en un solo panel.
           </DialogDescription>
         </DialogHeader>
 
@@ -230,7 +230,7 @@ export function GroupPlayerManager({
               <div>
                 <h3 className="text-sm font-semibold text-[#102A43]">Cruces round-robin</h3>
                 <p className="mt-2 text-xs leading-relaxed text-[#64748B]">
-                  Genera partidos desde el panel admin. «Regenerar» borra cruces previos del grupo.
+                  Al llegar a 5 jugadores se generan automáticamente 10 cruces. También puedes generar faltantes manualmente.
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -255,9 +255,9 @@ export function GroupPlayerManager({
 
             <div className="space-y-4 rounded-2xl border border-[#E2E8F0] p-5 sm:p-6">
               <div>
-                <h3 className="text-sm font-semibold text-[#102A43]">Agenda y captura</h3>
+                <h3 className="text-sm font-semibold text-[#102A43]">Cruces y captura</h3>
                 <p className="mt-2 text-xs leading-relaxed text-[#64748B]">
-                  Hora de fin y cancha para habilitar captura de marcador por jugadores.
+                  Al completarse el grupo se generan los cruces y los jugadores pueden registrar marcador.
                 </p>
               </div>
               <GroupMatchScheduleList

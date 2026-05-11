@@ -53,7 +53,7 @@ export function AdminSidebar({ onNavigate }: { onNavigate?: () => void }) {
       <div className="m-3 rounded-2xl border border-[#E2E8F0] bg-[#F6F3EE] p-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-[#1F5A4C]">Modo admin</p>
         <p className="mt-1 text-xs leading-5 text-[#64748B]">
-          Opera grupos, agenda partidos y revisa marcadores desde un solo lugar.
+          Opera grupos, cruces y marcadores desde un solo lugar.
         </p>
       </div>
     </aside>

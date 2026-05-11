@@ -1,10 +1,15 @@
 import { supabase } from '@/lib/supabase'
-import type { GroupPlayer, Json, MatchRow, MatchStatus, ScoreSet } from '@/types/database'
+import type { GroupPlayer, Json, MatchRow, MatchStatus, ScorePayload, ScoreSet } from '@/types/database'
 import { getTournamentRules } from '@/services/tournaments'
 import { orderPlayersCanonically, pairKey } from '@/utils/matches'
 import {
   computeWinnerGroupPlayerId,
-  validateScoreAgainstRules,
+  scorePayloadToSets,
+  validateBestOf3Score,
+  validateLongSetScore,
+  validateScoreWithRules,
+  validateSuddenDeathScore,
+  winnerSideToGroupPlayerId,
 } from '@/utils/score'
 
 export async function listMatchesForGroup(groupId: string): Promise<MatchRow[]> {
@@ -26,35 +31,72 @@ function mapPostgresError(e: { message: string; code?: string; details?: string 
 
 export async function saveMatchScore(input: {
   match: MatchRow
-  sets: ScoreSet[]
+  sets?: ScoreSet[]
+  scorePayload?: ScorePayload
   actorUserId: string
   isAdmin: boolean
+  adminStatus?: MatchStatus
 }): Promise<void> {
   const rules = await getTournamentRules(input.match.tournament_id)
   if (!rules) throw new Error('No se encontraron reglas del torneo.')
 
-  const issues = validateScoreAgainstRules(input.sets, rules)
-  if (issues.length > 0) {
-    throw new Error(issues.map((i) => i.message).join(' '))
-  }
-
-  const winnerId = computeWinnerGroupPlayerId(
-    input.sets,
+  const fallbackWinner = computeWinnerGroupPlayerId(
+    input.sets ?? [],
     input.match.player_a_id,
     input.match.player_b_id,
     rules.best_of_sets,
   )
+  const payload: ScorePayload = input.scorePayload ?? (
+    input.match.game_type === 'sudden_death'
+      ? {
+          game_type: 'sudden_death',
+          score_json: null,
+          winner: input.match.winner_id === input.match.player_b_id ? 'b' : 'a',
+        }
+      : input.match.game_type === 'long_set'
+        ? {
+            game_type: 'long_set',
+            score_json: [input.sets?.[0] ?? { a: 0, b: 0 }],
+            winner: (input.sets?.[0]?.b ?? 0) > (input.sets?.[0]?.a ?? 0) ? 'b' : 'a',
+          }
+        : {
+            game_type: 'best_of_3',
+            score_json: input.sets ?? [],
+            winner: fallbackWinner === input.match.player_b_id ? 'b' : 'a',
+          }
+  )
+
+  const sets = scorePayloadToSets(payload)
+  let winnerId: string | null = null
+
+  if (payload.game_type === 'best_of_3') {
+    const validation = validateBestOf3Score(payload.score_json)
+    if (!validation.ok || !validation.winner) throw new Error(validation.errors.join(' '))
+    const rulesValidation = validateScoreWithRules(payload.score_json, rules)
+    if (!rulesValidation.ok) throw new Error(rulesValidation.errors.join(' '))
+    winnerId = winnerSideToGroupPlayerId(validation.winner, input.match)
+  } else if (payload.game_type === 'long_set') {
+    const validation = validateLongSetScore(payload.score_json[0])
+    if (!validation.ok || !validation.winner) throw new Error(validation.errors.join(' '))
+    winnerId = winnerSideToGroupPlayerId(validation.winner, input.match)
+  } else {
+    const validation = validateSuddenDeathScore({ game_type: payload.game_type, winner: payload.winner })
+    if (!validation.ok || !validation.winner) throw new Error(validation.errors.join(' '))
+    winnerId = winnerSideToGroupPlayerId(validation.winner, input.match)
+  }
+
   if (!winnerId) throw new Error('No se pudo determinar un ganador.')
 
-  const pScore = input.sets as unknown as Json
+  const pScore = (payload.game_type === 'sudden_death' ? null : sets) as unknown as Json
 
   if (input.isAdmin) {
     const { error } = await supabase.rpc('admin_set_match_result', {
       p_match_id: input.match.id,
       p_score: pScore,
       p_winner_id: winnerId,
-      p_status: 'closed',
+      p_status: input.adminStatus ?? 'closed',
       p_result_type: 'normal',
+      p_game_type: payload.game_type,
     })
     if (error) throw new Error(mapPostgresError(error))
     return
@@ -65,7 +107,86 @@ export async function saveMatchScore(input: {
     p_score: pScore,
     p_result_type: 'normal',
     p_winner_group_player_id: winnerId,
+    p_game_type: payload.game_type,
   })
+  if (error) throw new Error(mapPostgresError(error))
+}
+
+/**
+ * Jugador A: envía marcador → RPC `submit_player_match_result` deja el partido en `score_submitted`.
+ * Jugador B acepta con `respondOpponentMatchScore` → `player_confirmed`. El staff cierra → `closed`.
+ */
+export async function submitPlayerScore(input: {
+  match: MatchRow
+  sets?: ScoreSet[]
+  scorePayload?: ScorePayload
+  actorUserId: string
+}): Promise<void> {
+  return saveMatchScore({ ...input, isAdmin: false })
+}
+
+export async function submitMatchScore(
+  matchId: string,
+  playerId: string,
+  scorePayload: ScoreSet[] | ScorePayload,
+): Promise<void> {
+  const { data, error } = await supabase.from('matches').select('*').eq('id', matchId).single()
+  if (error) throw new Error(mapPostgresError(error))
+  return Array.isArray(scorePayload)
+    ? submitPlayerScore({ match: data as MatchRow, sets: scorePayload, actorUserId: playerId })
+    : submitPlayerScore({ match: data as MatchRow, scorePayload, actorUserId: playerId })
+}
+
+export async function correctAdminScore(input: {
+  match: MatchRow
+  sets: ScoreSet[]
+  actorUserId: string
+  closeAfter?: boolean
+}): Promise<void> {
+  return saveMatchScore({
+    ...input,
+    isAdmin: true,
+    adminStatus: input.closeAfter === false ? 'player_confirmed' : 'closed',
+  })
+}
+
+export async function closeAdminScore(input: {
+  match: MatchRow
+  actorUserId: string
+}): Promise<void> {
+  if (input.match.game_type === 'sudden_death') {
+    if (!input.match.winner_id) throw new Error('El partido no tiene ganador para cerrar.')
+    return saveMatchScore({
+      match: input.match,
+      scorePayload: {
+        game_type: 'sudden_death',
+        score_json: null,
+        winner: input.match.winner_id === input.match.player_b_id ? 'b' : 'a',
+      },
+      actorUserId: input.actorUserId,
+      isAdmin: true,
+    })
+  }
+  if (!input.match.score_raw?.length) throw new Error('El partido no tiene marcador para cerrar.')
+  return saveMatchScore({
+    match: input.match,
+    sets: input.match.score_raw,
+    actorUserId: input.actorUserId,
+    isAdmin: true,
+  })
+}
+
+export async function adminCloseMatch(matchId: string, adminId: string): Promise<void> {
+  const { data, error } = await supabase.from('matches').select('*').eq('id', matchId).single()
+  if (error) throw new Error(mapPostgresError(error))
+  return closeAdminScore({ match: data as MatchRow, actorUserId: adminId })
+}
+
+export async function cancelMatch(matchId: string, actorUserId: string): Promise<void> {
+  const { error } = await supabase
+    .from('matches')
+    .update({ status: 'cancelled', updated_by: actorUserId })
+    .eq('id', matchId)
   if (error) throw new Error(mapPostgresError(error))
 }
 
@@ -80,6 +201,29 @@ export async function respondOpponentMatchScore(input: {
     p_dispute_reason: input.disputeReason ?? null,
   })
   if (error) throw new Error(mapPostgresError(error))
+}
+
+export async function acceptPlayerScore(matchId: string): Promise<void> {
+  return respondOpponentMatchScore({ matchId, accept: true })
+}
+
+export async function acceptMatchScore(matchId: string, _playerId?: string): Promise<void> {
+  return acceptPlayerScore(matchId)
+}
+
+export async function rejectPlayerScore(input: {
+  matchId: string
+  disputeReason: string
+}): Promise<void> {
+  return respondOpponentMatchScore({
+    matchId: input.matchId,
+    accept: false,
+    disputeReason: input.disputeReason,
+  })
+}
+
+export async function rejectMatchScore(matchId: string, _playerId: string | undefined, reason: string): Promise<void> {
+  return rejectPlayerScore({ matchId, disputeReason: reason })
 }
 
 export async function adminReopenMatchResult(matchId: string): Promise<void> {
@@ -123,6 +267,7 @@ export async function generateRoundRobinMatches(input: {
     player_a_user_id: string
     player_b_user_id: string
     created_by: string | null
+    status: MatchStatus
   }[] = []
 
   for (let i = 0; i < players.length; i++) {
@@ -138,6 +283,7 @@ export async function generateRoundRobinMatches(input: {
         player_a_user_id: c.playerAUserId,
         player_b_user_id: c.playerBUserId,
         created_by: createdBy,
+        status: 'pending_score',
       })
     }
   }
@@ -147,53 +293,45 @@ export async function generateRoundRobinMatches(input: {
   if (error) throw new Error(mapPostgresError(error))
 }
 
-export type MatchSchedulePatch = {
-  scheduled_date?: string | null
-  scheduled_start_at?: string | null
-  scheduled_end_at?: string | null
-  location?: string | null
-}
-
-/**
- * Agendar partido. Si hay agenda, el estado pasa a `scheduled` salvo que ya tenga
- * resultado o esté en flujo de confirmación.
- */
-export async function updateMatchSchedule(
-  matchId: string,
-  patch: MatchSchedulePatch,
-  actorId: string,
-): Promise<void> {
-  const { data: row, error: fetchError } = await supabase
-    .from('matches')
-    .select('id, status')
-    .eq('id', matchId)
+export async function generateMatchesForGroupIfComplete(input: {
+  groupId: string
+  createdBy: string | null
+}): Promise<{ generated: boolean; reason?: 'incomplete' | 'exists'; expectedPlayers: number; playerCount: number }> {
+  const { data: group, error: groupError } = await supabase
+    .from('groups')
+    .select('id, tournament_id, max_players')
+    .eq('id', input.groupId)
     .single()
-  if (fetchError) throw fetchError
-  const hasSomeSchedule = Boolean(
-    patch.scheduled_date ?? patch.scheduled_start_at ?? patch.scheduled_end_at,
-  )
-  const keepStatus = [
-    'score_submitted',
-    'score_disputed',
-    'player_confirmed',
-    'admin_validated',
-    'closed',
-    'cancelled',
-  ].includes(row.status)
-  const nextStatus: MatchStatus | undefined = keepStatus
-    ? (row.status as MatchStatus)
-    : hasSomeSchedule
-      ? 'scheduled'
-      : undefined
-  const { error } = await supabase
-    .from('matches')
-    .update({
-      ...patch,
-      ...(nextStatus ? { status: nextStatus } : {}),
-      updated_by: actorId,
-    })
-    .eq('id', matchId)
-  if (error) throw error
+  if (groupError) throw groupError
+
+  const { data: playersData, error: playersError } = await supabase
+    .from('group_players')
+    .select('*')
+    .eq('group_id', input.groupId)
+    .order('seed_order', { ascending: true })
+    .order('id', { ascending: true })
+  if (playersError) throw playersError
+
+  const players = (playersData ?? []) as GroupPlayer[]
+  const expectedPlayers = group.max_players ?? 5
+  if (players.length < expectedPlayers) {
+    return { generated: false, reason: 'incomplete', expectedPlayers, playerCount: players.length }
+  }
+
+  const existing = await listMatchesForGroup(input.groupId)
+  if (existing.length > 0) {
+    return { generated: false, reason: 'exists', expectedPlayers, playerCount: players.length }
+  }
+
+  await generateRoundRobinMatches({
+    tournamentId: group.tournament_id,
+    groupId: input.groupId,
+    players,
+    createdBy: input.createdBy,
+    mode: 'fill',
+  })
+
+  return { generated: true, expectedPlayers, playerCount: players.length }
 }
 
 export function matchMapByPair(matches: MatchRow[]): Map<string, MatchRow> {

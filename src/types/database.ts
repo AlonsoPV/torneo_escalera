@@ -1,18 +1,17 @@
 export type UserRole = 'player' | 'admin' | 'super_admin' | 'captain' | 'referee'
 
-export type TournamentStatus = 'draft' | 'active' | 'finished'
+export type TournamentStatus = 'draft' | 'active' | 'finished' | 'archived'
 
 export type MatchStatus =
-  | 'scheduled'
-  | 'ready_for_score'
+  | 'pending_score'
   | 'score_submitted'
   | 'score_disputed'
   | 'player_confirmed'
-  | 'admin_validated'
   | 'closed'
   | 'cancelled'
 
 export type MatchResultType = 'normal' | 'default_win_a' | 'default_win_b'
+export type MatchGameType = 'best_of_3' | 'sudden_death' | 'long_set'
 
 export type Json =
   | string
@@ -23,6 +22,23 @@ export type Json =
   | Json[]
 
 export type ScoreSet = { a: number; b: number }
+export type ScoreWinnerSide = 'a' | 'b'
+export type ScorePayload =
+  | {
+      game_type: 'best_of_3'
+      score_json: ScoreSet[]
+      winner: ScoreWinnerSide
+    }
+  | {
+      game_type: 'sudden_death'
+      score_json: null
+      winner: ScoreWinnerSide
+    }
+  | {
+      game_type: 'long_set'
+      score_json: [ScoreSet]
+      winner: ScoreWinnerSide
+    }
 
 export interface Database {
   public: {
@@ -34,6 +50,13 @@ export interface Database {
           email: string | null
           role: UserRole
           created_at: string
+          external_id: string | null
+          category_id: string | null
+          status: 'active' | 'inactive'
+          auto_enroll_eligible: boolean
+          updated_at: string
+          import_carry_pj: number | null
+          import_carry_pts: number | null
         }
         Insert: {
           id: string
@@ -41,11 +64,25 @@ export interface Database {
           email?: string | null
           role?: UserRole
           created_at?: string
+          external_id?: string | null
+          category_id?: string | null
+          status?: 'active' | 'inactive'
+          auto_enroll_eligible?: boolean
+          updated_at?: string
+          import_carry_pj?: number | null
+          import_carry_pts?: number | null
         }
         Update: {
           full_name?: string | null
           email?: string | null
           role?: UserRole
+          external_id?: string | null
+          category_id?: string | null
+          status?: 'active' | 'inactive'
+          auto_enroll_eligible?: boolean
+          updated_at?: string
+          import_carry_pj?: number | null
+          import_carry_pts?: number | null
         }
       }
       tournaments: {
@@ -254,6 +291,7 @@ export interface Database {
           player_a_user_id: string
           player_b_user_id: string
           score_raw: ScoreSet[] | null
+          game_type: MatchGameType
           winner_id: string | null
           status: MatchStatus
           result_type: MatchResultType
@@ -287,6 +325,7 @@ export interface Database {
           player_a_user_id: string
           player_b_user_id: string
           score_raw?: ScoreSet[] | null
+          game_type?: MatchGameType
           winner_id?: string | null
           status?: MatchStatus
           result_type?: MatchResultType
@@ -313,6 +352,7 @@ export interface Database {
         }
         Update: {
           score_raw?: ScoreSet[] | null
+          game_type?: MatchGameType
           winner_id?: string | null
           status?: MatchStatus
           result_type?: MatchResultType
@@ -368,6 +408,96 @@ export interface Database {
           changed_by?: string | null
         }
       }
+      player_categories: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          name?: string
+          description?: string | null
+          created_by?: string | null
+          updated_at?: string
+        }
+      }
+      bulk_import_batches: {
+        Row: {
+          id: string
+          file_name: string | null
+          tournament_id: string | null
+          uploaded_by: string
+          total_rows: number
+          success_rows: number
+          error_rows: number
+          status: 'processing' | 'completed' | 'failed'
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          file_name?: string | null
+          tournament_id?: string | null
+          uploaded_by: string
+          total_rows?: number
+          success_rows?: number
+          error_rows?: number
+          status?: 'processing' | 'completed' | 'failed'
+          created_at?: string
+        }
+        Update: {
+          file_name?: string | null
+          total_rows?: number
+          success_rows?: number
+          error_rows?: number
+          status?: 'processing' | 'completed' | 'failed'
+        }
+      }
+      bulk_import_rows: {
+        Row: {
+          id: string
+          batch_id: string
+          row_number: number
+          external_id: string | null
+          full_name: string | null
+          role: string | null
+          group_name: string | null
+          category_name: string | null
+          status: 'success' | 'error'
+          error_message: string | null
+          created_profile_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          batch_id: string
+          row_number: number
+          external_id?: string | null
+          full_name?: string | null
+          role?: string | null
+          group_name?: string | null
+          category_name?: string | null
+          status: 'success' | 'error'
+          error_message?: string | null
+          created_profile_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          status?: 'success' | 'error'
+          error_message?: string | null
+          created_profile_id?: string | null
+        }
+      }
     }
     Views: Record<string, never>
     Functions: {
@@ -377,6 +507,7 @@ export interface Database {
           p_score: Json
           p_result_type: string
           p_winner_group_player_id: string | null
+          p_game_type?: MatchGameType
         }
         Returns: undefined
       }
@@ -387,6 +518,21 @@ export interface Database {
           p_winner_id: string
           p_status: string
           p_result_type: string
+          p_game_type?: MatchGameType
+        }
+        Returns: undefined
+      }
+      opponent_respond_match_score: {
+        Args: {
+          p_match_id: string
+          p_accept: boolean
+          p_dispute_reason: string | null
+        }
+        Returns: undefined
+      }
+      admin_reopen_match_result: {
+        Args: {
+          p_match_id: string
         }
         Returns: undefined
       }
@@ -404,3 +550,4 @@ export type GroupCategory = Database['public']['Tables']['group_categories']['Ro
 export type GroupPlayer = Database['public']['Tables']['group_players']['Row']
 export type MatchRow = Database['public']['Tables']['matches']['Row']
 export type MatchScoreLog = Database['public']['Tables']['match_score_logs']['Row']
+export type PlayerCategory = Database['public']['Tables']['player_categories']['Row']

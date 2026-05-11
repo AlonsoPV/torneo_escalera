@@ -13,6 +13,8 @@ import { AdminToolbar } from '@/components/admin/shared/AdminToolbar'
 import { ChangePasswordModal } from '@/components/admin/users/ChangePasswordModal'
 import { CreateUserModal } from '@/components/admin/users/CreateUserModal'
 import { EditUserModal } from '@/components/admin/users/EditUserModal'
+import { AvailablePlayersPoolSection } from '@/components/admin/users/AvailablePlayersPoolSection'
+import { UserBulkImportSection } from '@/components/admin/users/UserBulkImportSection'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -35,6 +37,7 @@ import {
   updateUser,
   type AdminUserRecord,
 } from '@/services/admin'
+import { ADMIN_USER_ASSIGNABLE_ROLES } from '@/lib/permissions'
 import type { UserRole } from '@/types/database'
 
 export function AdminUsersPage() {
@@ -161,6 +164,15 @@ export function AdminUsersPage() {
         }
       />
 
+      <UserBulkImportSection />
+
+      <AvailablePlayersPoolSection
+        users={usersQ.data ?? []}
+        groups={groups}
+        isLoading={usersQ.isLoading}
+        onUpdateUser={(input) => updateUserMut.mutate(input)}
+      />
+
       <section className="space-y-4" aria-labelledby="users-toolbar-heading">
         <AdminSectionTitle
           id="users-toolbar-heading"
@@ -187,11 +199,11 @@ export function AdminUsersPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los roles</SelectItem>
-                  <SelectItem value="player">Jugador</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="super_admin">Super admin</SelectItem>
-                  <SelectItem value="captain">Capitán</SelectItem>
-                  <SelectItem value="referee">Árbitro</SelectItem>
+                  {ADMIN_USER_ASSIGNABLE_ROLES.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r === 'player' ? 'Jugador' : 'Super admin'}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

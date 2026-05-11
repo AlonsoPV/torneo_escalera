@@ -57,7 +57,7 @@ export function RulesDefaultWorkflowCard() {
         <Label htmlFor="rules-result-window-hours" className="text-sm font-medium text-slate-800">
           Ventana para capturar resultado (horas)
         </Label>
-        <FieldHint>Referencia operativa para ventanas de captura; la validación en cancha puede depender de agenda (ver nota en motor).</FieldHint>
+        <FieldHint>Referencia operativa futura. En el MVP actual la captura no depende de horario.</FieldHint>
         <Input
           id="rules-result-window-hours"
           type="number"

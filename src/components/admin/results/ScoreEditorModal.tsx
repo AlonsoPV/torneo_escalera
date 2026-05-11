@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { formValuesToMatchRulesTournament, rulesRowToFormValues } from '@/domain/tournamentRulesForm'
-import { isSuddenDeathRowIndex, maxSetsFromRules, validateTennisScore } from '@/lib/tournamentRulesEngine'
+import { isSuddenDeathRowIndex, maxSetsFromRules } from '@/lib/tournamentRulesEngine'
 import type { AdminMatchRecord } from '@/services/admin'
 import type { ScoreSet, TournamentRules } from '@/types/database'
+import { validateScoreWithRules } from '@/utils/score'
 
 function setRowHeading(index: number, rules: TournamentRules): string {
   if (isSuddenDeathRowIndex(index, rules)) {
@@ -42,7 +43,7 @@ function ScoreEditorForm({
       onSubmit={(event) => {
         event.preventDefault()
         const cleaned = sets.filter((set) => Number.isFinite(set.a) && Number.isFinite(set.b))
-        const v = validateTennisScore(cleaned, effectiveRules)
+        const v = validateScoreWithRules(cleaned, effectiveRules)
         if (!v.ok) {
           toast.error(v.errors[0] ?? 'Marcador inválido')
           return

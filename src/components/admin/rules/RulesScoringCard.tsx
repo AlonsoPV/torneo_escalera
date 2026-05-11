@@ -29,7 +29,7 @@ export function RulesScoringCard() {
       />
       <NumberFieldRow
         label="Partido jugado (derrota normal)"
-        hint="Puntos que recibe el jugador que pierde pero disputó el partido (p. ej. 1 pt)."
+        hint="Puntos por derrota normal; pueden ser negativos (penalización), p. ej. −1."
         inputId="rules-points-per-loss"
         inputProps={register('points_per_loss', { valueAsNumber: true })}
         error={errors.points_per_loss}

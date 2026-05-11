@@ -52,7 +52,7 @@ export const tournamentRulesFormSchema = z
     final_set_format: z.enum(finalSetFormatIds),
     sudden_death_points: z.union([z.literal(7), z.literal(10)]),
     points_per_win: z.coerce.number().int().min(0),
-    points_per_loss: z.coerce.number().int().min(0),
+    points_per_loss: z.coerce.number().int().min(-50),
     points_default_win: z.coerce.number().int().min(0),
     points_default_loss: z.coerce.number().int().min(-20).max(20),
     allow_player_score_entry: z.boolean(),
@@ -71,7 +71,7 @@ export const tournamentRulesFormSchema = z
     if (data.points_per_win <= data.points_per_loss) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Los puntos por victoria deben ser mayores que los puntos por partido jugado (p. ej. 3 > 1).',
+        message: 'Los puntos por victoria deben ser mayores que los de derrota (p. ej. 3 > 1 o 3 > −1).',
         path: ['points_per_win'],
       })
     }

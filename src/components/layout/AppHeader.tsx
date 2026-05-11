@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import {
+  BarChart3,
   ChevronDown,
   LogIn,
   LogOut,
   ShieldCheck,
   Trophy,
-  UserPlus,
   UserRound,
 } from 'lucide-react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
@@ -45,7 +45,7 @@ function initials(profile: Profile | null, fallbackEmail?: string | null): strin
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   cn(
-    'inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium transition-colors',
+    'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-medium transition-colors sm:h-8 sm:px-2.5',
     'hover:bg-muted hover:text-foreground',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
     isActive ? 'bg-muted text-foreground' : 'text-muted-foreground',
@@ -73,16 +73,16 @@ export function AppHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/80 bg-background/90 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-background/75">
-      <div className="mx-auto flex h-14 w-full max-w-7xl items-center gap-3 px-3 sm:gap-4 sm:px-4">
+    <header className="sticky top-0 z-40 border-b border-border/80 bg-background/90 pt-[env(safe-area-inset-top,0px)] shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-background/75">
+      <div className="mx-auto grid min-h-14 w-full max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-3 sm:gap-3 sm:px-4 md:gap-4 md:px-6">
         <Link
-          to="/tournaments"
-          className="group flex min-w-0 shrink-0 items-center gap-2.5 rounded-lg outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring/50"
+          to="/dashboard"
+          className="group flex min-w-0 max-w-[min(100%,12rem)] shrink items-center gap-2 rounded-lg outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring/50 sm:max-w-none sm:gap-2.5"
         >
-          <span className="flex size-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-700 shadow-sm transition-transform group-hover:scale-[1.02] dark:text-emerald-400">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-700 shadow-sm transition-transform group-hover:scale-[1.02] dark:text-emerald-400">
             <Trophy className="size-[1.125rem]" aria-hidden />
           </span>
-          <span className="hidden min-w-0 flex-col leading-none sm:flex">
+          <span className="hidden min-w-0 flex-col leading-none md:flex">
             <span className="truncate font-semibold tracking-tight text-foreground">
               Torneo Mega Varonil
             </span>
@@ -90,27 +90,34 @@ export function AppHeader() {
               Escalera varonil
             </span>
           </span>
+          <span className="hidden min-w-0 truncate font-semibold leading-tight tracking-tight text-foreground sm:block md:hidden">
+            Torneo MV
+          </span>
         </Link>
 
-        <Separator orientation="vertical" className="hidden h-7 sm:block" />
+        <div className="flex min-w-0 items-center justify-center gap-2 justify-self-stretch sm:justify-start">
+          <Separator orientation="vertical" className="hidden h-7 shrink-0 sm:block" />
+          <nav className="flex min-w-0 items-center justify-center gap-0.5 sm:justify-start sm:gap-1" aria-label="Principal">
+            <NavLink
+              to="/dashboard"
+              className={navLinkClass}
+              end={false}
+              title="Dashboard del torneo"
+              aria-label="Dashboard torneo"
+            >
+              <BarChart3 className="size-4 shrink-0" aria-hidden />
+              <span className="hidden sm:inline">Dashboard torneo</span>
+            </NavLink>
+          </nav>
+        </div>
 
-        <nav
-          className="flex min-w-0 flex-1 items-center justify-center gap-0.5 sm:justify-start md:gap-1"
-          aria-label="Principal"
-        >
-          <NavLink to="/tournaments" className={navLinkClass} end={false}>
-            <Trophy className="size-4 shrink-0" aria-hidden />
-            <span className="inline">Torneo</span>
-          </NavLink>
-        </nav>
-
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+        <div className="flex min-w-0 shrink-0 items-center justify-end gap-1 sm:gap-1.5 md:gap-2">
           {session ? (
             <DropdownMenu>
               <DropdownMenuTrigger
                 className={cn(
                   buttonVariants({ variant: 'ghost', size: 'sm' }),
-                  'h-9 max-w-full gap-1.5 pl-1 pr-2 data-[open]:bg-muted/80',
+                  'h-9 max-w-[min(100%,14rem)] gap-1 pl-1 pr-1.5 data-[open]:bg-muted/80 sm:max-w-full sm:gap-1.5 sm:pr-2',
                 )}
               >
                 <span
@@ -164,22 +171,14 @@ export function AppHeader() {
           ) : null}
 
           {!session ? (
-            <>
-              <Link
-                className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'gap-1.5')}
-                to="/login"
-              >
-                <LogIn className="size-3.5" aria-hidden />
-                <span className="hidden sm:inline">Entrar</span>
-              </Link>
-              <Link
-                className={cn(buttonVariants({ variant: 'default', size: 'sm' }), 'gap-1.5')}
-                to="/register"
-              >
-                <UserPlus className="size-3.5" aria-hidden />
-                <span className="hidden sm:inline">Registro</span>
-              </Link>
-            </>
+            <Link
+              className={cn(buttonVariants({ variant: 'default', size: 'sm' }), 'gap-1.5 px-2.5 sm:px-3')}
+              to="/login"
+              aria-label="Entrar"
+            >
+              <LogIn className="size-3.5 shrink-0" aria-hidden />
+              <span className="hidden sm:inline">Entrar</span>
+            </Link>
           ) : null}
         </div>
       </div>

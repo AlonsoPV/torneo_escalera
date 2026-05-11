@@ -1,14 +1,17 @@
-import { Activity, ListOrdered, Timer, Trophy } from 'lucide-react'
+import { Activity, Gauge, ListOrdered, Timer, Trophy } from 'lucide-react'
 
+import { PlayerMetricCard } from '@/components/player/PlayerMetricCard'
 import { cn } from '@/lib/utils'
 import type { PlayerSummary } from '@/services/playerViewModel'
-
-const card =
-  'rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm sm:p-5'
 
 type Props = {
   summary: PlayerSummary
   className?: string
+}
+
+function signed(value: number) {
+  if (value > 0) return `+${value}`
+  return String(value)
 }
 
 export function PlayerSummaryCards({ summary, className }: Props) {
@@ -17,37 +20,43 @@ export function PlayerSummaryCards({ summary, className }: Props) {
       label: 'Posición',
       value: summary.position > 0 ? `#${summary.position}` : '—',
       icon: ListOrdered,
+      tone: 'gold' as const,
     },
     {
       label: 'Puntos',
       value: String(summary.points),
       icon: Trophy,
+      tone: 'primary' as const,
     },
     {
       label: 'Jugados',
       value: summary.playedLabel,
       icon: Activity,
+      tone: 'blue' as const,
+    },
+    {
+      label: 'Dif. juegos',
+      value: signed(summary.gamesDifference),
+      icon: Gauge,
+      tone: summary.gamesDifference < 0 ? ('red' as const) : ('green' as const),
     },
     {
       label: 'Pendientes',
       value: String(summary.pendingCount),
       icon: Timer,
+      tone: 'amber' as const,
     },
   ]
 
   return (
-    <div className={cn('grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4', className)}>
+    <section
+      id="player-section-summary"
+      data-name="player-section-summary"
+      className={cn('grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5', className)}
+    >
       {items.map((it) => (
-        <div key={it.label} className={card}>
-          <div className="flex items-start justify-between gap-2">
-            <p className="text-xs font-medium text-[#64748B]">{it.label}</p>
-            <span className="flex size-8 items-center justify-center rounded-xl bg-[#F6F3EE] text-[#1F5A4C]">
-              <it.icon className="size-4" aria-hidden />
-            </span>
-          </div>
-          <p className="mt-2 text-2xl font-semibold tabular-nums text-[#102A43] sm:text-3xl">{it.value}</p>
-        </div>
+        <PlayerMetricCard key={it.label} label={it.label} value={it.value} icon={it.icon} tone={it.tone} />
       ))}
-    </div>
+    </section>
   )
 }

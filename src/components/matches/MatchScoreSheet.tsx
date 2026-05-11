@@ -19,11 +19,11 @@ import {
 } from '@/components/ui/sheet'
 import { canPlayerACaptureScore, canPlayerBRespondToScore } from '@/lib/matchStatus'
 import { canEditMatchAsAdmin } from '@/lib/permissions'
-import { isSuddenDeathRowIndex, maxSetsFromRules, validateTennisScore } from '@/lib/tournamentRulesEngine'
+import { isSuddenDeathRowIndex, maxSetsFromRules } from '@/lib/tournamentRulesEngine'
 import { cn } from '@/lib/utils'
 import { respondOpponentMatchScore } from '@/services/matches'
 import type { GroupPlayer, MatchRow, TournamentRules } from '@/types/database'
-import { formatScoreCompact, invertScoreSets } from '@/utils/score'
+import { formatScoreCompact, invertScoreSets, validateScoreWithRules } from '@/utils/score'
 
 const scoreInputClass = cn(
   'box-border h-12 w-full max-w-[5rem] min-w-[3.25rem] sm:max-w-[5.5rem]',
@@ -39,7 +39,20 @@ const setSchema = z.object({
 })
 
 const formSchema = z.object({
-  sets: z.array(setSchema).min(1),
+  sets: z
+    .array(setSchema)
+    .min(1)
+    .superRefine((sets, ctx) => {
+      sets.forEach((s, i) => {
+        if (s.a === s.b) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Un set no puede terminar empatado; indica el ganador (p. ej. 6-4, 7-6).',
+            path: [i, 'b'],
+          })
+        }
+      })
+    }),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -141,7 +154,7 @@ export function MatchScoreSheet(props: {
   const preview = formatScoreCompact(invertScoreSets(watched ?? []))
 
   const submit = form.handleSubmit(async (values) => {
-    const v = validateTennisScore(values.sets, rules)
+    const v = validateScoreWithRules(values.sets, rules)
     if (!v.ok) {
       toast.error(v.errors[0] ?? 'Marcador no válido para este torneo')
       return
@@ -160,7 +173,7 @@ export function MatchScoreSheet(props: {
     setResponding(true)
     try {
       await respondOpponentMatchScore({ matchId: match.id, accept: true })
-      toast.success('Marcador aceptado')
+      toast.success('Marcador aceptado. Queda pendiente la validación del organizador.')
       await flowAfter()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo registrar la aceptación')
@@ -200,13 +213,18 @@ export function MatchScoreSheet(props: {
           <SheetHeader className="space-y-1.5 p-0 text-left">
             <SheetTitle className="text-lg">Marcador</SheetTitle>
             <SheetDescription className="line-clamp-4 text-balance sm:text-sm">
-              {showOpponentPanel
-                ? `${nameA} registró el marcador. Revísalo y acéptalo o recházalo con un comentario. No puedes editar los números directamente.`
-                : isAdmin
-                  ? `Como staff puedes ajustar el marcador. Al guardar se cierra oficialmente el partido (ranking).`
-                  : hasPointsDecider
-                    ? `Eres el Jugador A: hasta ${maxSets} sets; los primeros van por games y el decisivo por puntos si aplica. Tras la hora de fin puedes enviar.`
-                    : `Eres el Jugador A: introduce games por set (hasta ${maxSets} sets). Tras la hora de fin puedes enviar.`}
+              {showOpponentPanel ? (
+                `${nameA} registró el marcador. Revísalo y acéptalo o recházalo con un comentario. No puedes editar los números directamente.`
+              ) : (
+                <>
+                  {isAdmin
+                    ? `Como staff puedes ajustar el marcador. Al guardar se cierra oficialmente el partido (ranking).`
+                    : hasPointsDecider
+                      ? `Eres el Jugador A: hasta ${maxSets} sets; los primeros van por games y el decisivo por puntos si aplica. Puedes enviar el marcador cuando el partido haya terminado.`
+                      : `Eres el Jugador A: introduce games por set (hasta ${maxSets} sets). Puedes enviar el marcador cuando el partido haya terminado.`}{' '}
+                  Cada set debe tener ganador: no se permiten marcadores empatados (p. ej. 6-6 no es un resultado final válido).
+                </>
+              )}
             </SheetDescription>
           </SheetHeader>
         </div>
@@ -221,6 +239,33 @@ export function MatchScoreSheet(props: {
                 <p className="mt-1 leading-relaxed text-amber-950/90">{match.dispute_reason}</p>
               </div>
             ) : null}
+            {(() => {
+              const se = form.formState.errors.sets
+              if (!se) return null
+              if (typeof (se as { message?: string }).message === 'string') {
+                return (
+                  <p role="alert" className="text-sm font-medium text-destructive">
+                    {(se as { message: string }).message}
+                  </p>
+                )
+              }
+              if (Array.isArray(se)) {
+                const first = se.find((e) => e && (e.a?.message || e.b?.message))
+                const msg = first?.a?.message ?? first?.b?.message
+                if (msg) {
+                  return (
+                    <p role="alert" className="text-sm font-medium text-destructive">
+                      {String(msg)}
+                    </p>
+                  )
+                }
+              }
+              return (
+                <p role="alert" className="text-sm font-medium text-destructive">
+                  Revisa cada set: debe haber un ganador (no se permiten empates como 4-4 o 6-6).
+                </p>
+              )
+            })()}
             <div className="rounded-2xl border border-border/80 bg-gradient-to-b from-card to-muted/20 p-3 shadow-sm sm:p-4">
               <div className="mb-3 grid grid-cols-[1fr_auto_1fr] items-end gap-2 sm:gap-3">
                 <p

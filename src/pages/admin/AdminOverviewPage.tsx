@@ -114,7 +114,7 @@ export function AdminOverviewPage() {
           <section
             id="section-admin-overview-pending"
             className="scroll-mt-3 rounded-xl border border-amber-200/70 bg-gradient-to-b from-amber-50/35 to-white p-3 shadow-sm ring-1 ring-amber-900/[0.04] sm:rounded-2xl sm:p-4 sm:ring-amber-900/[0.03]"
-            aria-label="Pendientes, agenda y cierre"
+            aria-label="Pendientes y cierre"
           >
             <details onToggle={(event) => setPendingSectionOpen(event.currentTarget.open)}>
               <summary className="flex cursor-pointer list-none items-start justify-between gap-3 rounded-lg py-0.5 text-left outline-none [&::-webkit-details-marker]:hidden focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white">
@@ -123,11 +123,11 @@ export function AdminOverviewPage() {
                     id="overview-risk-heading"
                     className="text-sm font-semibold leading-snug tracking-tight text-slate-900 sm:text-[0.9375rem]"
                   >
-                    Pendientes, agenda y cierre
+                    Pendientes y cierre
                   </h3>
                   <p className="mt-0.5 text-[11px] leading-snug text-slate-500 sm:text-xs">
-                    <span className="max-sm:inline sm:hidden">Toca para ver métricas de agenda y cierre.</span>
-                    <span className="hidden sm:inline">Riesgos operativos y resultados ya validados.</span>
+                    <span className="max-sm:inline sm:hidden">Toca para ver métricas de marcadores y cierre.</span>
+                    <span className="hidden sm:inline">Métricas de marcadores pendientes y cierre administrativo.</span>
                   </p>
                 </div>
                 <ChevronDown
@@ -140,7 +140,7 @@ export function AdminOverviewPage() {
               </summary>
               <div className="mt-3 border-t border-amber-200/60 pt-3 sm:mt-3 sm:pt-3">
                 <p className="mb-3 hidden text-xs leading-relaxed text-slate-500 sm:block">
-                  Riesgos operativos y resultados ya validados.
+                  Revisa marcadores pendientes, grupos incompletos y resultados listos para cierre.
                 </p>
                 <div
                   id="admin-overview-metrics-pending"
@@ -150,11 +150,11 @@ export function AdminOverviewPage() {
                   )}
                 >
                   <AdminMetricCard
-                    label="Partidos sin fecha"
+                    label="Pendientes de marcador"
                     value={overviewQ.data.matchesWithoutDate}
                     icon={CalendarClock}
                     tone="warning"
-                    description="Sin día asignado en agenda"
+                    description="Cruces disponibles para captura"
                   />
                   <AdminMetricCard
                     label="Grupos incompletos"
@@ -207,7 +207,7 @@ export function AdminOverviewPage() {
                 <div className="rounded-2xl bg-slate-50/90 p-4 ring-1 ring-slate-200/60">
                   <p className="text-xs font-medium text-slate-500">Siguiente foco</p>
                   <p className="mt-2 text-sm font-semibold text-slate-900">
-                    {overviewQ.data.pendingResults > 0 ? 'Revisar resultados' : 'Completar agenda'}
+                    {overviewQ.data.pendingResults > 0 ? 'Revisar resultados' : 'Ver cruces'}
                   </p>
                 </div>
                 <div className="rounded-2xl bg-slate-50/90 p-4 ring-1 ring-slate-200/60">

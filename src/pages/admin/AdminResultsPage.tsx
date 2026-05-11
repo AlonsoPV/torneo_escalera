@@ -1,10 +1,10 @@
-import { AlertTriangle, CheckCircle2, Gavel, ListFilter, Pencil, Search, Trophy } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock3, ListFilter, Search, Trophy } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
+import { AdminScoreCorrectionModal } from '@/components/admin/results/AdminScoreCorrectionModal'
 import { ResultReviewCard } from '@/components/admin/results/ResultReviewCard'
-import { ScoreEditorModal } from '@/components/admin/results/ScoreEditorModal'
 import { AdminEmptyState } from '@/components/admin/shared/AdminEmptyState'
 import { AdminMetricCard, ADMIN_METRIC_GRID_3 } from '@/components/admin/shared/AdminMetricCard'
 import { AdminPageHeader } from '@/components/admin/shared/AdminPageHeader'
@@ -26,23 +26,23 @@ import {
   confirmResult,
   correctResult,
   getAdminGroups,
-  getAdminMatches,
   getAdminResults,
   type AdminMatchRecord,
 } from '@/services/admin'
 import { getTournamentRules } from '@/services/tournaments'
 import { useAuthStore } from '@/stores/authStore'
-import type { MatchStatus, ScoreSet } from '@/types/database'
+import type { ScoreSet } from '@/types/database'
+
+type ResultsQueueFilter = 'all' | 'to_validate' | 'disputed' | 'waiting_rival' | 'official'
 
 export function AdminResultsPage() {
   const qc = useQueryClient()
   const actorId = useAuthStore((s) => s.user?.id)
-  const [status, setStatus] = useState<MatchStatus | 'all'>('all')
   const [groupId, setGroupId] = useState('all')
+  const [queueFilter, setQueueFilter] = useState<ResultsQueueFilter>('all')
   const [search, setSearch] = useState('')
   const [editingMatch, setEditingMatch] = useState<AdminMatchRecord | null>(null)
 
-  const matchesQ = useQuery({ queryKey: ['admin-matches'], queryFn: () => getAdminMatches() })
   const groupsQ = useQuery({ queryKey: ['admin-groups'], queryFn: () => getAdminGroups() })
   const rulesForEditor = useQuery({
     queryKey: ['tournament-rules', editingMatch?.tournament_id ?? ''],
@@ -50,13 +50,7 @@ export function AdminResultsPage() {
     enabled: Boolean(editingMatch?.tournament_id),
   })
   const resultsQ = useQuery({ queryKey: ['admin-results'], queryFn: getAdminResults })
-  const breakdown = useMemo(() => computeAdminMatchBreakdown(matchesQ.data ?? []), [matchesQ.data])
-
-  const recentResults = useMemo(() => {
-    const rows = [...(matchesQ.data ?? [])]
-    rows.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-    return rows.filter((m) => m.score_raw && m.score_raw.length > 0).slice(0, 5)
-  }, [matchesQ.data])
+  const breakdown = useMemo(() => computeAdminMatchBreakdown(resultsQ.data ?? []), [resultsQ.data])
 
   const refreshResults = async () => {
     await qc.invalidateQueries({ queryKey: ['admin-results'] })
@@ -77,9 +71,9 @@ export function AdminResultsPage() {
   })
 
   const correctMut = useMutation({
-    mutationFn: async (input: { match: AdminMatchRecord; sets: ScoreSet[] }) => {
+    mutationFn: async (input: { match: AdminMatchRecord; sets: ScoreSet[]; closeAfter: boolean; adminNote: string }) => {
       if (!actorId) throw new Error('No autenticado')
-      await correctResult(input.match, input.sets, actorId)
+      await correctResult(input.match, input.sets, actorId, input.closeAfter, input.adminNote)
     },
     onSuccess: async () => {
       toast.success('Marcador corregido')
@@ -92,14 +86,62 @@ export function AdminResultsPage() {
   const filteredResults = useMemo(() => {
     const q = search.trim().toLowerCase()
     return (resultsQ.data ?? []).filter((match) => {
-      const okStatus = status === 'all' || match.status === status
       const okGroup = groupId === 'all' || match.group_id === groupId
-      if (!okStatus || !okGroup) return false
+      if (!okGroup) return false
       if (!q) return true
       const hay = `${match.playerAName} ${match.playerBName} ${match.groupName} ${match.tournamentName}`.toLowerCase()
-      return hay.includes(q)
+      if (!hay.includes(q)) return false
+      return true
     })
-  }, [groupId, resultsQ.data, search, status])
+  }, [groupId, resultsQ.data, search])
+
+  const queueFilteredResults = useMemo(() => {
+    if (queueFilter === 'to_validate') return filteredResults.filter((match) => match.status === 'player_confirmed')
+    if (queueFilter === 'disputed') return filteredResults.filter((match) => match.status === 'score_disputed')
+    if (queueFilter === 'waiting_rival') return filteredResults.filter((match) => match.status === 'score_submitted')
+    if (queueFilter === 'official') return filteredResults.filter((match) => match.status === 'closed')
+    return filteredResults
+  }, [filteredResults, queueFilter])
+
+  const actionRequired = useMemo(
+    () => queueFilteredResults.filter((match) => match.status === 'player_confirmed'),
+    [queueFilteredResults],
+  )
+  const disputed = useMemo(
+    () => queueFilteredResults.filter((match) => match.status === 'score_disputed'),
+    [queueFilteredResults],
+  )
+  const followUp = useMemo(
+    () => queueFilteredResults.filter((match) => match.status === 'score_submitted'),
+    [queueFilteredResults],
+  )
+  const history = useMemo(
+    () => queueFilteredResults.filter((match) => match.status === 'closed'),
+    [queueFilteredResults],
+  )
+
+  const renderQueue = (
+    matches: AdminMatchRecord[],
+    emptyTitle: string,
+    emptyDescription: string,
+  ) => {
+    if (resultsQ.isLoading) return <Skeleton className="h-72 rounded-2xl" />
+    if (matches.length === 0) {
+      return <AdminEmptyState title={emptyTitle} description={emptyDescription} icon={CheckCircle2} />
+    }
+    return (
+      <div className="grid grid-cols-1 gap-4">
+        {matches.map((match) => (
+          <ResultReviewCard
+            key={match.id}
+            match={match}
+            onConfirm={(nextMatch) => confirmMut.mutate(nextMatch)}
+            onCorrect={(nextMatch) => setEditingMatch(nextMatch)}
+          />
+        ))}
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-5 sm:space-y-8 md:space-y-10">
@@ -115,7 +157,7 @@ export function AdminResultsPage() {
           title="Qué requiere tu atención"
           description="Prioriza pendientes de revisión y valida el flujo de confirmación."
         />
-        {matchesQ.isLoading ? (
+        {resultsQ.isLoading ? (
           <div className={ADMIN_METRIC_GRID_3}>
             {Array.from({ length: 6 }).map((_, index) => (
               <Skeleton key={index} className="h-[5.5rem] rounded-2xl sm:h-24" />
@@ -145,18 +187,11 @@ export function AdminResultsPage() {
               description="Oficialmente cerrados"
             />
             <AdminMetricCard
-              label="Validados (intermedio)"
-              value={breakdown.adminValidated}
-              icon={Pencil}
+              label="Esperando rival"
+              value={breakdown.scoreSubmitted}
+              icon={Clock3}
               tone="info"
-              description="Marcados validados por admin sin cierre final"
-            />
-            <AdminMetricCard
-              label="W/O y no estándar"
-              value={breakdown.defaultResults}
-              icon={Gavel}
-              tone={breakdown.defaultResults > 0 ? 'warning' : 'neutral'}
-              description="Resultados por walkover u otros"
+              description="Marcadores enviados por jugador A"
             />
             <AdminMetricCard
               label="Total partidos"
@@ -186,7 +221,7 @@ export function AdminResultsPage() {
               aria-label="Buscar en resultados"
             />
           </div>
-          <div className="grid w-full min-w-0 grid-cols-1 gap-4 sm:flex sm:flex-1 sm:flex-wrap sm:gap-4 md:grid-cols-2">
+          <div className="grid w-full min-w-0 grid-cols-1 gap-4 sm:flex sm:flex-1 sm:flex-wrap sm:gap-4">
             <div className="min-w-0 space-y-2 sm:min-w-[12rem]">
               <Label className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
                 <ListFilter className="size-3.5" aria-hidden />
@@ -207,98 +242,94 @@ export function AdminResultsPage() {
               </Select>
             </div>
             <div className="min-w-0 space-y-2 sm:min-w-[12rem]">
-              <Label className="text-xs font-medium text-slate-600">Estado del partido</Label>
-              <Select value={status} onValueChange={(value) => setStatus(value as MatchStatus | 'all')}>
+              <Label className="text-xs font-medium text-slate-600">Cola</Label>
+              <Select value={queueFilter} onValueChange={(value) => setQueueFilter((value ?? 'all') as ResultsQueueFilter)}>
                 <SelectTrigger className="h-11 w-full">
-                  <SelectValue placeholder="Estado" />
+                  <SelectValue placeholder="Cola" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="scheduled">Programados</SelectItem>
-                  <SelectItem value="ready_for_score">Listos para marcador</SelectItem>
-                  <SelectItem value="score_submitted">Marcador enviado</SelectItem>
-                  <SelectItem value="score_disputed">En disputa</SelectItem>
-                  <SelectItem value="player_confirmed">Aceptado por rival</SelectItem>
-                  <SelectItem value="admin_validated">Validado por admin</SelectItem>
-                  <SelectItem value="closed">Cerrados</SelectItem>
-                  <SelectItem value="cancelled">Cancelados</SelectItem>
+                  <SelectItem value="to_validate">Por validar</SelectItem>
+                  <SelectItem value="disputed">En disputa</SelectItem>
+                  <SelectItem value="waiting_rival">Esperando rival</SelectItem>
+                  <SelectItem value="official">Oficiales</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
-          <Button type="button" variant="outline" className="h-11 w-full shrink-0 sm:w-auto" onClick={() => { setSearch(''); setGroupId('all'); setStatus('all') }}>
+          <Button type="button" variant="outline" className="h-11 w-full shrink-0 sm:w-auto" onClick={() => { setSearch(''); setGroupId('all'); setQueueFilter('all') }}>
             Limpiar
           </Button>
         </AdminToolbar>
       </section>
 
-      {recentResults.length > 0 && !matchesQ.isLoading ? (
-        <section className="space-y-3" aria-labelledby="results-recent-heading">
-          <AdminSectionTitle
-            id="results-recent-heading"
-            title="Últimos marcadores registrados"
-            description="Ordenados por fecha de actualización."
-          />
-          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {recentResults.map((m) => (
-              <li
-                key={m.id}
-                className="rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-sm shadow-sm"
-              >
-                <p className="font-medium text-slate-900">
-                  {m.playerAName} vs {m.playerBName}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  {new Date(m.updated_at).toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' })}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      <section className="space-y-4" aria-labelledby="results-list-heading">
-        <AdminSectionTitle
-          id="results-list-heading"
-          title="Revisión de marcadores"
-          description="Confirma envíos de jugadores o abre el editor para corregir sets."
+      {resultsQ.isError ? (
+        <AdminEmptyState
+          title="No se pudieron cargar los resultados."
+          description={resultsQ.error instanceof Error ? resultsQ.error.message : 'Revisa permisos o conexión con Supabase.'}
+          icon={CheckCircle2}
         />
-        {resultsQ.isError ? (
-          <AdminEmptyState
-            title="No se pudieron cargar los resultados."
-            description={resultsQ.error instanceof Error ? resultsQ.error.message : 'Revisa permisos o conexión con Supabase.'}
-            icon={CheckCircle2}
+      ) : queueFilteredResults.length === 0 && !resultsQ.isLoading ? (
+        <section className="space-y-4" aria-labelledby="results-empty-heading">
+          <AdminSectionTitle
+            id="results-empty-heading"
+            title="Revisión de marcadores"
+            description="No hay resultados que coincidan con tus filtros."
           />
-        ) : resultsQ.isLoading ? (
-          <Skeleton className="h-72 rounded-2xl" />
-        ) : filteredResults.length === 0 ? (
           <AdminEmptyState
             title="No hay partidos con ese filtro."
             description="Cambia filtros o revisa la sección Partidos para generar cruces."
             icon={CheckCircle2}
           />
-        ) : (
-          <div className="grid grid-cols-1 gap-4">
-            {filteredResults.map((match) => (
-              <ResultReviewCard
-                key={match.id}
-                match={match}
-                onConfirm={(nextMatch) => confirmMut.mutate(nextMatch)}
-                onCorrect={(nextMatch) => setEditingMatch(nextMatch)}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+        </section>
+      ) : (
+        <>
+          <section className="space-y-4" aria-labelledby="results-action-heading">
+            <AdminSectionTitle
+              id="results-action-heading"
+              title="Por validar"
+              description="Resultados aceptados por rival pendientes de cierre administrativo."
+            />
+            {renderQueue(actionRequired, 'No hay resultados pendientes de validación.', 'Todos los resultados aceptados están al día.')}
+          </section>
 
-      <ScoreEditorModal
+          <section className="space-y-4" aria-labelledby="results-disputed-heading">
+            <AdminSectionTitle
+              id="results-disputed-heading"
+              title="En disputa"
+              description="Marcadores rechazados por el rival que requieren corrección o intervención."
+            />
+            {renderQueue(disputed, 'No hay disputas activas.', 'No hay marcadores rechazados por resolver.')}
+          </section>
+
+          <section className="space-y-4" aria-labelledby="results-follow-heading">
+            <AdminSectionTitle
+              id="results-follow-heading"
+              title="Seguimiento"
+              description="Marcadores enviados por Jugador A que esperan aceptación del rival."
+            />
+            {renderQueue(followUp, 'Tu rival aún no ha aceptado el marcador.', 'No hay marcadores esperando aceptación del rival.')}
+          </section>
+
+          <section className="space-y-4" aria-labelledby="results-history-heading">
+            <AdminSectionTitle
+              id="results-history-heading"
+              title="Oficiales"
+              description="Resultados oficiales que ya impactan el ranking."
+            />
+            {renderQueue(history, 'No hay resultados cerrados.', 'Aún no hay partidos oficiales en el historial.')}
+          </section>
+        </>
+      )}
+
+      <AdminScoreCorrectionModal
         match={editingMatch}
         rules={rulesForEditor.data ?? null}
         open={Boolean(editingMatch)}
         onOpenChange={(open) => {
           if (!open) setEditingMatch(null)
         }}
-        onSubmit={(match, sets) => correctMut.mutate({ match, sets })}
+        onSubmit={(input) => correctMut.mutate(input)}
       />
     </div>
   )

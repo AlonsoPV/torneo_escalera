@@ -12,6 +12,8 @@ export const supabase = createClient(
     auth: {
       persistSession: true,
       autoRefreshToken: true,
+      /** Necesario para enlaces de recuperación (hash / PKCE en la URL). */
+      detectSessionInUrl: true,
     },
   },
 )

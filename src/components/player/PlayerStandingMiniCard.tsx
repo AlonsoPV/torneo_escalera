@@ -20,10 +20,12 @@ export function PlayerStandingMiniCard({ you, leader, pointsBehindLeader, classN
         }.`
       : leader && leader.userId === you.userId
         ? 'Vas al frente de tu grupo.'
-        : 'Racha en juego. Sigue sumando con tus próximos partidos.'
+        : 'Racha en juego. Sigue sumando con tus partidos por jugar.'
 
   return (
-    <div
+    <section
+      id="player-section-standing"
+      data-name="player-section-standing"
       className={cn(
         'rounded-2xl border border-[#C8A96B]/30 bg-gradient-to-br from-white to-[#C8A96B]/8 p-4 sm:p-5',
         className,
@@ -38,6 +40,6 @@ export function PlayerStandingMiniCard({ you, leader, pointsBehindLeader, classN
           <p className="mt-0.5 text-sm leading-relaxed text-[#64748B]">{line}</p>
         </div>
       </div>
-    </div>
+    </section>
   )
 }

@@ -52,16 +52,17 @@ function validateGamesSet(
   const mx = Math.max(a, b)
   const mi = Math.min(a, b)
   const isStd = mx === games && mx - mi >= minDiff
+  const isLongSevenFive = games === 6 && mx === 7 && mi === 5
   let isTb = false
-  if (tbEnabled && tbAt != null) {
+  if (tbEnabled) {
     if (tbAt === 5) {
       isTb = mx === games + 1 && mi === games - 1
-    } else {
+    } else if (tbAt === 6 || tbAt == null) {
       isTb = mx === games + 1 && mi === games
     }
   }
-  if (mx > games && !isStd && !isTb) {
-    return `Set inválido para jugar a ${games} games (diferencia mín. ${minDiff}, tie-break según reglas).`
+  if (!isStd && !isLongSevenFive && !isTb) {
+    return `Set inválido: usa ${games}-0 a ${games}-${games - minDiff}, 7-5 o 7-6 solo si el tie-break está activo.`
   }
   return null
 }

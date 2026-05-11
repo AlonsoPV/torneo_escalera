@@ -8,6 +8,7 @@ import {
   Settings,
   Settings2,
   ShieldCheck,
+  Tags,
   Trophy,
   Users,
 } from 'lucide-react'
@@ -20,6 +21,7 @@ export const adminNavItems = [
   { label: 'Partidos', href: '/admin/matches', icon: CalendarClock },
   { label: 'Resultados', href: '/admin/results', icon: BarChart3 },
   { label: 'Usuarios', href: '/admin/users', icon: Users },
+  { label: 'Categorías', href: '/admin/categories', icon: Tags },
   { label: 'Notificaciones', href: '/admin/notifications', icon: Bell, upcoming: true },
   { label: 'Exportaciones', href: '/admin/exports', icon: Download, upcoming: true },
   { label: 'Configuración', href: '/admin/settings', icon: Settings },

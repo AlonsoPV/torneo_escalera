@@ -1,3 +1,4 @@
+import { isMissingPostgrestRelationError } from '@/lib/postgrestErrors'
 import { supabase } from '@/lib/supabase'
 import type { GroupCategory } from '@/types/database'
 
@@ -13,7 +14,10 @@ export async function ensureDefaultGroupCategories(tournamentId: string): Promis
     .from('group_categories')
     .select('name')
     .eq('tournament_id', tournamentId)
-  if (exErr) throw exErr
+  if (exErr) {
+    if (isMissingPostgrestRelationError(exErr)) return
+    throw exErr
+  }
   const have = new Set((existing ?? []).map((r) => r.name))
   const rows = DEFAULT_CATEGORIES.filter((d) => !have.has(d.name)).map((d) => ({
     tournament_id: tournamentId,
@@ -32,7 +36,10 @@ export async function listGroupCategories(tournamentId: string): Promise<GroupCa
     .eq('tournament_id', tournamentId)
     .order('order_index', { ascending: true })
     .order('name', { ascending: true })
-  if (error) throw error
+  if (error) {
+    if (isMissingPostgrestRelationError(error)) return []
+    throw error
+  }
   return (data ?? []) as GroupCategory[]
 }
 

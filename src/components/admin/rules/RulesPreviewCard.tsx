@@ -88,7 +88,8 @@ export function RulesPreviewCard() {
               <span className="font-medium">Jugador A:</span> +{normal.winnerPts} pts
             </li>
             <li>
-              <span className="font-medium">Jugador B:</span> +{normal.loserPts} pt{normal.loserPts === 1 ? '' : 's'}
+              <span className="font-medium">Jugador B:</span> {normal.loserPts >= 0 ? '+' : ''}
+              {normal.loserPts} pt{Math.abs(normal.loserPts) === 1 ? '' : 's'}
             </li>
           </ul>
         </div>

@@ -13,6 +13,13 @@ export function getPlayerPerspectiveScoreSetsForUserId(match: MatchRow, userId: 
 
 /** Texto compacto del marcador desde la perspectiva del usuario. */
 export function getPlayerPerspectiveScore(match: MatchRow, userId: string): string {
+  if (match.game_type === 'sudden_death') {
+    if (!match.winner_id) return 'Muerte súbita'
+    const won =
+      (match.player_a_user_id === userId && match.winner_id === match.player_a_id) ||
+      (match.player_b_user_id === userId && match.winner_id === match.player_b_id)
+    return won ? 'Ganó muerte súbita' : 'Perdió muerte súbita'
+  }
   const sets = getPlayerPerspectiveScoreSetsForUserId(match, userId)
   if (!sets?.length) return '—'
   return formatScoreCompact(sets)

@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { ADMIN_USER_ASSIGNABLE_ROLES, normalizeAdminAssignableRole } from '@/lib/permissions'
 import type { AdminUserRecord } from '@/services/admin'
 import type { Group, UserRole } from '@/types/database'
 
@@ -26,7 +27,7 @@ export function EditUserModal({
 }) {
   const [fullName, setFullName] = useState(user.full_name ?? '')
   const [email, setEmail] = useState(user.email ?? '')
-  const [role, setRole] = useState<UserRole>(user.role)
+  const [role, setRole] = useState<UserRole>(normalizeAdminAssignableRole(user.role))
   const [groupId, setGroupId] = useState(user.group?.id ?? 'none')
 
   return (
@@ -63,11 +64,11 @@ export function EditUserModal({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="player">Jugador</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="super_admin">Super admin</SelectItem>
-                <SelectItem value="captain">Capitán</SelectItem>
-                <SelectItem value="referee">Árbitro</SelectItem>
+                {ADMIN_USER_ASSIGNABLE_ROLES.map((r) => (
+                  <SelectItem key={r} value={r}>
+                    {r === 'player' ? 'Jugador' : 'Super admin'}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

@@ -114,7 +114,7 @@ export function AdminPage() {
       <Card>
         <CardHeader>
           <CardTitle>Resumen operativo</CardTitle>
-          <CardDescription>Contadores globos (MVP) para agendar y dar seguimiento a resultados.</CardDescription>
+          <CardDescription>Contadores globales (MVP) para cruces y seguimiento de resultados.</CardDescription>
         </CardHeader>
         <CardContent>
           {statsQ.isLoading ? (
@@ -134,8 +134,8 @@ export function AdminPage() {
                 {statsQ.data.matchCount}
               </li>
               <li>
-                <span className="text-muted-foreground">Sin hora de fin: </span>
-                {statsQ.data.matchesWithoutEndTime}
+                <span className="text-muted-foreground">Pendientes de marcador: </span>
+                {statsQ.data.pendingScoreCount}
               </li>
               <li>
                 <span className="text-muted-foreground">Pend. confirmar (enviado por jugador): </span>

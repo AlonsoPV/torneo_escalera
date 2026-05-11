@@ -77,11 +77,11 @@ export function AdminMetricCard({
     >
       <div className={cn('flex items-center justify-between', compact ? 'gap-2.5 sm:gap-3' : 'gap-3 sm:gap-4')}>
         <div className="min-w-0 flex-1">
-          <p className="line-clamp-1 text-xs font-medium text-slate-500 sm:text-sm">{label}</p>
+          <p className="text-xs font-medium leading-snug text-slate-500 sm:text-sm">{label}</p>
           <div className="mt-0.5 flex items-end gap-2 sm:mt-1">
             <p
               className={cn(
-                'truncate font-bold tabular-nums tracking-tight text-slate-950',
+                'font-bold tabular-nums tracking-tight text-slate-950',
                 compact ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-3xl',
               )}
             >
@@ -89,12 +89,12 @@ export function AdminMetricCard({
             </p>
           </div>
           {desc ? (
-            <p className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-slate-400 sm:mt-1 sm:text-xs sm:leading-relaxed">
+            <p className="mt-0.5 text-[11px] leading-snug text-slate-400 sm:mt-1 sm:text-xs sm:leading-relaxed">
               {desc}
             </p>
           ) : null}
           {trend ? (
-            <p className="mt-0.5 line-clamp-1 text-[10px] font-medium uppercase tracking-wide text-slate-400 sm:mt-1 sm:text-[11px]">
+            <p className="mt-0.5 text-[10px] font-medium uppercase leading-snug tracking-wide text-slate-400 sm:mt-1 sm:text-[11px]">
               {trend}
             </p>
           ) : null}

@@ -5,7 +5,7 @@ export type AdminDashboardStats = {
   activeTournamentCount: number
   groupCount: number
   matchCount: number
-  matchesWithoutEndTime: number
+  pendingScoreCount: number
   resultSubmittedCount: number
 }
 
@@ -23,23 +23,23 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
   const m = await supabase
     .from('matches')
     .select('id', { count: 'exact', head: true })
-  const unsched = await supabase
+  const pendingScore = await supabase
     .from('matches')
     .select('id', { count: 'exact', head: true })
-    .is('scheduled_end_at', null)
+    .eq('status', 'pending_score')
   const submitted = await supabase
     .from('matches')
     .select('id', { count: 'exact', head: true })
     .in('status', ['player_confirmed', 'score_disputed'])
 
-  const e = t.error || act.error || g.error || m.error || unsched.error || submitted.error
+  const e = t.error || act.error || g.error || m.error || pendingScore.error || submitted.error
   if (e) throw e
   return {
     tournamentCount: t.count ?? 0,
     activeTournamentCount: act.count ?? 0,
     groupCount: g.count ?? 0,
     matchCount: m.count ?? 0,
-    matchesWithoutEndTime: unsched.count ?? 0,
+    pendingScoreCount: pendingScore.count ?? 0,
     resultSubmittedCount: submitted.count ?? 0,
   }
 }

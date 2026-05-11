@@ -1,0 +1,7 @@
+# Supabase CLI — https://supabase.com/docs/guides/cli/config
+#
+# Sin esto, el gateway puede responder 401 al OPTIONS (preflight CORS) porque no lleva
+# Authorization, y el navegador reporta error CORS en lugar del 401 real.
+
+[functions.admin-bulk-create-users]
+verify_jwt = false

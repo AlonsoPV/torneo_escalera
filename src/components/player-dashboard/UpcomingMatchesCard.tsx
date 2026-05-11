@@ -116,7 +116,7 @@ export function UpcomingMatchesCard(props: Props) {
       </div>
       <div className="flex items-start gap-2 border-t border-[var(--tdash-border)] bg-[var(--tdash-surface-2)]/50 px-3 py-2 text-[11px] leading-snug text-[var(--tdash-muted)] sm:items-center sm:px-4 sm:py-2.5 sm:text-xs">
         <CalendarClock className="mt-0.5 size-3.5 shrink-0 sm:mt-0" aria-hidden />
-        <span>Las fechas y canchas se acuerdan con la organización o en el club.</span>
+        <span>Los cruces quedan disponibles para registrar marcador cuando se jueguen.</span>
       </div>
     </section>
   )

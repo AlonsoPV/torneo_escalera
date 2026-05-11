@@ -23,6 +23,8 @@ function statusVariant(t: TournamentStatus): { variant: ClubStatusVariant; label
       return { variant: 'active', label: 'En curso' }
     case 'finished':
       return { variant: 'finished', label: 'Finalizado' }
+    case 'archived':
+      return { variant: 'finished', label: 'Archivado' }
     default:
       return { variant: 'draft', label: 'Borrador' }
   }

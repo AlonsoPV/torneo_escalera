@@ -524,7 +524,17 @@ export function AdminGroupsPage() {
         onSaveGroupDetails={(groupId, patch) =>
           actionMut.mutate(() => updateGroup(groupId, patch))
         }
-        onAssign={(input) => actionMut.mutate(() => assignPlayerToGroup(input).then(() => undefined))}
+        onAssign={(input) =>
+          actionMut.mutate(async () => {
+            await assignPlayerToGroup(input)
+            const groupWillBeComplete = managedGroup && managedGroup.players.length + 1 === managedGroup.max_players
+            if (groupWillBeComplete) {
+              toast.success('Grupo completo. Partidos generados correctamente.')
+            } else if (managedGroup) {
+              toast.info(`Agrega ${managedGroup.max_players} jugadores para generar partidos.`)
+            }
+          })
+        }
         onRemove={(groupPlayerId) => actionMut.mutate(() => removePlayerFromGroup(groupPlayerId))}
         onGenerateMatches={(group, mode) => generateMut.mutate({ group, mode })}
         currentUserId={currentUserId}

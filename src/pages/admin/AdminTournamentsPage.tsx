@@ -7,11 +7,12 @@ import {
   Eye,
   Flag,
   Lock,
+  Pencil,
   Plus,
   Trophy,
   Users,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -105,6 +106,79 @@ function CreateTournamentModal({
   )
 }
 
+function RenameTournamentModal({
+  tournament,
+  onSave,
+  saving,
+}: {
+  tournament: Tournament
+  onSave: (name: string) => Promise<void>
+  saving: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState(tournament.name)
+
+  useEffect(() => {
+    if (open) setName(tournament.name)
+  }, [open, tournament.id, tournament.name])
+
+  return (
+    <AdminFormModal
+      open={open}
+      onOpenChange={setOpen}
+      trigger={
+        <Button
+          id={`admin-tournament-btn-rename-${tournament.id}`}
+          variant="outline"
+          size="sm"
+          type="button"
+          disabled={saving}
+        >
+          <Pencil className="size-3.5" />
+          Renombrar
+        </Button>
+      }
+      title="Renombrar torneo"
+      description="Actualiza el nombre visible en listados, dashboard y ficha del torneo."
+    >
+      <form
+        id={`form-admin-tournament-rename-${tournament.id}`}
+        className="space-y-4"
+        onSubmit={async (event) => {
+          event.preventDefault()
+          const trimmed = name.trim()
+          if (!trimmed) {
+            toast.error('El nombre no puede estar vacío')
+            return
+          }
+          try {
+            await onSave(trimmed)
+            setOpen(false)
+          } catch {
+            /* toast en el padre */
+          }
+        }}
+      >
+        <div className="space-y-2">
+          <Label htmlFor={`admin-tournament-rename-name-${tournament.id}`}>Nombre</Label>
+          <Input
+            id={`admin-tournament-rename-name-${tournament.id}`}
+            name="renameTournamentName"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+            autoComplete="off"
+            maxLength={200}
+          />
+        </div>
+        <Button type="submit" className="w-full" disabled={saving}>
+          {saving ? 'Guardando…' : 'Guardar nombre'}
+        </Button>
+      </form>
+    </AdminFormModal>
+  )
+}
+
 export function AdminTournamentsPage() {
   const qc = useQueryClient()
   const userId = useAuthStore((s) => s.user?.id)
@@ -155,6 +229,24 @@ export function AdminTournamentsPage() {
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Error al cerrar torneo'),
   })
 
+  const renameMut = useMutation({
+    mutationFn: async (input: { id: string; name: string }) => {
+      await updateTournament(input.id, { name: input.name })
+    },
+    onSuccess: async (_, { id }) => {
+      toast.success('Torneo renombrado')
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['admin-tournaments'] }),
+        qc.invalidateQueries({ queryKey: ['tournaments'] }),
+        qc.invalidateQueries({ queryKey: ['admin-overview'] }),
+        qc.invalidateQueries({ queryKey: ['tournament', id] }),
+        qc.invalidateQueries({ queryKey: ['tournament-dashboard-options'] }),
+        qc.invalidateQueries({ queryKey: ['tournament-dashboard'] }),
+      ])
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Error al renombrar'),
+  })
+
   const columns: AdminDataTableColumn<Tournament>[] = [
     {
       key: 'name',
@@ -174,6 +266,11 @@ export function AdminTournamentsPage() {
       header: 'Acciones',
       render: (tournament) => (
         <div className="flex flex-wrap gap-2">
+          <RenameTournamentModal
+            tournament={tournament}
+            saving={renameMut.isPending}
+            onSave={(name) => renameMut.mutateAsync({ id: tournament.id, name })}
+          />
           <Link
             id={`admin-tournament-link-manage-${tournament.id}`}
             data-name={`manageTournament-${tournament.id}`}
@@ -222,7 +319,7 @@ export function AdminTournamentsPage() {
       <AdminPageHeader
         eyebrow="Administración"
         title="Torneos"
-        description="Gestiona torneos, revisa el estado operativo (grupos, agenda y resultados) y abre el detalle para reglas y cruces."
+        description="Gestiona torneos, revisa el estado operativo (grupos, cruces y resultados) y abre el detalle para reglas."
         actions={<CreateTournamentModal disabled={hasOpenTournament} onCreate={(values) => createMut.mutate(values)} />}
       />
 
@@ -278,17 +375,17 @@ export function AdminTournamentsPage() {
           <section
             id="section-admin-tournaments-metrics-pending"
             className="rounded-xl border border-amber-200/70 bg-gradient-to-b from-amber-50/35 to-white p-3 shadow-sm ring-1 ring-amber-900/[0.04] sm:rounded-2xl sm:p-4 sm:ring-amber-900/[0.03]"
-            aria-label="Agenda y pendientes"
+            aria-label="Marcadores y pendientes"
           >
             <details onToggle={(event) => setPendingMetricsOpen(event.currentTarget.open)}>
               <summary className="flex cursor-pointer list-none items-start justify-between gap-3 rounded-lg py-0.5 text-left outline-none [&::-webkit-details-marker]:hidden focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white">
                 <div className="min-w-0 flex-1 pr-1">
                   <h3 id="tournaments-metrics-pending" className="text-sm font-semibold leading-snug tracking-tight text-slate-900 sm:text-[0.9375rem]">
-                    Agenda y pendientes
+                    Marcadores y pendientes
                   </h3>
                   <p className="mt-0.5 text-[11px] leading-snug text-slate-500 sm:text-xs">
-                    <span className="max-sm:inline sm:hidden">Toca para ver huecos de agenda y revisiones.</span>
-                    <span className="hidden sm:inline">Huecos de calendario y cola de revisión de marcadores.</span>
+                    <span className="max-sm:inline sm:hidden">Toca para ver marcadores pendientes y revisiones.</span>
+                    <span className="hidden sm:inline">Cruces pendientes y cola de revisión de marcadores.</span>
                   </p>
                 </div>
                 <ChevronDown
@@ -302,25 +399,25 @@ export function AdminTournamentsPage() {
 
               <div className="mt-3 border-t border-amber-200/60 pt-3 sm:mt-3 sm:pt-3">
                 <p className="mb-3 hidden text-xs leading-relaxed text-slate-500 sm:block">
-                  Huecos de calendario y cola de revisión de marcadores.
+                  Cruces pendientes y cola de revisión de marcadores.
                 </p>
                 <div
                   id="admin-tournaments-metrics-pending"
                   className={cn('max-sm:flex max-sm:flex-col max-sm:gap-2', 'sm:grid sm:grid-cols-2 sm:gap-4 xl:grid-cols-4 xl:gap-5')}
                 >
                   <AdminMetricCard
-                    label="Partidos programados"
-                    value={breakdown.scheduled}
+                    label="Pendientes de marcador"
+                    value={breakdown.pendingScore}
                     icon={CalendarDays}
                     tone="info"
-                    description="Estado programado en agenda"
+                    description="Disponibles para captura"
                   />
                   <AdminMetricCard
-                    label="Partidos sin fecha"
+                    label="Cruces sin marcador"
                     value={overview.matchesWithoutDate}
                     icon={CalendarClock}
                     tone={overview.matchesWithoutDate > 0 ? 'warning' : 'neutral'}
-                    description="Sin día asignado"
+                    description="Aún sin captura"
                   />
                   <AdminMetricCard
                     label="Resultados pendientes"
@@ -390,6 +487,11 @@ export function AdminTournamentsPage() {
                     </div>
                   </div>
                   <div className="flex flex-col gap-2 border-t border-[#E2E8F0] pt-3 sm:flex-row sm:flex-wrap">
+                    <RenameTournamentModal
+                      tournament={tournament}
+                      saving={renameMut.isPending}
+                      onSave={(name) => renameMut.mutateAsync({ id: tournament.id, name })}
+                    />
                     <Link
                       id={`admin-tournament-mobile-link-manage-${tournament.id}`}
                       data-name={`manageTournamentMobile-${tournament.id}`}

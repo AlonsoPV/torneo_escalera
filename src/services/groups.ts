@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { generateMatchesForGroupIfComplete } from '@/services/matches'
 import type { Group, GroupPlayer } from '@/types/database'
 
 export async function listGroups(tournamentId: string): Promise<Group[]> {
@@ -97,7 +98,7 @@ export async function addGroupPlayer(input: {
 }): Promise<GroupPlayer> {
   const { data: g, error: gErr } = await supabase
     .from('groups')
-    .select('id, max_players')
+    .select('id, tournament_id, max_players')
     .eq('id', input.groupId)
     .single()
   if (gErr) throw gErr
@@ -120,7 +121,11 @@ export async function addGroupPlayer(input: {
     .select('*')
     .single()
   if (error) throw new Error(mapGroupPlayerError(error))
-  return data as GroupPlayer
+  const inserted = data as GroupPlayer
+  if (current.length + 1 === cap) {
+    await generateMatchesForGroupIfComplete({ groupId: input.groupId, createdBy: input.userId })
+  }
+  return inserted
 }
 
 export async function updateGroupPlayerSeed(

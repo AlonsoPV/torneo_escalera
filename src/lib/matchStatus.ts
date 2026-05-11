@@ -1,6 +1,36 @@
-import type { GroupPlayer, MatchRow } from '@/types/database'
+import type { GroupPlayer, MatchRow, MatchStatus, ScoreSet, UserRole } from '@/types/database'
+import { invertScoreSets } from '@/utils/score'
 
-export { getPlayerPerspectiveScoreSets as getPlayerPerspectiveScore } from '@/lib/playerDashboard'
+/**
+ * Ciclo acordado: Jugador A envía → score_submitted; Jugador B acepta → player_confirmed;
+ * staff cierra → closed. Rechazo del rival → score_disputed (A puede reenviar).
+ */
+export const PLAYER_SCORE_STATUSES = [
+  'pending_score',
+  'score_submitted',
+  'score_disputed',
+  'player_confirmed',
+  'closed',
+  'cancelled',
+] as const satisfies readonly MatchStatus[]
+
+export const matchStatusLabels: Record<MatchStatus, string> = {
+  pending_score: 'Pendiente de marcador',
+  score_submitted: 'Marcador enviado',
+  score_disputed: 'En disputa',
+  player_confirmed: 'Aceptado por rival',
+  closed: 'Resultado oficial',
+  cancelled: 'Cancelado',
+}
+
+export const matchStatusToneClasses: Record<MatchStatus, string> = {
+  pending_score: 'border-blue-200 bg-blue-50 text-blue-700',
+  score_submitted: 'border-amber-200 bg-amber-50 text-amber-800',
+  score_disputed: 'border-red-200 bg-red-50 text-red-700',
+  player_confirmed: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  closed: 'border-green-200 bg-green-50 text-green-700',
+  cancelled: 'border-slate-200 bg-slate-50 text-slate-500',
+}
 
 export function isMatchInRankingWindow(
   m: MatchRow,
@@ -9,10 +39,15 @@ export function isMatchInRankingWindow(
   return m.status === 'closed'
 }
 
-/** Sin hora de fin agendada = ventana abierta (alineado con RPC). */
+/** MVP sin agenda: cualquier partido pendiente puede capturarse libremente. */
 export function isMatchReadyForTimeWindow(m: MatchRow, now: Date = new Date()): boolean {
-  if (!m.scheduled_end_at) return true
-  return new Date(m.scheduled_end_at) < now
+  void m
+  void now
+  return true
+}
+
+export function isPendingScoreStatus(status: MatchStatus): boolean {
+  return status === 'pending_score'
 }
 
 export function isMatchPlayerA(match: MatchRow, userId: string | null | undefined): boolean {
@@ -23,8 +58,40 @@ export function isMatchPlayerB(match: MatchRow, userId: string | null | undefine
   return Boolean(userId && match.player_b_user_id === userId)
 }
 
+export function canSubmitScore(match: MatchRow, userId: string | null | undefined): boolean {
+  if (!isMatchPlayerA(match, userId)) return false
+  return isPendingScoreStatus(match.status) || match.status === 'score_disputed'
+}
+
+export function canAcceptScore(match: MatchRow, userId: string | null | undefined): boolean {
+  return isMatchPlayerB(match, userId) && match.status === 'score_submitted'
+}
+
+export function canRejectScore(match: MatchRow, userId: string | null | undefined): boolean {
+  return canAcceptScore(match, userId)
+}
+
+export function canAdminCloseScore(userRole: UserRole | null | undefined, match: MatchRow): boolean {
+  const isAdmin = userRole === 'admin' || userRole === 'super_admin'
+  if (!isAdmin || match.status === 'closed' || match.status === 'cancelled') return false
+  return match.status === 'player_confirmed' || match.status === 'score_disputed'
+}
+
+export function canAdminCorrectScore(userRole: UserRole | null | undefined, match: MatchRow): boolean {
+  const isAdmin = userRole === 'admin' || userRole === 'super_admin'
+  return Boolean(isAdmin && match.status !== 'closed' && match.status !== 'cancelled')
+}
+
+export function getPlayerPerspectiveScore(match: MatchRow, userId: string | null | undefined): ScoreSet[] {
+  const score = match.score_raw ?? []
+  if (!userId || score.length === 0) return []
+  if (isMatchPlayerA(match, userId)) return score
+  if (isMatchPlayerB(match, userId)) return invertScoreSets(score)
+  return []
+}
+
 /**
- * Jugador A: captura o corrige solo en scheduled / ready_for_score / score_disputed
+ * Jugador A: captura o corrige en pendiente de marcador o disputa.
  * (no tras enviar a revisión del rival).
  */
 export function canPlayerACaptureScore(params: {
@@ -33,11 +100,7 @@ export function canPlayerACaptureScore(params: {
   allowPlayerScoreEntry: boolean
 }): boolean {
   const { match, userId, allowPlayerScoreEntry } = params
-  if (!allowPlayerScoreEntry || !isMatchPlayerA(match, userId)) return false
-  if (match.status === 'cancelled') return false
-  if (!['scheduled', 'ready_for_score', 'score_disputed'].includes(match.status)) return false
-  if (!isMatchReadyForTimeWindow(match)) return false
-  return true
+  return Boolean(allowPlayerScoreEntry && canSubmitScore(match, userId))
 }
 
 /** Jugador B: aceptar o rechazar cuando el marcador está pendiente de revisión. */
@@ -47,8 +110,7 @@ export function canPlayerBRespondToScore(params: {
   allowPlayerScoreEntry: boolean
 }): boolean {
   const { match, userId, allowPlayerScoreEntry } = params
-  if (!allowPlayerScoreEntry || !isMatchPlayerB(match, userId)) return false
-  return match.status === 'score_submitted'
+  return Boolean(allowPlayerScoreEntry && canAcceptScore(match, userId))
 }
 
 /** Compat: “puede editar marcador” = A en ventana de captura, o admin (manejado aparte). */
@@ -69,12 +131,7 @@ export function canAdminEditMatch(_match: MatchRow, isAdmin: boolean): boolean {
 }
 
 export function matchDisplayStatus(m: MatchRow): string {
-  if ((m.status === 'scheduled' || m.status === 'ready_for_score') && isMatchReadyForTimeWindow(m) && m.winner_id == null) {
-    return 'ready_for_score'
-  }
-  if (m.status === 'ready_for_score') {
-    if (!isMatchReadyForTimeWindow(m) && m.winner_id == null) return m.status
-  }
+  if (isPendingScoreStatus(m.status) && m.winner_id == null) return 'pending_score'
   return m.status
 }
 

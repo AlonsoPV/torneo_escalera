@@ -14,7 +14,6 @@ import { cn } from '@/lib/utils'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import { AuthPageShell } from '@/pages/auth/AuthPageShell'
-import { AuthHomeLink } from '@/pages/auth/AuthHomeLink'
 
 const schema = z.object({
   email: z.string().min(1, 'Introduce tu email').email('Email no válido'),
@@ -39,11 +38,7 @@ export function LoginPage() {
   if (!isSupabaseConfigured) {
     return (
       <AuthPageShell>
-        <div className="relative mx-auto min-h-dvh max-w-6xl">
-          <div className="absolute right-4 top-4 z-20 sm:right-8 lg:right-10">
-            <AuthHomeLink />
-          </div>
-          <div className="flex min-h-dvh items-center justify-center p-6 pt-16">
+        <div className="mx-auto flex min-h-dvh max-w-6xl items-center justify-center p-6">
           <Card className="w-full max-w-md border-border/60 shadow-lg shadow-black/5">
             <CardHeader className="space-y-1 pb-2">
               <div className="flex items-center gap-3">
@@ -67,7 +62,6 @@ export function LoginPage() {
               , reinicia el servidor de desarrollo y vuelve a esta página.
             </CardContent>
           </Card>
-        </div>
         </div>
       </AuthPageShell>
     )
@@ -93,10 +87,6 @@ export function LoginPage() {
 
   return (
     <AuthPageShell>
-      <div className="relative mx-auto min-h-dvh max-w-6xl">
-        <div className="absolute right-4 top-4 z-20 sm:right-8 lg:right-10">
-          <AuthHomeLink />
-        </div>
       <div className="mx-auto grid min-h-dvh max-w-6xl lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:gap-0">
         <aside className="relative hidden flex-col justify-between border-border/50 px-10 py-12 lg:flex lg:border-r">
           <div>
@@ -123,7 +113,7 @@ export function LoginPage() {
           </div>
         </aside>
 
-        <main className="flex flex-col justify-center px-4 py-10 pt-16 sm:px-8 lg:px-12 lg:pt-10">
+        <main className="flex flex-col justify-center px-4 py-10 sm:px-8 lg:px-12">
           <div className="mb-8 flex items-center gap-3 lg:hidden">
             <div className="flex size-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
               <Trophy className="size-5" aria-hidden />
@@ -172,6 +162,12 @@ export function LoginPage() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <Label htmlFor="password">Contraseña</Label>
+                    <Link
+                      to="/forgot-password"
+                      className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+                    >
+                      ¿Olvidaste tu contraseña?
+                    </Link>
                   </div>
                   <div className="relative">
                     <Lock
@@ -208,19 +204,9 @@ export function LoginPage() {
                   )}
                 </Button>
               </form>
-              <p className="mt-6 text-center text-sm text-muted-foreground">
-                ¿No tienes cuenta?{' '}
-                <Link
-                  className="font-medium text-primary underline-offset-4 transition-colors hover:text-primary/90 hover:underline"
-                  to="/register"
-                >
-                  Crear cuenta
-                </Link>
-              </p>
             </CardContent>
           </Card>
         </main>
-      </div>
       </div>
     </AuthPageShell>
   )

@@ -76,7 +76,11 @@ export function MyResultsCard(props: Props) {
                       </div>
                     </div>
                     <div className="shrink-0 text-right sm:pt-0.5">
-                      <p className="text-sm font-bold text-[var(--tdash-primary)]">+{pts} pts</p>
+                      <p className="text-sm font-bold text-[var(--tdash-primary)]">
+                        {pts == null
+                          ? '—'
+                          : `${pts >= 0 ? '+' : ''}${pts} ${Math.abs(pts) === 1 ? 'pt' : 'pts'}`}
+                      </p>
                       {when ? (
                         <p className="text-[11px] text-[var(--tdash-muted)]">
                           {when.line1} · {when.line2}

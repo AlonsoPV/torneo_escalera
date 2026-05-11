@@ -10,7 +10,7 @@ export function isMatchCompleted(m: MatchRow): boolean {
 
 export function isMatchPending(m: MatchRow): boolean {
   if (m.status === 'cancelled') return false
-  return m.winner_id == null
+  return m.status !== 'closed'
 }
 
 export function getPlayerMatches(membershipId: string, matches: MatchRow[]): MatchRow[] {
@@ -23,7 +23,7 @@ export function getUpcomingMatches(membershipId: string, matches: MatchRow[]): M
 
 /** Partidos donde el jugador puede tener acción (captura A, revisión B) o seguimiento. */
 export function isMatchOpenForPlayerScoreEntry(m: MatchRow): boolean {
-  return ['scheduled', 'ready_for_score', 'score_submitted', 'score_disputed'].includes(m.status)
+  return ['pending_score', 'score_submitted', 'score_disputed'].includes(m.status)
 }
 
 export function getPlayerMatchesOpenForScoreEntry(
@@ -54,6 +54,48 @@ export function getPlayerPerspectiveScoreLabel(
   const sets = getPlayerPerspectiveScoreSets(match, myGroupPlayerId)
   if (!sets || sets.length === 0) return '—'
   return formatScoreCompact(sets)
+}
+
+export function calculateMatchGamesDifference(
+  playerId: string,
+  match: MatchRow,
+): number {
+  // Sudden death does not affect games difference because no games are captured.
+  if (match.game_type === 'sudden_death') return 0
+  const sets = getPlayerPerspectiveScoreSets(match, playerId)
+  if (!sets?.length) return 0
+  return sets.reduce((total, set) => total + set.a - set.b, 0)
+}
+
+export function calculateGamesForAndAgainst(
+  playerId: string,
+  matches: MatchRow[],
+): { gamesFor: number; gamesAgainst: number; gamesDifference: number } {
+  const officialMatches = matches.filter((match) => match.status === 'closed')
+
+  return officialMatches.reduce(
+    (totals, match) => {
+      // Sudden death does not affect games difference because no games are captured.
+      if (match.game_type === 'sudden_death') return totals
+      const sets = getPlayerPerspectiveScoreSets(match, playerId)
+      if (!sets?.length) return totals
+
+      for (const set of sets) {
+        totals.gamesFor += set.a
+        totals.gamesAgainst += set.b
+      }
+      totals.gamesDifference = totals.gamesFor - totals.gamesAgainst
+      return totals
+    },
+    { gamesFor: 0, gamesAgainst: 0, gamesDifference: 0 },
+  )
+}
+
+export function calculateGamesDifferenceForPlayer(
+  playerId: string,
+  closedMatches: MatchRow[],
+): number {
+  return calculateGamesForAndAgainst(playerId, closedMatches).gamesDifference
 }
 
 export function getOpponentGroupPlayerId(match: MatchRow, myGroupPlayerId: string): string | null {

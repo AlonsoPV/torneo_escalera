@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui/badge'
+import { matchStatusLabels } from '@/lib/matchStatus'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import type { GroupPlayer, MatchRow } from '@/types/database'
@@ -90,11 +91,9 @@ export function GroupMatrix(props: {
                             'flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-md border px-1 text-[11px] font-medium transition-colors sm:h-16 sm:text-xs',
                             match?.status === 'closed' &&
                               'border-emerald-500/40 bg-emerald-500/10',
-                            match?.status === 'admin_validated' &&
-                              'border-teal-500/35 bg-teal-500/10',
                             match?.status === 'player_confirmed' &&
                               'border-violet-500/35 bg-violet-500/10',
-                            (match?.status === 'scheduled' || match?.status === 'ready_for_score') &&
+                            match?.status === 'pending_score' &&
                               'border-dashed border-primary/40 bg-background hover:bg-muted/60',
                             match?.status === 'score_submitted' &&
                               'border-sky-500/30 bg-sky-500/5',
@@ -113,7 +112,7 @@ export function GroupMatrix(props: {
                               variant="outline"
                               className="h-5 px-1 text-[10px] font-normal"
                             >
-                              {match.status}
+                              {matchStatusLabels[match.status]}
                             </Badge>
                           ) : null}
                         </button>

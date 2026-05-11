@@ -15,24 +15,24 @@ import { AdminRulesPage } from '@/pages/admin/AdminRulesPage'
 import { AdminSettingsPage } from '@/pages/admin/AdminSettingsPage'
 import { AdminTournamentsPage } from '@/pages/admin/AdminTournamentsPage'
 import { AdminUsersPage } from '@/pages/admin/AdminUsersPage'
+import { AdminCategoriesPage } from '@/pages/admin/AdminCategoriesPage'
+import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
-import { RegisterPage } from '@/pages/auth/RegisterPage'
-import { DashboardPage } from '@/pages/dashboard/DashboardPage'
-import { TournamentDetailPage } from '@/pages/tournaments/TournamentDetailPage'
+import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
+import { TournamentDashboardPage } from '@/pages/dashboard/TournamentDashboardPage'
 import { TournamentSimulationPage } from '@/pages/simulation/TournamentSimulationPage'
 import { PlayerDashboardPage } from '@/pages/player/PlayerDashboardPage'
-import { TournamentsListPage } from '@/pages/tournaments/TournamentsListPage'
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
-  { path: '/register', element: <RegisterPage /> },
+  { path: '/forgot-password', element: <ForgotPasswordPage /> },
+  { path: '/auth/reset-password', element: <ResetPasswordPage /> },
+  { path: '/register', element: <Navigate to="/login" replace /> },
   {
     path: '/',
     element: <AppShell />,
     children: [
       { index: true, element: <IndexRedirect /> },
-      { path: 'dashboard', element: <DashboardPage /> },
-      { path: 'simulation', element: <TournamentSimulationPage /> },
       // /profile/* (p. ej. /profile/academy/edit): enlaces legacy → panel jugador
       {
         path: 'profile/*',
@@ -41,10 +41,12 @@ export const router = createBrowserRouter([
       {
         element: <RequireAuth />,
         children: [
+          { path: 'simulation', element: <TournamentSimulationPage /> },
+          { path: 'dashboard', element: <TournamentDashboardPage /> },
           { path: 'player', element: <PlayerDashboardPage /> },
-          { path: 'tournaments', element: <TournamentsListPage /> },
-          { path: 'tournaments/:tournamentId/:tournamentSlug', element: <TournamentDetailPage /> },
-          { path: 'tournaments/:tournamentId', element: <TournamentDetailPage /> },
+          { path: 'tournaments/:tournamentId/:tournamentSlug', element: <Navigate to="/dashboard" replace /> },
+          { path: 'tournaments/:tournamentId', element: <Navigate to="/dashboard" replace /> },
+          { path: 'tournaments', element: <Navigate to="/dashboard" replace /> },
           {
             path: 'admin',
             element: <RequireAdmin />,
@@ -60,6 +62,7 @@ export const router = createBrowserRouter([
                   { path: 'matches', element: <AdminMatchesPage /> },
                   { path: 'results', element: <AdminResultsPage /> },
                   { path: 'users', element: <AdminUsersPage /> },
+                  { path: 'categories', element: <AdminCategoriesPage /> },
                   { path: 'notifications', element: <AdminNotificationsPage /> },
                   { path: 'exports', element: <AdminExportsPage /> },
                   { path: 'settings', element: <AdminSettingsPage /> },

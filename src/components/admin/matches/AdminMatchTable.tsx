@@ -15,25 +15,29 @@ function formatScore(match: AdminMatchRecord) {
   return match.score_raw?.map((set) => `${set.a}-${set.b}`).join(', ') ?? 'Sin marcador'
 }
 
-function formatTime(value: string | null) {
-  return value ? value.slice(11, 16) : '-'
+function registeredAt(match: AdminMatchRecord) {
+  if (!match.score_submitted_at) return 'Sin registro'
+  const d = new Date(match.score_submitted_at)
+  if (Number.isNaN(d.getTime())) return 'Sin registro'
+  return new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short' }).format(d)
 }
 
 export function AdminMatchTable({
   matches,
   onEditResult,
+  onCancel,
 }: {
   matches: AdminMatchRecord[]
   onEditResult?: (match: AdminMatchRecord) => void
+  onCancel?: (match: AdminMatchRecord) => void
 }) {
   const columns: AdminDataTableColumn<AdminMatchRecord>[] = [
     { key: 'group', header: 'Grupo', render: (match) => match.groupName },
     { key: 'a', header: 'Jugador 1', render: (match) => match.playerAName },
     { key: 'b', header: 'Jugador 2', render: (match) => match.playerBName },
-    { key: 'date', header: 'Fecha', render: (match) => match.scheduled_date ?? '-' },
-    { key: 'time', header: 'Hora', render: (match) => formatTime(match.scheduled_start_at) },
     { key: 'status', header: 'Estado', render: (match) => <AdminStatusBadge status={match.status} /> },
     { key: 'score', header: 'Resultado', render: formatScore },
+    { key: 'registered', header: 'Registrado el', render: registeredAt },
     {
       key: 'actions',
       header: 'Acciones',
@@ -45,6 +49,11 @@ export function AdminMatchTable({
           {onEditResult ? (
             <Button variant="outline" size="sm" onClick={() => onEditResult(match)}>
               Editar resultado
+            </Button>
+          ) : null}
+          {onCancel && match.status !== 'closed' && match.status !== 'cancelled' ? (
+            <Button variant="outline" size="sm" onClick={() => onCancel(match)}>
+              Cancelar
             </Button>
           ) : null}
         </div>
@@ -74,12 +83,12 @@ export function AdminMatchTable({
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <p className="text-xs text-[#64748B]">Fecha</p>
-                  <p className="font-medium text-[#102A43]">{match.scheduled_date ?? '-'}</p>
-                </div>
-                <div>
                   <p className="text-xs text-[#64748B]">Resultado</p>
                   <p className="font-medium text-[#102A43]">{formatScore(match)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-[#64748B]">Registrado el</p>
+                  <p className="font-medium text-[#102A43]">{registeredAt(match)}</p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -89,6 +98,11 @@ export function AdminMatchTable({
                 {onEditResult ? (
                   <Button variant="outline" size="sm" onClick={() => onEditResult(match)}>
                     Editar resultado
+                  </Button>
+                ) : null}
+                {onCancel && match.status !== 'closed' && match.status !== 'cancelled' ? (
+                  <Button variant="outline" size="sm" onClick={() => onCancel(match)}>
+                    Cancelar
                   </Button>
                 ) : null}
               </div>

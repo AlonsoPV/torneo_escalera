@@ -1,0 +1,155 @@
+import { useQuery } from '@tanstack/react-query'
+import { useEffect, useMemo, useState } from 'react'
+
+import { GroupProgressCard } from '@/components/dashboard/GroupProgressCard'
+import { RecentMatchesCard } from '@/components/dashboard/RecentMatchesCard'
+import { TournamentDashboardHeaderCompact } from '@/components/dashboard/TournamentDashboardHeaderCompact'
+import { TournamentFiltersBar } from '@/components/dashboard/TournamentFiltersBar'
+import { TournamentLeaderboardCard } from '@/components/dashboard/TournamentLeaderboardCard'
+import { TournamentPerformanceOverview } from '@/components/dashboard/TournamentPerformanceOverview'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  getTournamentDashboardData,
+  listTournamentOptionsForDashboard,
+  type TournamentDashboardMatchStatusFilter,
+} from '@/services/dashboard/tournamentDashboardService'
+import type { Tournament } from '@/types/database'
+
+function defaultTournamentId(tournaments: Tournament[]): string | null {
+  const active = tournaments.find((t) => t.status === 'active')
+  return active?.id ?? tournaments[0]?.id ?? null
+}
+
+export function TournamentDashboardPage() {
+  const tq = useQuery({ queryKey: ['tournament-dashboard-options'], queryFn: listTournamentOptionsForDashboard })
+  const tournaments = tq.data ?? []
+
+  const [tournamentId, setTournamentId] = useState<string | null>(null)
+  const [groupId, setGroupId] = useState<'all' | string>('all')
+  const [matchStatus, setMatchStatus] = useState<TournamentDashboardMatchStatusFilter>('all')
+  const [matchDay, setMatchDay] = useState('')
+
+  useEffect(() => {
+    if (!tq.isSuccess || tournaments.length === 0) return
+    setTournamentId((prev) => {
+      if (prev && tournaments.some((t) => t.id === prev)) return prev
+      return defaultTournamentId(tournaments)
+    })
+  }, [tq.isSuccess, tournaments])
+
+  useEffect(() => {
+    setGroupId('all')
+  }, [tournamentId])
+
+  const filters = useMemo(
+    () => ({
+      groupId,
+      matchStatus,
+      matchDay: matchDay || undefined,
+    }),
+    [groupId, matchStatus, matchDay],
+  )
+
+  const dq = useQuery({
+    queryKey: ['tournament-dashboard', tournamentId, filters],
+    queryFn: async () => {
+      const d = await getTournamentDashboardData(tournamentId!, filters)
+      if (!d) throw new Error('Torneo no encontrado')
+      return d
+    },
+    enabled: Boolean(tournamentId),
+  })
+
+  const data = dq.data
+
+  const leaderboardGroupTitle =
+    groupId === 'all' ? 'general' : data?.groups.find((g) => g.id === groupId)?.name ?? 'Grupo'
+
+  const clearDashboardFilters = () => {
+    setGroupId('all')
+    setMatchStatus('all')
+    setMatchDay('')
+  }
+
+  if (tq.isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-32 w-full rounded-2xl" />
+        <Skeleton className="h-24 w-full rounded-2xl" />
+        <Skeleton className="h-48 w-full rounded-2xl" />
+      </div>
+    )
+  }
+
+  if (tournaments.length === 0) {
+    return (
+      <div className="mx-auto max-w-lg rounded-2xl border border-dashed border-border/80 bg-card px-6 py-10 text-center shadow-sm">
+        <h1 className="text-lg font-semibold text-foreground">No hay torneo activo</h1>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          Cuando se active un torneo, aquí podrás consultar su desempeño general, ranking y avance por grupo.
+        </p>
+      </div>
+    )
+  }
+
+  if (!tournamentId) {
+    return null
+  }
+
+  if (dq.isError) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-red-50/60 px-4 py-6 text-sm text-red-900">
+        No se pudo cargar el dashboard. {dq.error instanceof Error ? dq.error.message : ''}
+      </div>
+    )
+  }
+
+  if (dq.isLoading || !data) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-32 w-full rounded-2xl" />
+        <Skeleton className="h-20 w-full rounded-2xl" />
+        <Skeleton className="h-56 w-full rounded-2xl" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6 pb-6 sm:space-y-6 sm:pb-8">
+      <TournamentDashboardHeaderCompact tournament={data.tournament} />
+
+      <TournamentFiltersBar
+        tournaments={tournaments}
+        tournamentId={tournamentId}
+        groups={data.groups}
+        groupId={groupId}
+        matchDay={matchDay}
+        matchStatus={matchStatus}
+        isFetching={dq.isFetching}
+        onTournamentChange={(id) => setTournamentId(id)}
+        onGroupChange={(id) => setGroupId(id)}
+        onMatchDayChange={setMatchDay}
+        onMatchStatusChange={setMatchStatus}
+        onClearFilters={clearDashboardFilters}
+      />
+
+      <TournamentPerformanceOverview metrics={data.metrics} />
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-12 md:gap-4 lg:gap-6">
+        <div className="order-1 md:col-span-7 xl:col-span-8">
+          <TournamentLeaderboardCard leaderboard={data.leaderboard} groupLabel={leaderboardGroupTitle} />
+        </div>
+        <div className="order-2 md:col-span-5 xl:col-span-4">
+          <GroupProgressCard items={data.groupProgress} />
+        </div>
+      </div>
+
+      <div className="order-3">
+        <RecentMatchesCard
+          matches={data.recentMatches}
+          noMatchesScheduled={data.metrics.matchesTotal === 0}
+        />
+      </div>
+    </div>
+  )
+}

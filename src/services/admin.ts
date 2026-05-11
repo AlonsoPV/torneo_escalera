@@ -1,6 +1,7 @@
+import { isMissingPostgrestRelationError } from '@/lib/postgrestErrors'
 import { supabase } from '@/lib/supabase'
 import { addGroupPlayer, removeGroupPlayer as removeGroupMembership } from '@/services/groups'
-import { saveMatchScore, updateMatchSchedule, type MatchSchedulePatch } from '@/services/matches'
+import { cancelMatch, correctAdminScore, saveMatchScore } from '@/services/matches'
 import type {
   Group,
   GroupCategory,
@@ -41,7 +42,7 @@ export type AdminOverviewData = {
   totalGroups: number
   /** Total de filas en `matches` visibles para el admin. */
   totalMatches: number
-  /** Partidos sin `scheduled_date` (útil para detectar agenda incompleta). */
+  /** Partidos generados que aún esperan marcador. */
   matchesWithoutDate: number
   playedMatches: number
   pendingResults: number
@@ -79,10 +80,12 @@ async function listAllAdminData() {
   const error = tournaments.error || groups.error || groupPlayers.error || matches.error
   if (error) throw error
 
-  // `group_categories` puede no existir si la migración aún no se aplicó: no bloquear todo el admin.
-  const groupCategoriesRows = groupCategories.error
-    ? ([] as GroupCategory[])
-    : ((groupCategories.data ?? []) as GroupCategory[])
+  if (groupCategories.error && !isMissingPostgrestRelationError(groupCategories.error)) {
+    throw groupCategories.error
+  }
+  const groupCategoriesRows = !groupCategories.error
+    ? ((groupCategories.data ?? []) as GroupCategory[])
+    : ([] as GroupCategory[])
 
   return {
     tournaments: (tournaments.data ?? []) as Tournament[],
@@ -135,7 +138,7 @@ export async function getAdminOverviewData(): Promise<AdminOverviewData> {
     ['player_confirmed', 'score_disputed'].includes(m.status),
   ).length
   const totalMatches = data.matches.length
-  const matchesWithoutDate = data.matches.filter((m) => !m.scheduled_date).length
+  const matchesWithoutDate = data.matches.filter((m) => m.status === 'pending_score').length
   const incompleteGroups = data.groups.filter((g) => (playerCounts.get(g.id) ?? 0) < g.max_players).length
 
   const pendingActions: string[] = []
@@ -153,7 +156,7 @@ export async function getAdminOverviewData(): Promise<AdminOverviewData> {
     incompleteGroups,
     activeTournaments: data.tournaments.filter((t) => t.status === 'active').length,
     totalTournaments: data.tournaments.length,
-    recentMatches: matchRecords.filter((m) => m.score_raw || m.scheduled_date).slice(0, 5),
+    recentMatches: matchRecords.filter((m) => m.score_raw || m.status !== 'pending_score').slice(0, 5),
     pendingActions,
   }
 }
@@ -161,13 +164,11 @@ export async function getAdminOverviewData(): Promise<AdminOverviewData> {
 /** Conteos por estado de partido para dashboards admin (matches / results / tournaments). */
 export type AdminMatchBreakdown = {
   total: number
-  scheduled: number
+  pendingScore: number
   withoutDate: number
-  readyForScore: number
   scoreSubmitted: number
   scoreDisputed: number
   playerConfirmed: number
-  adminValidated: number
   closed: number
   cancelled: number
   /** Marcador en curso o cerrado (excl. cancelados sin juego). */
@@ -184,13 +185,11 @@ export function computeAdminMatchBreakdown(matches: MatchRow[]): AdminMatchBreak
   ).length
   return {
     total: matches.length,
-    scheduled: matches.filter((m) => m.status === 'scheduled').length,
-    withoutDate: matches.filter((m) => !m.scheduled_date).length,
-    readyForScore: matches.filter((m) => m.status === 'ready_for_score').length,
+    pendingScore: matches.filter((m) => m.status === 'pending_score').length,
+    withoutDate: matches.filter((m) => m.status === 'pending_score').length,
     scoreSubmitted: matches.filter((m) => m.status === 'score_submitted').length,
     scoreDisputed: matches.filter((m) => m.status === 'score_disputed').length,
     playerConfirmed: matches.filter((m) => m.status === 'player_confirmed').length,
-    adminValidated: matches.filter((m) => m.status === 'admin_validated').length,
     closed: matches.filter((m) => m.status === 'closed').length,
     cancelled: matches.filter((m) => m.status === 'cancelled').length,
     withOutcome: matches.filter((m) =>
@@ -198,7 +197,6 @@ export function computeAdminMatchBreakdown(matches: MatchRow[]): AdminMatchBreak
         'score_submitted',
         'score_disputed',
         'player_confirmed',
-        'admin_validated',
         'closed',
       ].includes(m.status),
     ).length,
@@ -264,14 +262,6 @@ export async function getAdminMatches(filters?: {
   return records
 }
 
-export async function scheduleMatch(
-  matchId: string,
-  patch: MatchSchedulePatch,
-  actorId: string,
-): Promise<void> {
-  return updateMatchSchedule(matchId, patch, actorId)
-}
-
 export async function updateMatchStatus(
   matchId: string,
   status: MatchStatus,
@@ -284,24 +274,52 @@ export async function updateMatchStatus(
   if (error) throw error
 }
 
+export async function cancelResult(matchId: string, actorUserId: string): Promise<void> {
+  return cancelMatch(matchId, actorUserId)
+}
+
 export async function getAdminResults(): Promise<AdminMatchRecord[]> {
   return getAdminMatches()
 }
 
 export async function confirmResult(match: MatchRow, actorUserId: string): Promise<void> {
-  if (!match.score_raw) throw new Error('El partido no tiene marcador para confirmar.')
+  if (match.game_type !== 'sudden_death' && !match.score_raw) throw new Error('El partido no tiene marcador para confirmar.')
   if (match.status !== 'player_confirmed') {
     throw new Error('Solo puedes cerrar oficialmente partidos aceptados por el rival.')
   }
-  await saveMatchScore({ match, sets: match.score_raw, actorUserId, isAdmin: true })
+  if (match.game_type === 'sudden_death') {
+    if (!match.winner_id) throw new Error('El partido no tiene ganador para confirmar.')
+    await saveMatchScore({
+      match,
+      scorePayload: {
+        game_type: 'sudden_death',
+        score_json: null,
+        winner: match.winner_id === match.player_b_id ? 'b' : 'a',
+      },
+      actorUserId,
+      isAdmin: true,
+    })
+    return
+  }
+  await saveMatchScore({ match, sets: match.score_raw ?? [], actorUserId, isAdmin: true })
 }
 
 export async function correctResult(
   match: MatchRow,
   sets: ScoreSet[],
   actorUserId: string,
+  closeAfter = true,
+  adminNote?: string,
 ): Promise<void> {
-  await saveMatchScore({ match, sets, actorUserId, isAdmin: true })
+  await correctAdminScore({ match, sets, actorUserId, closeAfter })
+  const note = adminNote?.trim()
+  if (note) {
+    const { error } = await supabase
+      .from('matches')
+      .update({ admin_notes: note, updated_by: actorUserId })
+      .eq('id', match.id)
+    if (error) throw error
+  }
 }
 
 export async function getAdminUsers(): Promise<AdminUserRecord[]> {

@@ -54,6 +54,7 @@ const mockMatches: MatchRow[] = [
     winner_id: 'mock-1',
     status: 'closed',
     result_type: 'normal',
+    game_type: 'best_of_3',
     scheduled_date: null,
     scheduled_start_at: null,
     scheduled_end_at: null,

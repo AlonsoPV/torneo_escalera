@@ -5,14 +5,14 @@ import { isAdminRole } from '@/lib/permissions'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 
-/** Con sesión: admin/super_admin → /admin; resto → /player. Sin sesión → demo. */
+/** Con sesión: admin/super_admin → /admin; resto → /player. Sin sesión → /login. */
 export function IndexRedirect() {
   const initialized = useAuthStore((s) => s.initialized)
   const session = useAuthStore((s) => s.session)
   const profile = useAuthStore((s) => s.profile)
 
   if (!isSupabaseConfigured) {
-    return <Navigate to="/simulation" replace />
+    return <Navigate to="/login" replace />
   }
 
   if (!initialized) {
@@ -31,5 +31,5 @@ export function IndexRedirect() {
     return <Navigate to="/player" replace />
   }
 
-  return <Navigate to="/simulation" replace />
+  return <Navigate to="/login" replace />
 }

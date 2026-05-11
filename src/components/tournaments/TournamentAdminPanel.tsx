@@ -33,7 +33,7 @@ const rulesSchema = z.object({
   best_of_sets: z.coerce.number().refine((n) => [1, 3, 5].includes(n)),
   set_points: z.coerce.number().int().min(1),
   points_per_win: z.coerce.number().int().min(0),
-  points_per_loss: z.coerce.number().int().min(0),
+  points_per_loss: z.coerce.number().int().min(-50),
   points_default_win: z.coerce.number().int().min(0),
   points_default_loss: z.coerce.number().int().min(-10),
   allow_player_score_entry: z.boolean(),
@@ -324,7 +324,7 @@ export function TournamentAdminPanel(props: {
         <CardHeader>
           <CardTitle>Jugadores y cruces</CardTitle>
           <CardDescription>
-            Asigna perfiles existentes y genera el calendario round-robin del grupo.
+            Asigna perfiles existentes y genera los cruces round-robin del grupo.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -419,7 +419,7 @@ export function TournamentAdminPanel(props: {
           </div>
           {selectedGroupId ? (
             <div className="mt-6">
-              <p className="mb-2 text-sm font-medium">Agenda (hora de fin para captura)</p>
+              <p className="mb-2 text-sm font-medium">Cruces generados</p>
               <GroupMatchScheduleList
                 groupId={selectedGroupId}
                 tournamentId={tournamentId}

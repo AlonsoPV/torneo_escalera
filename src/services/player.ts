@@ -1,7 +1,7 @@
 /**
  * API de datos para el panel del jugador (finales / derivados vía getPlayerDashboardData de Supabase).
  */
-export { getPlayerDashboardData } from './dashboardPlayer'
+export { getPlayerDashboardData, getPlayerDashboardDataForGroup, listPlayerDashboardContexts } from './dashboardPlayer'
 export {
   getPlayerGroup,
   getPlayerUpcomingMatches,
