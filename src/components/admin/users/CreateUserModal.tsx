@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { ADMIN_USER_ASSIGNABLE_ROLES } from '@/lib/permissions'
+import { ADMIN_USER_ASSIGNABLE_ROLES, userRoleLabelEs } from '@/lib/permissions'
 import type { Group, UserRole } from '@/types/database'
 
 export function CreateUserModal({
@@ -80,7 +80,7 @@ export function CreateUserModal({
               <SelectContent>
                 {ADMIN_USER_ASSIGNABLE_ROLES.map((r) => (
                   <SelectItem key={r} value={r}>
-                    {r === 'player' ? 'Jugador' : 'Super admin'}
+                    {userRoleLabelEs(r)}
                   </SelectItem>
                 ))}
               </SelectContent>

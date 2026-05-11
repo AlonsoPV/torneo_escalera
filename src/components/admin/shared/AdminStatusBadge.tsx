@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge'
 import { matchStatusLabels, matchStatusToneClasses } from '@/lib/matchStatus'
+import { USER_ROLE_LABEL_ES } from '@/lib/permissions'
 import { cn } from '@/lib/utils'
 import type { MatchStatus, TournamentStatus, UserRole } from '@/types/database'
 
@@ -7,15 +8,11 @@ type StatusValue = MatchStatus | TournamentStatus | UserRole | 'complete' | 'inc
 
 const labels: Record<string, string> = {
   ...matchStatusLabels,
+  ...USER_ROLE_LABEL_ES,
   draft: 'Borrador',
   active: 'Activo',
   finished: 'Finalizado',
   archived: 'Archivado',
-  player: 'Jugador',
-  admin: 'Admin',
-  super_admin: 'Super admin',
-  captain: 'Capitán',
-  referee: 'Árbitro',
   complete: 'Completo',
   incomplete: 'Incompleto',
   empty: 'Sin jugadores',

@@ -54,6 +54,7 @@ import {
   listTournamentsForBulkImport,
   parseUserImportFile,
 } from '@/services/bulkUserImport'
+import { tournamentStatusLabel } from '@/services/playerViewModel'
 import { useAuthStore } from '@/stores/authStore'
 
 function isAbortError(e: unknown): boolean {
@@ -297,7 +298,7 @@ export function UserBulkImportSection() {
                   <SelectItem value="__none__">Ninguno (pool global)</SelectItem>
                   {(tournamentsQ.data ?? []).map((t) => (
                     <SelectItem key={t.id} value={t.id}>
-                      {t.name} · {t.status}
+                      {t.name} · {tournamentStatusLabel(t.status)}
                     </SelectItem>
                   ))}
                 </SelectContent>

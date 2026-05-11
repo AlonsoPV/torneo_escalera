@@ -2,6 +2,7 @@ import type { Session, User } from '@supabase/supabase-js'
 import { create } from 'zustand'
 
 import { fetchProfile } from '@/lib/auth'
+import { recoverFromAuthError } from '@/lib/authSessionRecovery'
 import { supabase } from '@/lib/supabase'
 import type { Profile } from '@/types/database'
 
@@ -47,17 +48,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
 export async function initAuthListener() {
   try {
-    const { data } = await supabase.auth.getSession()
+    const { data, error } = await supabase.auth.getSession()
+    if (error) await recoverFromAuthError(error)
     useAuthStore.getState().setSession(data.session ?? null)
-  } catch {
+  } catch (e) {
+    await recoverFromAuthError(e)
     useAuthStore.getState().setSession(null)
     useAuthStore.getState().setProfile(null)
   }
-  await useAuthStore.getState().refreshProfile()
+  try {
+    await useAuthStore.getState().refreshProfile()
+  } catch (e) {
+    await recoverFromAuthError(e)
+  }
   useAuthStore.getState().setInitialized(true)
 
   supabase.auth.onAuthStateChange(async (_event, session) => {
     useAuthStore.getState().setSession(session)
-    await useAuthStore.getState().refreshProfile()
+    try {
+      await useAuthStore.getState().refreshProfile()
+    } catch (e) {
+      void recoverFromAuthError(e)
+    }
   })
 }

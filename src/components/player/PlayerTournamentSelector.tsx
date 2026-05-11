@@ -16,8 +16,16 @@ type Props = {
   className?: string
 }
 
+function contextMenuLabel(c: PlayerDashboardContextSummary): string {
+  return c.group.name && c.group.name !== c.tournament.name
+    ? `${c.tournament.name} · ${c.group.name}`
+    : c.tournament.name
+}
+
 export function PlayerTournamentSelector({ contexts, value, onChange, className }: Props) {
   if (contexts.length <= 1) return null
+
+  const selected = contexts.find((c) => c.group.id === value)
 
   return (
     <div className={cn('flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3', className)}>
@@ -32,15 +40,14 @@ export function PlayerTournamentSelector({ contexts, value, onChange, className 
           size="sm"
           className="h-10 w-full min-w-[200px] max-w-md border-[#E2E8F0] bg-white text-[#102A43] sm:w-auto"
         >
-          <SelectValue />
+          <SelectValue placeholder="Selecciona torneo">
+            {selected ? contextMenuLabel(selected) : null}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
           {contexts.map((c) => {
             const status = tournamentStatusLabel(c.tournament.status)
-            const label =
-              c.group.name && c.group.name !== c.tournament.name
-                ? `${c.tournament.name} · ${c.group.name}`
-                : c.tournament.name
+            const label = contextMenuLabel(c)
             return (
               <SelectItem key={c.group.id} value={c.group.id}>
                 <span className="flex flex-col gap-0.5 text-left">

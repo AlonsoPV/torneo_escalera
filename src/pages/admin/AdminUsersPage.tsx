@@ -37,7 +37,7 @@ import {
   updateUser,
   type AdminUserRecord,
 } from '@/services/admin'
-import { ADMIN_USER_ASSIGNABLE_ROLES } from '@/lib/permissions'
+import { ADMIN_USER_FILTER_ROLES, userRoleLabelEs } from '@/lib/permissions'
 import type { UserRole } from '@/types/database'
 
 export function AdminUsersPage() {
@@ -199,9 +199,9 @@ export function AdminUsersPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los roles</SelectItem>
-                  {ADMIN_USER_ASSIGNABLE_ROLES.map((r) => (
+                  {ADMIN_USER_FILTER_ROLES.map((r) => (
                     <SelectItem key={r} value={r}>
-                      {r === 'player' ? 'Jugador' : 'Super admin'}
+                      {userRoleLabelEs(r)}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -9,6 +9,23 @@ import {
   canSubmitScore,
 } from '@/lib/matchStatus'
 
+/** Etiqueta visible en UI (selects, badges) — nunca mostrar el slug crudo al usuario. */
+export const USER_ROLE_LABEL_ES: Record<UserRole, string> = {
+  player: 'Jugador',
+  admin: 'Administrador',
+  super_admin: 'Super administrador',
+  captain: 'Capitán',
+  referee: 'Árbitro',
+}
+
+export function userRoleLabelEs(role: UserRole | string | null | undefined): string {
+  if (!role) return '—'
+  return USER_ROLE_LABEL_ES[role as UserRole] ?? String(role)
+}
+
+/** Orden estable para filtros de rol en admin (todos los valores de `UserRole`). */
+export const ADMIN_USER_FILTER_ROLES: readonly UserRole[] = ['player', 'admin', 'super_admin', 'captain', 'referee']
+
 /** Roles que se pueden filtrar, crear y asignar en Admin → Usuarios. */
 export const ADMIN_USER_ASSIGNABLE_ROLES: readonly UserRole[] = ['player', 'super_admin']
 

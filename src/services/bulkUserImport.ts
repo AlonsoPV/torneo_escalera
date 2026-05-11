@@ -1,6 +1,7 @@
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 
+import { recoverFromAuthError } from '@/lib/authSessionRecovery'
 import { supabase } from '@/lib/supabase'
 import type { BulkImportContext, BulkImportGroupMeta, BulkImportParsedRow } from '@/lib/bulkUserImportPreview'
 import { normalizeImportLabel } from '@/lib/userImportTemplate'
@@ -176,6 +177,20 @@ export async function invokeBulkCreateUsers(input: {
   rows: BulkImportInvokeRow[]
   signal?: AbortSignal
 }): Promise<BulkImportResponse> {
+  const { data: sessionData, error: sessionErr } = await supabase.auth.getSession()
+  if (sessionErr) {
+    if (await recoverFromAuthError(sessionErr)) {
+      throw new Error('Sesión no válida. Redirigiendo al login…')
+    }
+    throw new Error(sessionErr.message)
+  }
+  const accessToken = sessionData.session?.access_token
+  if (!accessToken) {
+    throw new Error('Inicia sesión para importar usuarios.')
+  }
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+  if (!anonKey) throw new Error('Falta VITE_SUPABASE_ANON_KEY')
+
   const { data, error } = await supabase.functions.invoke<BulkImportResponse>('admin-bulk-create-users', {
     body: {
       tournamentId: input.tournamentId ?? null,
@@ -184,11 +199,24 @@ export async function invokeBulkCreateUsers(input: {
       rows: input.rows,
     },
     signal: input.signal,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      apikey: anonKey,
+    },
   })
-  if (error) throw new Error(error.message)
-  const payload = data as (BulkImportResponse & { error?: string }) | null
-  if (!payload?.batchId) {
-    throw new Error(payload?.error ?? 'Respuesta inválida de la función (¿desplegaste admin-bulk-create-users?)')
+  if (error) {
+    if (await recoverFromAuthError(error)) {
+      throw new Error('Sesión no válida. Redirigiendo al login…')
+    }
+    throw new Error(error.message)
   }
-  return payload
+  const payload = data as Record<string, unknown> | null
+  if (!payload || typeof payload.batchId !== 'string') {
+    const msg =
+      typeof payload?.error === 'string'
+        ? payload.error
+        : 'Respuesta inválida de la función (¿desplegaste admin-bulk-create-users?)'
+    throw new Error(msg)
+  }
+  return payload as unknown as BulkImportResponse
 }

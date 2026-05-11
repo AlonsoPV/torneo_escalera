@@ -1,11 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Max-Age': '86400',
-}
+import { corsHeaders } from '../_shared/cors.ts'
 
 type RowInput = {
   rowNumber: number
@@ -28,9 +23,16 @@ type Body = {
 
 const ALLOWED = new Set(['player', 'admin', 'super_admin'])
 
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
+function err(message: string, status: number) {
+  return new Response(JSON.stringify({ success: false, error: message }), {
     status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+}
+
+function ok(body: Record<string, unknown>) {
+  return new Response(JSON.stringify(body), {
+    status: 200,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 }
@@ -169,12 +171,25 @@ async function ensureGroupMembership(
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: corsHeaders })
+    return new Response('ok', { status: 200, headers: corsHeaders })
+  }
+
+  if (req.method !== 'POST') {
+    return err('Método no permitido', 405)
   }
 
   try {
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) return json({ error: 'No autorizado' }, 401)
+    if (!authHeader?.startsWith('Bearer ')) {
+      return err('No autorizado. Envía Authorization: Bearer <access_token>.', 401)
+    }
+
+    let body: Body
+    try {
+      body = (await req.json()) as Body
+    } catch {
+      return err('Cuerpo JSON inválido', 400)
+    }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -184,7 +199,7 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     })
     const { data: userData, error: userErr } = await userClient.auth.getUser()
-    if (userErr || !userData.user) return json({ error: 'No autorizado' }, 401)
+    if (userErr || !userData.user) return err('No autorizado', 401)
 
     const adminClient = createClient(supabaseUrl, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -196,24 +211,23 @@ Deno.serve(async (req) => {
       .eq('id', userData.user.id)
       .single()
 
-    if (profileErr || !profile) return json({ error: 'Perfil no encontrado' }, 403)
+    if (profileErr || !profile) return err('No tienes permisos para importar usuarios.', 403)
     if (!['admin', 'super_admin'].includes(profile.role as string)) {
-      return json({ error: 'Solo administradores pueden importar' }, 403)
+      return err('No tienes permisos para importar usuarios.', 403)
     }
 
     const callerIsSuper = profile.role === 'super_admin'
 
-    const body = (await req.json()) as Body
     if (!Array.isArray(body.rows) || body.rows.length === 0) {
-      return json({ error: 'rows requeridos' }, 400)
+      return err('rows requeridos', 400)
     }
-    if (body.rows.length > 200) return json({ error: 'Máximo 200 filas por lote' }, 400)
+    if (body.rows.length > 200) return err('Máximo 200 filas por lote', 400)
 
     const tournamentId =
       body.tournamentId && String(body.tournamentId).trim() ? String(body.tournamentId).trim() : null
     if (tournamentId) {
       const { data: tRow, error: tErr } = await adminClient.from('tournaments').select('id').eq('id', tournamentId).single()
-      if (tErr || !tRow) return json({ error: 'Torneo no encontrado' }, 400)
+      if (tErr || !tRow) return err('Torneo no encontrado', 400)
     }
 
     const createCat = body.createMissingCategories !== false
@@ -232,7 +246,7 @@ Deno.serve(async (req) => {
       .select('id')
       .single()
 
-    if (batchErr || !batchIns) return json({ error: batchErr?.message ?? 'No se creó el lote' }, 500)
+    if (batchErr || !batchIns) return err(batchErr?.message ?? 'No se creó el lote', 500)
 
     const batchId = batchIns.id as string
 
@@ -844,7 +858,7 @@ Deno.serve(async (req) => {
       })
       .eq('id', batchId)
 
-    return json({
+    return ok({
       batchId,
       success,
       errors,
@@ -853,6 +867,6 @@ Deno.serve(async (req) => {
     })
   } catch (e) {
     console.error(e)
-    return json({ error: e instanceof Error ? e.message : 'Error interno' }, 500)
+    return err(e instanceof Error ? e.message : 'Error interno', 500)
   }
 })

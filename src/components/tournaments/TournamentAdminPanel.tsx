@@ -369,7 +369,7 @@ export function TournamentAdminPanel(props: {
                 <SelectContent>
                   {(profilesQ.data ?? []).map((p) => (
                     <SelectItem key={p.id} value={p.id}>
-                      {(p.full_name ?? p.email) ?? p.id}
+                      {p.full_name?.trim() || p.email?.trim() || 'Usuario sin nombre'}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { signInWithEmail } from '@/lib/auth'
+import { clearLocalAuthAndGoToLogin } from '@/lib/authSessionRecovery'
 import { cn } from '@/lib/utils'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
@@ -203,6 +204,19 @@ export function LoginPage() {
                     'Entrar'
                   )}
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 w-full text-sm"
+                  onClick={() => {
+                    void clearLocalAuthAndGoToLogin()
+                  }}
+                >
+                  Limpiar sesión y volver a iniciar
+                </Button>
+                <p className="text-center text-[11px] text-muted-foreground">
+                  Usa esta opción si ves errores de sesión o la pantalla se queda en blanco.
+                </p>
               </form>
             </CardContent>
           </Card>

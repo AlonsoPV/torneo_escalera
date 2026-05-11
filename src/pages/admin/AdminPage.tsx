@@ -17,12 +17,21 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { userRoleLabelEs } from '@/lib/permissions'
 import { tournamentPath } from '@/lib/tournamentUrl'
 import { getAdminDashboardStats } from '@/services/dashboardAdmin'
 import { adminSetUserRole, listProfilesForAdmin } from '@/services/profiles'
 import { createTournament, listTournaments } from '@/services/tournaments'
 import { useAuthStore } from '@/stores/authStore'
 import type { UserRole } from '@/types/database'
+
+const ADMIN_PAGE_ROLE_OPTIONS = [
+  'player',
+  'admin',
+  'super_admin',
+  'captain',
+  'referee',
+] as const satisfies readonly UserRole[]
 
 const createSchema = z.object({
   name: z.string().min(2),
@@ -207,20 +216,14 @@ export function AdminPage() {
                       }}
                     >
                       <SelectTrigger className="w-36 min-w-0">
-                        <SelectValue>
-                          {p.role === 'super_admin'
-                            ? 'Super admin'
-                            : p.role === 'admin'
-                              ? 'Admin'
-                              : p.role === 'player'
-                                ? 'Jugador'
-                                : p.role}
-                        </SelectValue>
+                        <SelectValue>{userRoleLabelEs(p.role)}</SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="player">player</SelectItem>
-                        <SelectItem value="admin">admin</SelectItem>
-                        <SelectItem value="super_admin">super_admin</SelectItem>
+                        {ADMIN_PAGE_ROLE_OPTIONS.map((r) => (
+                          <SelectItem key={r} value={r}>
+                            {userRoleLabelEs(r)}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
