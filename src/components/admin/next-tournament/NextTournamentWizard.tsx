@@ -742,18 +742,13 @@ export function NextTournamentWizard() {
             <Button
               type="button"
               className="w-full sm:w-auto bg-[#1F5A4C] hover:bg-[#1F5A4C]/90"
-              disabled={creationPhase === 'running' || creationPhase === 'validating'}
+              disabled={creationPhase === 'validating'}
               onClick={() => void runCreateNextTournament()}
             >
               {creationPhase === 'validating' ? (
                 <>
                   <Loader2 className="mr-2 size-4 animate-spin" />
                   Validando…
-                </>
-              ) : creationPhase === 'running' ? (
-                <>
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  Guardando…
                 </>
               ) : (
                 'Crear nuevo torneo'

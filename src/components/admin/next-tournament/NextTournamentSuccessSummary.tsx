@@ -15,7 +15,6 @@ export function NextTournamentSuccessSummary({
   onCreateAnother: () => void
 }) {
   const { tournament, partialFailure, groupErrors, movementSaveError } = result
-  const okGroups = groupErrors.filter((e) => e.tempId !== '_movements')
 
   return (
     <Card

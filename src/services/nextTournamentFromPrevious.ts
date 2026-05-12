@@ -751,7 +751,7 @@ export async function createNextTournamentWithProgress(
     currentStep = 'generating_matches'
     cb.onStepStart?.(currentStep)
     const completeIndices: number[] = []
-    planned.forEach((p, i) => {
+    planned.forEach((_, i) => {
       const gid = (createdGroups[i] as { id: string }).id
       const players = byGroupId.get(gid) ?? []
       if (players.length === groupSize) completeIndices.push(i)
