@@ -140,13 +140,13 @@ export function AdminOverviewPage() {
               </summary>
               <div className="mt-3 border-t border-amber-200/60 pt-3 sm:mt-3 sm:pt-3">
                 <p className="mb-3 hidden text-xs leading-relaxed text-slate-500 sm:block">
-                  Revisa marcadores pendientes, grupos incompletos y resultados listos para cierre.
+                  Revisa marcadores pendientes, grupos incompletos y cierres administrativos.
                 </p>
                 <div
                   id="admin-overview-metrics-pending"
                   className={cn(
                     'max-sm:flex max-sm:flex-col max-sm:gap-2',
-                    'sm:grid sm:grid-cols-2 sm:gap-4 xl:grid-cols-4 xl:gap-5',
+                    'sm:grid sm:grid-cols-2 sm:gap-4 xl:grid-cols-3 xl:gap-5',
                   )}
                 >
                   <AdminMetricCard
@@ -164,22 +164,8 @@ export function AdminOverviewPage() {
                     description="Por debajo del cupo configurado"
                   />
                   <AdminMetricCard
-                    label="Resultados pendientes"
-                    value={overviewQ.data.pendingResults}
-                    icon={AlertTriangle}
-                    tone="warning"
-                    description="Marcador enviado, falta confirmar"
-                  />
-                  <AdminMetricCard
-                    label="Partidos jugados"
-                    value={overviewQ.data.playedMatches}
-                    icon={CheckCircle2}
-                    tone="success"
-                    description="Confirmados o corregidos"
-                  />
-                  <AdminMetricCard
                     className="max-sm:w-full sm:col-span-2 xl:col-span-1"
-                    label="Resultados confirmados"
+                    label="Cerrados"
                     value={overviewQ.data.confirmedResults}
                     icon={CheckCircle2}
                     tone="success"
@@ -190,33 +176,7 @@ export function AdminOverviewPage() {
             </details>
           </section>
 
-          <div id="admin-overview-panels-top" className="grid grid-cols-1 gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-            <Card id="card-admin-overview-health" className="rounded-2xl border border-slate-200/70 bg-white shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle id="admin-overview-health-title" className="text-base font-semibold text-slate-900">
-                  Salud del torneo
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl bg-slate-50/90 p-4 ring-1 ring-slate-200/60">
-                  <p className="text-xs font-medium text-slate-500">Operación</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900">
-                    {overviewQ.data.pendingActions.length === 0 ? 'Sin alertas críticas' : 'Requiere atención'}
-                  </p>
-                </div>
-                <div className="rounded-2xl bg-slate-50/90 p-4 ring-1 ring-slate-200/60">
-                  <p className="text-xs font-medium text-slate-500">Siguiente foco</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900">
-                    {overviewQ.data.pendingResults > 0 ? 'Revisar resultados' : 'Ver cruces'}
-                  </p>
-                </div>
-                <div className="rounded-2xl bg-slate-50/90 p-4 ring-1 ring-slate-200/60">
-                  <p className="text-xs font-medium text-slate-500">Pendientes</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900">{overviewQ.data.pendingActions.length}</p>
-                </div>
-              </CardContent>
-            </Card>
-
+          <div id="admin-overview-panels-top">
             <Card
               id="card-admin-overview-quick-actions"
               className="rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/70 via-white to-white shadow-sm ring-1 ring-emerald-900/[0.04]"

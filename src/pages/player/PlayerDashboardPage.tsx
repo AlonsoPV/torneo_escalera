@@ -8,6 +8,7 @@ import { PlayerGroupCard } from '@/components/player/PlayerGroupCard'
 import { PlayerHeaderCard } from '@/components/player/PlayerHeaderCard'
 import { PlayerStandingMiniCard } from '@/components/player/PlayerStandingMiniCard'
 import { PlayerSummaryCards } from '@/components/player/PlayerSummaryCards'
+import { PlayerTournamentMovementCard } from '@/components/player/PlayerTournamentMovementCard'
 import { PlayerTournamentSelector } from '@/components/player/PlayerTournamentSelector'
 import { buttonVariants } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -207,6 +208,9 @@ export function PlayerDashboardPage() {
     await qc.invalidateQueries({ queryKey: ['playerContexts', userId] })
     await qc.invalidateQueries({ queryKey: ['playerViewModel', userId] })
     await qc.invalidateQueries({ queryKey: ['tournament-dashboard'] })
+    if (t.id && userId) {
+      await qc.invalidateQueries({ queryKey: ['playerTournamentMovement', userId, t.id] })
+    }
   }
 
   return (
@@ -229,6 +233,10 @@ export function PlayerDashboardPage() {
       />
 
       <PlayerSummaryCards summary={summary} />
+
+      {userId ? (
+        <PlayerTournamentMovementCard playerId={userId} tournamentId={t.id} />
+      ) : null}
 
       <div className="grid grid-cols-1 items-start gap-5 sm:gap-6 xl:grid-cols-12">
         <div className="space-y-5 sm:space-y-6 xl:col-span-8">

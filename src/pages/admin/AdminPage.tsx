@@ -37,6 +37,7 @@ const createSchema = z.object({
   name: z.string().min(2),
   description: z.string().optional(),
   category: z.string().optional(),
+  initialGroups: z.enum(['none', 'per_category']),
 })
 
 type CreateForm = z.infer<typeof createSchema>
@@ -54,7 +55,7 @@ export function AdminPage() {
 
   const form = useForm<CreateForm>({
     resolver: zodResolver(createSchema),
-    defaultValues: { name: '', description: '', category: '' },
+    defaultValues: { name: '', description: '', category: '', initialGroups: 'none' },
   })
 
   const createMut = useMutation({
@@ -66,13 +67,23 @@ export function AdminPage() {
         category: values.category,
         status: 'draft',
         createdBy: userId,
+        initialGroups: values.initialGroups,
       })
     },
-    onSuccess: async (t) => {
-      toast.success('Torneo creado')
-      form.reset({ name: '', description: '', category: '' })
+    onSuccess: async (result) => {
+      const msg =
+        result.groupsCreated > 0
+          ? `Torneo creado con ${result.groupsCreated} grupo(s)`
+          : 'Torneo creado'
+      toast.success(msg)
+      form.reset({ name: '', description: '', category: '', initialGroups: 'none' })
       await qc.invalidateQueries({ queryKey: ['tournaments'] })
-      window.location.href = tournamentPath(t)
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['admin-groups'] }),
+        qc.invalidateQueries({ queryKey: ['group-categories'] }),
+        qc.invalidateQueries({ queryKey: ['admin-tournaments'] }),
+      ])
+      window.location.href = tournamentPath(result.tournament)
     },
     onError: (e) => {
       toast.error(e instanceof Error ? e.message : 'Error al crear torneo')
@@ -112,6 +123,17 @@ export function AdminPage() {
             <div>
               <Label>Categoría</Label>
               <Input {...form.register('category')} />
+            </div>
+            <div>
+              <Label htmlFor="admin-home-initial-groups">Grupos iniciales</Label>
+              <select
+                id="admin-home-initial-groups"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                {...form.register('initialGroups')}
+              >
+                <option value="none">Sin grupos (administrar después en Grupos)</option>
+                <option value="per_category">Un grupo vacío por división (registros reales en grupos)</option>
+              </select>
             </div>
             <Button type="submit" disabled={createMut.isPending}>
               Crear torneo

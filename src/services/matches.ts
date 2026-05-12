@@ -235,46 +235,35 @@ export async function adminReopenMatchResult(matchId: string): Promise<void> {
 
 export type GenerateRrMode = 'fill' | 'reset'
 
-export async function generateRoundRobinMatches(input: {
+/** Fila lista para insert en `matches` (round robin); sin I/O. */
+export type RoundRobinMatchInsertRow = {
+  tournament_id: string
+  group_id: string
+  player_a_id: string
+  player_b_id: string
+  player_a_user_id: string
+  player_b_user_id: string
+  created_by: string | null
+  status: MatchStatus
+}
+
+/** Construye todos los cruces round robin en memoria (requiere `GroupPlayer.id` persistidos). */
+export function buildRoundRobinMatchRows(input: {
   tournamentId: string
   groupId: string
   players: GroupPlayer[]
   createdBy: string | null
-  mode?: GenerateRrMode
-}): Promise<void> {
-  const { tournamentId, groupId, players, createdBy, mode = 'fill' } = input
-  if (players.length < 2) return
+}): RoundRobinMatchInsertRow[] {
+  const { tournamentId, groupId, players, createdBy } = input
+  if (players.length < 2) return []
   if (players.length > 5) {
     throw new Error('Máximo 5 jugadores por grupo para round robin (reglas del producto).')
   }
 
-  if (mode === 'reset') {
-    const { error: delError } = await supabase
-      .from('matches')
-      .delete()
-      .eq('group_id', groupId)
-    if (delError) throw delError
-  }
-
-  const existing = mode === 'fill' ? await listMatchesForGroup(groupId) : []
-  const existingKeys = new Set(existing.map((m) => pairKey(m.player_a_id, m.player_b_id)))
-
-  const rows: {
-    tournament_id: string
-    group_id: string
-    player_a_id: string
-    player_b_id: string
-    player_a_user_id: string
-    player_b_user_id: string
-    created_by: string | null
-    status: MatchStatus
-  }[] = []
-
+  const rows: RoundRobinMatchInsertRow[] = []
   for (let i = 0; i < players.length; i++) {
     for (let j = i + 1; j < players.length; j++) {
       const c = orderPlayersCanonically(players[i], players[j])
-      const key = pairKey(players[i].id, players[j].id)
-      if (mode === 'fill' && existingKeys.has(key)) continue
       rows.push({
         tournament_id: tournamentId,
         group_id: groupId,
@@ -287,16 +276,137 @@ export async function generateRoundRobinMatches(input: {
       })
     }
   }
+  return rows
+}
 
-  if (rows.length === 0) return
+/** Alcance al generar cruces para varios grupos de un torneo. */
+export type GenerateRrTournamentScope = 'all_eligible' | 'complete_groups_only'
+
+export type GenerateRrTournamentGroupResult = {
+  groupId: string
+  groupName: string
+  outcome: 'generated' | 'skipped'
+  detail?: string
+}
+
+type GroupLike = {
+  id: string
+  name: string
+  tournament_id: string
+  max_players: number
+  players: GroupPlayer[]
+}
+
+/**
+ * Genera cruces RR en todos los grupos del torneo que cumplan el alcance.
+ * Respeta el cupo `max_players` del grupo y el límite MVP de 5 jugadores por grupo.
+ */
+export async function generateRoundRobinForTournamentGroups(input: {
+  tournamentId: string
+  mode: GenerateRrMode
+  scope: GenerateRrTournamentScope
+  createdBy: string | null
+  groups: GroupLike[]
+}): Promise<GenerateRrTournamentGroupResult[]> {
+  const results: GenerateRrTournamentGroupResult[] = []
+  const inTournament = input.groups.filter((g) => g.tournament_id === input.tournamentId)
+
+  for (const g of inTournament) {
+    const n = g.players.length
+    const cap = g.max_players ?? 5
+
+    if (n < 2) {
+      results.push({
+        groupId: g.id,
+        groupName: g.name,
+        outcome: 'skipped',
+        detail: 'Menos de 2 jugadores',
+      })
+      continue
+    }
+    if (n > 5) {
+      results.push({
+        groupId: g.id,
+        groupName: g.name,
+        outcome: 'skipped',
+        detail: 'Más de 5 jugadores (límite del producto)',
+      })
+      continue
+    }
+    if (input.scope === 'complete_groups_only' && n < cap) {
+      results.push({
+        groupId: g.id,
+        groupName: g.name,
+        outcome: 'skipped',
+        detail: `Grupo incompleto (${n}/${cap})`,
+      })
+      continue
+    }
+
+    try {
+      await generateRoundRobinMatches({
+        tournamentId: input.tournamentId,
+        groupId: g.id,
+        players: g.players,
+        createdBy: input.createdBy,
+        mode: input.mode,
+      })
+      results.push({ groupId: g.id, groupName: g.name, outcome: 'generated' })
+    } catch (e) {
+      results.push({
+        groupId: g.id,
+        groupName: g.name,
+        outcome: 'skipped',
+        detail: e instanceof Error ? e.message : 'Error al generar',
+      })
+    }
+  }
+
+  return results
+}
+
+export async function generateRoundRobinMatches(input: {
+  tournamentId: string
+  groupId: string
+  players: GroupPlayer[]
+  createdBy: string | null
+  mode?: GenerateRrMode
+}): Promise<number> {
+  const { tournamentId, groupId, players, createdBy, mode = 'fill' } = input
+
+  if (mode === 'reset') {
+    const { error: delError } = await supabase
+      .from('matches')
+      .delete()
+      .eq('group_id', groupId)
+    if (delError) throw delError
+  }
+
+  const existing = mode === 'fill' ? await listMatchesForGroup(groupId) : []
+  const existingKeys = new Set(existing.map((m) => pairKey(m.player_a_id, m.player_b_id)))
+
+  const built = buildRoundRobinMatchRows({ tournamentId, groupId, players, createdBy })
+  const rows =
+    mode === 'fill' && existingKeys.size > 0
+      ? built.filter((r) => !existingKeys.has(pairKey(r.player_a_id, r.player_b_id)))
+      : built
+
+  if (rows.length === 0) return 0
   const { error } = await supabase.from('matches').insert(rows)
   if (error) throw new Error(mapPostgresError(error))
+  return rows.length
 }
 
 export async function generateMatchesForGroupIfComplete(input: {
   groupId: string
   createdBy: string | null
-}): Promise<{ generated: boolean; reason?: 'incomplete' | 'exists'; expectedPlayers: number; playerCount: number }> {
+}): Promise<{
+  generated: boolean
+  reason?: 'incomplete'
+  expectedPlayers: number
+  playerCount: number
+  matchesInserted: number
+}> {
   const { data: group, error: groupError } = await supabase
     .from('groups')
     .select('id, tournament_id, max_players')
@@ -315,15 +425,16 @@ export async function generateMatchesForGroupIfComplete(input: {
   const players = (playersData ?? []) as GroupPlayer[]
   const expectedPlayers = group.max_players ?? 5
   if (players.length < expectedPlayers) {
-    return { generated: false, reason: 'incomplete', expectedPlayers, playerCount: players.length }
+    return {
+      generated: false,
+      reason: 'incomplete',
+      expectedPlayers,
+      playerCount: players.length,
+      matchesInserted: 0,
+    }
   }
 
-  const existing = await listMatchesForGroup(input.groupId)
-  if (existing.length > 0) {
-    return { generated: false, reason: 'exists', expectedPlayers, playerCount: players.length }
-  }
-
-  await generateRoundRobinMatches({
+  const inserted = await generateRoundRobinMatches({
     tournamentId: group.tournament_id,
     groupId: input.groupId,
     players,
@@ -331,7 +442,12 @@ export async function generateMatchesForGroupIfComplete(input: {
     mode: 'fill',
   })
 
-  return { generated: true, expectedPlayers, playerCount: players.length }
+  return {
+    generated: inserted > 0,
+    expectedPlayers,
+    playerCount: players.length,
+    matchesInserted: inserted,
+  }
 }
 
 export function matchMapByPair(matches: MatchRow[]): Map<string, MatchRow> {

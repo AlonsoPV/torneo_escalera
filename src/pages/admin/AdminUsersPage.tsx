@@ -1,4 +1,4 @@
-import { Search, Trash2, Users } from 'lucide-react'
+import { RotateCcw, Search, Trash2, Users } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -38,10 +38,12 @@ import {
   type AdminUserRecord,
 } from '@/services/admin'
 import { ADMIN_USER_FILTER_ROLES, userRoleLabelEs } from '@/lib/permissions'
+import { useAuthStore } from '@/stores/authStore'
 import type { UserRole } from '@/types/database'
 
 export function AdminUsersPage() {
   const qc = useQueryClient()
+  const currentUserId = useAuthStore((s) => s.user?.id ?? null)
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all')
   const [groupFilter, setGroupFilter] = useState('all')
@@ -116,6 +118,11 @@ export function AdminUsersPage() {
         </div>
       ),
     },
+    {
+      key: 'account',
+      header: 'Cuenta',
+      render: (user) => <AdminStatusBadge status={user.status === 'inactive' ? 'inactive' : 'active'} />,
+    },
     { key: 'role', header: 'Rol', render: (user) => <AdminStatusBadge status={user.role} /> },
     { key: 'group', header: 'Grupo', render: (user) => user.group?.name ?? 'Sin grupo' },
     { key: 'created', header: 'Creado', render: (user) => user.created_at.slice(0, 10) },
@@ -133,18 +140,41 @@ export function AdminUsersPage() {
             userId={user.id}
             onSubmit={(values) => actionMut.mutate(() => changeUserPassword(values))}
           />
-          <AdminConfirmDialog
-            title="¿Seguro que deseas eliminar este usuario?"
-            description="Esta acción puede afectar partidos y rankings relacionados. Por ahora se preparará como desactivación segura."
-            confirmLabel="Desactivar"
-            onConfirm={() => actionMut.mutate(() => deactivateUser(user.id))}
-            trigger={
-              <Button variant="destructive" size="sm">
-                <Trash2 className="size-3.5" />
-                Eliminar
-              </Button>
-            }
-          />
+          {user.status === 'inactive' ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={actionMut.isPending}
+              onClick={() =>
+                actionMut.mutate(async () => {
+                  await updateUser(user.id, { status: 'active' })
+                  toast.success('Usuario reactivado')
+                })
+              }
+            >
+              <RotateCcw className="size-3.5" />
+              Reactivar
+            </Button>
+          ) : (
+            <AdminConfirmDialog
+              title="¿Desactivar esta cuenta?"
+              description="El usuario no podrá acceder a torneos ni datos hasta que un administrador lo reactive. Su fila en la base de datos y el historial se conservan."
+              confirmLabel="Desactivar"
+              onConfirm={() =>
+                actionMut.mutate(async () => {
+                  await deactivateUser(user.id)
+                  toast.success('Usuario desactivado')
+                })
+              }
+              trigger={
+                <Button variant="destructive" size="sm" disabled={currentUserId !== null && user.id === currentUserId}>
+                  <Trash2 className="size-3.5" />
+                  Desactivar
+                </Button>
+              }
+            />
+          )}
         </div>
       ),
     },

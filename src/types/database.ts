@@ -2,6 +2,13 @@ export type UserRole = 'player' | 'admin' | 'super_admin' | 'captain' | 'referee
 
 export type TournamentStatus = 'draft' | 'active' | 'finished' | 'archived'
 
+export type TournamentMovementType =
+  | 'promote'
+  | 'stay'
+  | 'demote'
+  | 'capped_top'
+  | 'capped_bottom'
+
 export type MatchStatus =
   | 'pending_score'
   | 'score_submitted'
@@ -95,6 +102,8 @@ export interface Database {
           status: TournamentStatus
           created_by: string | null
           created_at: string
+          previous_tournament_id: string | null
+          period_label: string | null
         }
         Insert: {
           id?: string
@@ -105,6 +114,8 @@ export interface Database {
           status?: TournamentStatus
           created_by?: string | null
           created_at?: string
+          previous_tournament_id?: string | null
+          period_label?: string | null
         }
         Update: {
           name?: string
@@ -113,6 +124,53 @@ export interface Database {
           season?: string | null
           status?: TournamentStatus
           created_by?: string | null
+          previous_tournament_id?: string | null
+          period_label?: string | null
+        }
+      }
+      tournament_movements: {
+        Row: {
+          id: string
+          from_tournament_id: string
+          to_tournament_id: string
+          player_id: string
+          from_category_id: string | null
+          to_category_id: string | null
+          from_group_id: string | null
+          from_position: number
+          points: number
+          games_for: number
+          games_difference: number
+          movement_type: TournamentMovementType
+          raw_movement: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          from_tournament_id: string
+          to_tournament_id: string
+          player_id: string
+          from_category_id?: string | null
+          to_category_id?: string | null
+          from_group_id?: string | null
+          from_position: number
+          points?: number
+          games_for?: number
+          games_difference?: number
+          movement_type: TournamentMovementType
+          raw_movement?: string | null
+          created_at?: string
+        }
+        Update: {
+          from_category_id?: string | null
+          to_category_id?: string | null
+          from_group_id?: string | null
+          from_position?: number
+          points?: number
+          games_for?: number
+          games_difference?: number
+          movement_type?: TournamentMovementType
+          raw_movement?: string | null
         }
       }
       tournament_rules: {
@@ -498,6 +556,62 @@ export interface Database {
           created_profile_id?: string | null
         }
       }
+      match_results_import_batches: {
+        Row: {
+          id: string
+          file_name: string | null
+          uploaded_by: string
+          total_rows: number
+          success_rows: number
+          error_rows: number
+          status: 'processing' | 'completed' | 'failed'
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          file_name?: string | null
+          uploaded_by: string
+          total_rows?: number
+          success_rows?: number
+          error_rows?: number
+          status?: 'processing' | 'completed' | 'failed'
+          created_at?: string
+        }
+        Update: {
+          file_name?: string | null
+          total_rows?: number
+          success_rows?: number
+          error_rows?: number
+          status?: 'processing' | 'completed' | 'failed'
+        }
+      }
+      match_results_import_rows: {
+        Row: {
+          id: string
+          batch_id: string
+          row_number: number
+          status: 'success' | 'error'
+          error_message: string | null
+          match_id: string | null
+          payload: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          batch_id: string
+          row_number: number
+          status: 'success' | 'error'
+          error_message?: string | null
+          match_id?: string | null
+          payload?: Json
+          created_at?: string
+        }
+        Update: {
+          status?: 'success' | 'error'
+          error_message?: string | null
+          match_id?: string | null
+        }
+      }
     }
     Views: Record<string, never>
     Functions: {
@@ -548,6 +662,7 @@ export type TournamentRules =
 export type Group = Database['public']['Tables']['groups']['Row']
 export type GroupCategory = Database['public']['Tables']['group_categories']['Row']
 export type GroupPlayer = Database['public']['Tables']['group_players']['Row']
+export type TournamentMovement = Database['public']['Tables']['tournament_movements']['Row']
 export type MatchRow = Database['public']['Tables']['matches']['Row']
 export type MatchScoreLog = Database['public']['Tables']['match_score_logs']['Row']
 export type PlayerCategory = Database['public']['Tables']['player_categories']['Row']

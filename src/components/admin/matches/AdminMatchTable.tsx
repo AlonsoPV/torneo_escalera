@@ -25,11 +25,9 @@ function registeredAt(match: AdminMatchRecord) {
 export function AdminMatchTable({
   matches,
   onEditResult,
-  onCancel,
 }: {
   matches: AdminMatchRecord[]
   onEditResult?: (match: AdminMatchRecord) => void
-  onCancel?: (match: AdminMatchRecord) => void
 }) {
   const columns: AdminDataTableColumn<AdminMatchRecord>[] = [
     { key: 'group', header: 'Grupo', render: (match) => match.groupName },
@@ -49,11 +47,6 @@ export function AdminMatchTable({
           {onEditResult ? (
             <Button variant="outline" size="sm" onClick={() => onEditResult(match)}>
               Editar resultado
-            </Button>
-          ) : null}
-          {onCancel && match.status !== 'closed' && match.status !== 'cancelled' ? (
-            <Button variant="outline" size="sm" onClick={() => onCancel(match)}>
-              Cancelar
             </Button>
           ) : null}
         </div>
@@ -98,11 +91,6 @@ export function AdminMatchTable({
                 {onEditResult ? (
                   <Button variant="outline" size="sm" onClick={() => onEditResult(match)}>
                     Editar resultado
-                  </Button>
-                ) : null}
-                {onCancel && match.status !== 'closed' && match.status !== 'cancelled' ? (
-                  <Button variant="outline" size="sm" onClick={() => onCancel(match)}>
-                    Cancelar
                   </Button>
                 ) : null}
               </div>

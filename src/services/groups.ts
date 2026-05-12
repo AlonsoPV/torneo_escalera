@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import { generateMatchesForGroupIfComplete } from '@/services/matches'
-import type { Group, GroupPlayer } from '@/types/database'
+import type { Group, GroupCategory, GroupPlayer } from '@/types/database'
+import { generateGroupName } from '@/utils/nextTournamentPromotion'
 
 export async function listGroups(tournamentId: string): Promise<Group[]> {
   const { data, error } = await supabase
@@ -17,6 +18,7 @@ export async function createGroup(input: {
   name: string
   orderIndex?: number
   groupCategoryId?: string | null
+  maxPlayers?: number
 }): Promise<Group> {
   const { data, error } = await supabase
     .from('groups')
@@ -24,12 +26,106 @@ export async function createGroup(input: {
       tournament_id: input.tournamentId,
       name: input.name,
       order_index: input.orderIndex ?? 0,
+      max_players: input.maxPlayers ?? 5,
       group_category_id: input.groupCategoryId ?? null,
     })
     .select('*')
     .single()
   if (error) throw error
   return data as Group
+}
+
+/**
+ * Crea un grupo por cada categoría del torneo que aún no tenga ningún grupo asignado.
+ * Nombres: `{categoría} — Grupo 1` (alineado con el wizard de siguiente torneo).
+ */
+export async function createMissingGroupsOnePerCategory(input: {
+  tournamentId: string
+  categories: GroupCategory[]
+  existingGroups: Pick<Group, 'order_index' | 'group_category_id'>[]
+}): Promise<{ created: number }> {
+  const sortedCats = [...input.categories].sort(
+    (a, b) => a.order_index - b.order_index || a.name.localeCompare(b.name, 'es'),
+  )
+  const groupCountByCategory = new Map<string, number>()
+  for (const g of input.existingGroups) {
+    if (!g.group_category_id) continue
+    groupCountByCategory.set(
+      g.group_category_id,
+      (groupCountByCategory.get(g.group_category_id) ?? 0) + 1,
+    )
+  }
+
+  let nextOrder =
+    input.existingGroups.length === 0
+      ? 0
+      : Math.max(...input.existingGroups.map((g) => g.order_index), 0) + 1
+
+  let created = 0
+  for (const cat of sortedCats) {
+    if ((groupCountByCategory.get(cat.id) ?? 0) > 0) continue
+    await createGroup({
+      tournamentId: input.tournamentId,
+      name: generateGroupName(cat.name, 0),
+      orderIndex: nextOrder,
+      groupCategoryId: cat.id,
+    })
+    nextOrder += 1
+    created += 1
+  }
+
+  return { created }
+}
+
+export type InitialGroupPayload = {
+  name: string
+  groupCategoryId?: string | null
+  maxPlayers?: number
+  orderIndex?: number
+}
+
+/**
+ * Inserta varios grupos reales. Evita duplicar (torneo + categoría + nombre normalizado).
+ */
+export async function createGroupsForTournament(
+  tournamentId: string,
+  payloads: InitialGroupPayload[],
+): Promise<Group[]> {
+  if (!tournamentId.trim()) throw new Error('tournament_id requerido')
+  if (payloads.length === 0) return []
+
+  const existing = await listGroups(tournamentId)
+  const dupKey = (name: string, cat: string | null) =>
+    `${cat ?? 'none'}::${name.trim().toLowerCase()}`
+  const taken = new Set(existing.map((g) => dupKey(g.name, g.group_category_id ?? null)))
+
+  let nextOrder =
+    existing.length === 0 ? 0 : Math.max(...existing.map((g) => g.order_index), 0) + 1
+
+  const created: Group[] = []
+  for (const p of payloads) {
+    const rawName = p.name.trim()
+    if (!rawName) throw new Error('Cada grupo requiere un nombre.')
+    const cat = p.groupCategoryId ?? null
+    const k = dupKey(rawName, cat)
+    if (taken.has(k)) {
+      throw new Error(`Ya existe un grupo «${rawName}» en esta categoría para el torneo.`)
+    }
+    taken.add(k)
+
+    const orderIdx = p.orderIndex ?? nextOrder
+    const g = await createGroup({
+      tournamentId,
+      name: rawName,
+      orderIndex: orderIdx,
+      groupCategoryId: cat,
+      maxPlayers: p.maxPlayers ?? 5,
+    })
+    created.push(g)
+    nextOrder = orderIdx + 1
+  }
+
+  return created
 }
 
 export async function listGroupPlayers(groupId: string): Promise<GroupPlayer[]> {
@@ -141,5 +237,21 @@ export async function updateGroupPlayerSeed(
 
 export async function removeGroupPlayer(id: string): Promise<void> {
   const { error } = await supabase.from('group_players').delete().eq('id', id)
+  if (error) throw error
+}
+
+/** Elimina el grupo solo si no tiene jugadores inscritos. `matches` vacíos pueden eliminarse en cascada con el grupo. */
+export async function deleteGroup(groupId: string): Promise<void> {
+  const { count, error: countErr } = await supabase
+    .from('group_players')
+    .select('*', { count: 'exact', head: true })
+    .eq('group_id', groupId)
+  if (countErr) throw countErr
+  if ((count ?? 0) > 0) {
+    throw new Error(
+      'No puedes eliminar un grupo con jugadores inscritos. Quita primero a todos los jugadores del grupo.',
+    )
+  }
+  const { error } = await supabase.from('groups').delete().eq('id', groupId)
   if (error) throw error
 }

@@ -13,6 +13,7 @@ import {
   listTournamentOptionsForDashboard,
   type TournamentDashboardMatchStatusFilter,
 } from '@/services/dashboard/tournamentDashboardService'
+import { ensureDefaultGroupCategories, listGroupCategories } from '@/services/groupCategories'
 import type { Tournament } from '@/types/database'
 
 function defaultTournamentId(tournaments: Tournament[]): string | null {
@@ -25,9 +26,9 @@ export function TournamentDashboardPage() {
   const tournaments = tq.data ?? []
 
   const [tournamentId, setTournamentId] = useState<string | null>(null)
+  const [groupCategoryId, setGroupCategoryId] = useState<'all' | 'none' | string>('all')
   const [groupId, setGroupId] = useState<'all' | string>('all')
   const [matchStatus, setMatchStatus] = useState<TournamentDashboardMatchStatusFilter>('all')
-  const [matchDay, setMatchDay] = useState('')
 
   useEffect(() => {
     if (!tq.isSuccess || tournaments.length === 0) return
@@ -37,17 +38,32 @@ export function TournamentDashboardPage() {
     })
   }, [tq.isSuccess, tournaments])
 
+  const categoriesQ = useQuery({
+    queryKey: ['group-categories', 'dashboard', tournamentId],
+    queryFn: async () => {
+      await ensureDefaultGroupCategories(tournamentId!)
+      return listGroupCategories(tournamentId!)
+    },
+    enabled: Boolean(tournamentId),
+    staleTime: 30_000,
+  })
+  const groupCategories = categoriesQ.data ?? []
+
+  useEffect(() => {
+    setGroupCategoryId('all')
+  }, [tournamentId])
+
   useEffect(() => {
     setGroupId('all')
-  }, [tournamentId])
+  }, [tournamentId, groupCategoryId])
 
   const filters = useMemo(
     () => ({
+      groupCategoryId,
       groupId,
       matchStatus,
-      matchDay: matchDay || undefined,
     }),
-    [groupId, matchStatus, matchDay],
+    [groupCategoryId, groupId, matchStatus],
   )
 
   const dq = useQuery({
@@ -66,9 +82,9 @@ export function TournamentDashboardPage() {
     groupId === 'all' ? 'general' : data?.groups.find((g) => g.id === groupId)?.name ?? 'Grupo'
 
   const clearDashboardFilters = () => {
+    setGroupCategoryId('all')
     setGroupId('all')
     setMatchStatus('all')
-    setMatchDay('')
   }
 
   if (tq.isLoading) {
@@ -114,6 +130,10 @@ export function TournamentDashboardPage() {
     )
   }
 
+  /** Solo refetch con datos ya mostrados; evita que `isFetching` quede enganchado en estados raros del observer. */
+  const filtersBarShowRefreshing =
+    dq.fetchStatus === 'fetching' && dq.status === 'success' && Boolean(dq.data)
+
   return (
     <div className="space-y-6 pb-6 sm:space-y-6 sm:pb-8">
       <TournamentDashboardHeaderCompact tournament={data.tournament} />
@@ -121,14 +141,15 @@ export function TournamentDashboardPage() {
       <TournamentFiltersBar
         tournaments={tournaments}
         tournamentId={tournamentId}
+        groupCategories={groupCategories}
+        groupCategoryId={groupCategoryId}
         groups={data.groups}
         groupId={groupId}
-        matchDay={matchDay}
         matchStatus={matchStatus}
-        isFetching={dq.isFetching}
+        isFetching={filtersBarShowRefreshing}
         onTournamentChange={(id) => setTournamentId(id)}
+        onGroupCategoryChange={(id) => setGroupCategoryId(id)}
         onGroupChange={(id) => setGroupId(id)}
-        onMatchDayChange={setMatchDay}
         onMatchStatusChange={setMatchStatus}
         onClearFilters={clearDashboardFilters}
       />

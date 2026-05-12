@@ -9,7 +9,7 @@ export type AdminMetricTone = 'neutral' | 'success' | 'warning' | 'danger' | 'in
 export const ADMIN_METRIC_GRID_4 =
   'grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4 xl:gap-5'
 
-/** Variante con 3 columnas en xl (p. ej. resultados con 6 métricas). */
+/** Variante con 3 columnas en xl (p. ej. bloque de resumen con 3 KPIs). */
 export const ADMIN_METRIC_GRID_3 =
   'grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3 xl:gap-5'
 

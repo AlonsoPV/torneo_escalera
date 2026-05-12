@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 import type { Json } from '@/types/database'
 import type { TournamentRules } from '@/types/database'
+import type { TournamentRulesUpdatePayload } from '@/services/tournaments'
 
 export const matchFormatIds = ['one_set', 'best_of_3', 'best_of_5'] as const
 export type MatchFormatId = (typeof matchFormatIds)[number]
@@ -177,21 +178,43 @@ export function rulesRowToFormValues(row: TournamentRulesRowInput): TournamentRu
   return withDefaults(row)
 }
 
-/** Payload persistible (sin campos solo UI). Sincroniza columnas legacy usadas por SQL. */
-export function formValuesToRulesUpdate(values: TournamentRulesFormValues, updatedBy: string | null): Record<string, unknown> {
-  const { allowHighDefaultWinPoints: _ack, ...rest } = values
+/** Payload persistible (solo columnas de `tournament_rules`; sin campos solo UI). */
+export function formValuesToRulesUpdate(
+  values: TournamentRulesFormValues,
+  updatedBy: string | null,
+): TournamentRulesUpdatePayload {
   const best_of_sets = values.match_format === 'one_set' ? 1 : values.match_format === 'best_of_5' ? 5 : 3
   const set_points = values.games_per_set
   const super_tiebreak_final_set = values.final_set_format === 'super_tiebreak'
   const tiebreak_at = values.tiebreak_enabled ? values.tiebreak_at : null
+
   return {
-    ...rest,
+    match_format: values.match_format,
+    set_type: values.set_type,
+    games_per_set: values.games_per_set,
+    min_game_difference: values.min_game_difference,
+    tiebreak_enabled: values.tiebreak_enabled,
+    tiebreak_at,
+    final_set_format: values.final_set_format,
+    sudden_death_points: values.sudden_death_points,
+    points_per_win: values.points_per_win,
+    points_per_loss: values.points_per_loss,
+    points_default_win: values.points_default_win,
+    points_default_loss: values.points_default_loss,
+    allow_player_score_entry: values.allow_player_score_entry,
+    allow_7_6: values.allow_7_6,
+    allow_7_5: values.allow_7_5,
+    defaults_enabled: values.defaults_enabled,
+    default_requires_admin_review: values.default_requires_admin_review,
+    player_can_report_default: values.player_can_report_default,
+    admin_can_set_default_manual: values.admin_can_set_default_manual,
+    result_submission_window_hours: values.result_submission_window_hours,
+    auto_penalty_no_show: values.auto_penalty_no_show,
     ranking_criteria: values.ranking_criteria as unknown as Json,
     updated_by: updatedBy,
     best_of_sets,
     set_points,
     super_tiebreak_final_set,
-    tiebreak_at,
   }
 }
 

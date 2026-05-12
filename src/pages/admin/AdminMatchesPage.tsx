@@ -5,10 +5,8 @@ import {
   ListFilter,
   Search,
   Trophy,
-  XCircle,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -19,7 +17,7 @@ import { AdminMetricCard, ADMIN_METRIC_GRID_4 } from '@/components/admin/shared/
 import { AdminPageHeader } from '@/components/admin/shared/AdminPageHeader'
 import { AdminSectionTitle } from '@/components/admin/shared/AdminSectionTitle'
 import { AdminToolbar } from '@/components/admin/shared/AdminToolbar'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -30,7 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { cancelResult, computeAdminMatchBreakdown, correctResult, getAdminGroups, getAdminMatches, type AdminMatchRecord } from '@/services/admin'
+import { computeAdminMatchBreakdown, correctResult, getAdminGroups, getAdminMatches, type AdminMatchRecord } from '@/services/admin'
 import { getTournamentRules } from '@/services/tournaments'
 import { useAuthStore } from '@/stores/authStore'
 import type { MatchStatus, ScoreSet } from '@/types/database'
@@ -67,19 +65,6 @@ export function AdminMatchesPage() {
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Error al editar resultado'),
   })
 
-  const cancelMut = useMutation({
-    mutationFn: async (match: AdminMatchRecord) => {
-      if (!actorId) throw new Error('No autenticado')
-      await cancelResult(match.id, actorId)
-    },
-    onSuccess: async () => {
-      toast.success('Partido cancelado')
-      await qc.invalidateQueries({ queryKey: ['admin-matches'] })
-      await qc.invalidateQueries({ queryKey: ['admin-results'] })
-    },
-    onError: (error) => toast.error(error instanceof Error ? error.message : 'Error al cancelar partido'),
-  })
-
   const filteredMatches = useMemo(() => {
     const q = search.trim().toLowerCase()
     return (matchesQ.data ?? []).filter((match) => {
@@ -104,11 +89,11 @@ export function AdminMatchesPage() {
         <AdminSectionTitle
           id="matches-metrics-heading"
           title="Resumen operativo"
-          description="Conteos globales para priorizar marcadores pendientes y partidos que requieren acción."
+          description="Conteos globales de partidos por estado operativo."
         />
         {matchesQ.isLoading ? (
           <div className={ADMIN_METRIC_GRID_4}>
-            {Array.from({ length: 8 }).map((_, index) => (
+            {Array.from({ length: 4 }).map((_, index) => (
               <Skeleton key={index} className="h-[5.5rem] rounded-2xl sm:h-24" />
             ))}
           </div>
@@ -136,32 +121,11 @@ export function AdminMatchesPage() {
               description="Marcador enviado por Jugador A"
             />
             <AdminMetricCard
-              label="Jugados (con resultado)"
-              value={breakdown.withOutcome}
-              icon={CheckCircle2}
-              tone="success"
-              description="En flujo de marcador o cerrado oficialmente"
-            />
-            <AdminMetricCard
-              label="Revisión admin"
-              value={breakdown.needsAdminAttention}
-              icon={AlertTriangle}
-              tone="warning"
-              description="Aceptado por rival o en disputa"
-            />
-            <AdminMetricCard
               label="Cerrados (ranking)"
               value={breakdown.closed}
               icon={CheckCircle2}
               tone="success"
               description="Validados y cerrados oficialmente"
-            />
-            <AdminMetricCard
-              label="Cancelados"
-              value={breakdown.cancelled}
-              icon={XCircle}
-              tone="danger"
-              description="Partidos dados de baja"
             />
           </div>
         )}
@@ -172,13 +136,6 @@ export function AdminMatchesPage() {
           id="matches-toolbar-heading"
           title="Filtros y búsqueda"
           description="Encuentra partidos por jugador, grupo o torneo."
-          action={
-            breakdown.needsAdminAttention > 0 ? (
-              <Link className={buttonVariants({ variant: 'default', size: 'sm', className: 'w-full sm:w-auto' })} to="/admin/results">
-                Revisar {breakdown.needsAdminAttention} pendiente{breakdown.needsAdminAttention === 1 ? '' : 's'}
-              </Link>
-            ) : null
-          }
         />
         <AdminToolbar>
           <div className="relative w-full min-w-0 sm:max-w-xs sm:flex-1">
@@ -224,7 +181,6 @@ export function AdminMatchesPage() {
                   <SelectItem value="score_disputed">Marcador en disputa</SelectItem>
                   <SelectItem value="player_confirmed">Aceptado por rival</SelectItem>
                   <SelectItem value="closed">Cerrado</SelectItem>
-                  <SelectItem value="cancelled">Cancelado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -259,7 +215,6 @@ export function AdminMatchesPage() {
           <AdminMatchTable
             matches={filteredMatches}
             onEditResult={(match) => setEditingResult(match)}
-            onCancel={(match) => cancelMut.mutate(match)}
           />
         )}
       </section>

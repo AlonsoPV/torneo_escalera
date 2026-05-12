@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { AdminGroupRecord } from '@/services/admin'
 import type { GenerateRrMode } from '@/services/matches'
 import type { Group, GroupCategory, Profile } from '@/types/database'
@@ -28,6 +29,7 @@ const NONE = '__none__'
 export function GroupPlayerManager({
   group,
   categories,
+  categoriesLoading = false,
   profiles,
   open,
   onOpenChange,
@@ -39,6 +41,7 @@ export function GroupPlayerManager({
 }: {
   group: AdminGroupRecord | null
   categories: GroupCategory[]
+  categoriesLoading?: boolean
   profiles: Profile[]
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -68,6 +71,19 @@ export function GroupPlayerManager({
     const currentIds = new Set(group?.players.map((player) => player.user_id) ?? [])
     return profiles.filter((profile) => profile.role === 'player' && !currentIds.has(profile.id))
   }, [group, profiles])
+
+  const categoryOptions = useMemo(() => {
+    const list = [...categories]
+    if (group?.category && !list.some((c) => c.id === group.category!.id)) {
+      list.push(group.category)
+    }
+    return list.sort((a, b) => a.order_index - b.order_index || a.name.localeCompare(b.name, 'es'))
+  }, [categories, group?.category])
+
+  const selectedCategoryLabel =
+    categorySelect === NONE
+      ? null
+      : categoryOptions.find((c) => c.id === categorySelect)?.name ?? group?.category?.name ?? null
 
   if (!group) return null
 
@@ -102,7 +118,11 @@ export function GroupPlayerManager({
             >
               <div>
                 <h3 className="text-sm font-semibold text-[#102A43]">Datos del grupo</h3>
-                <p className="mt-1 text-xs text-[#64748B]">Nombre visible y categoría del torneo.</p>
+                <p className="mt-1 text-xs text-[#64748B]">
+                  Nombre visible y <strong className="font-medium text-[#475569]">categoría de grupo</strong> (las
+                  divisiones del torneo que gestionas en «Categorías de grupo» arriba, para el mismo torneo). El listado
+                  se carga desde las categorías ya creadas en la base.
+                </p>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2 sm:col-span-2">
@@ -110,26 +130,31 @@ export function GroupPlayerManager({
                   <Input id="group-name" name="name" defaultValue={group.name} required />
                 </div>
                 <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="group-category">Categoría</Label>
-                  <Select value={categorySelect} onValueChange={(v) => setCategorySelect(v ?? NONE)}>
-                    <SelectTrigger id="group-category" className="h-11 w-full">
-                      <SelectValue placeholder="Sin categoría" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NONE}>Sin categoría</SelectItem>
-                      {categories.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="group-category">Categoría de grupo</Label>
+                  {categoriesLoading && categoryOptions.length === 0 ? (
+                    <Skeleton className="h-11 w-full rounded-lg" aria-hidden />
+                  ) : (
+                    <Select value={categorySelect} onValueChange={(v) => setCategorySelect(v ?? NONE)}>
+                      <SelectTrigger id="group-category" className="h-11 w-full">
+                        <SelectValue placeholder="Sin categoría">{selectedCategoryLabel}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NONE}>Sin categoría</SelectItem>
+                        {categoryOptions.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               </div>
-              {categories.length === 0 ? (
+              {categoryOptions.length === 0 && !categoriesLoading ? (
                 <p className="text-xs text-amber-800/90">
-                  No hay categorías cargadas para este torneo. Si eres admin, créalas en la sección «Categorías de
-                  grupo» arriba (elige el torneo en los filtros).
+                  No hay categorías de grupo para este torneo. Créalas en la sección «Categorías de grupo» arriba
+                  (selecciona el mismo torneo en los filtros) y vuelve a abrir este panel, o usa el botón Guardar tras
+                  crearlas.
                 </p>
               ) : null}
               <Button type="submit" className="w-full sm:w-auto">

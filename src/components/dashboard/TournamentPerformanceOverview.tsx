@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, LayoutGrid, Users } from 'lucide-react'
+import { CalendarDays, CheckCircle2, LayoutGrid, Users } from 'lucide-react'
 
 import type { TournamentScopeMetrics } from '@/utils/tournamentMetrics'
 
@@ -44,20 +44,6 @@ export function TournamentPerformanceOverview({ metrics }: { metrics: Tournament
           icon={CheckCircle2}
           tone="emerald"
           progressPercent={metrics.progressPercent}
-        />
-        <TournamentMetricCard
-          label="Pendientes"
-          value={metrics.matchesPending}
-          hint="Aún no cerrados"
-          icon={Clock3}
-          tone="amber"
-        />
-        <TournamentMetricCard
-          label="Por validar"
-          value={metrics.resultsPendingValidation}
-          hint="Revisión admin"
-          icon={AlertTriangle}
-          tone="red"
         />
       </div>
     </section>

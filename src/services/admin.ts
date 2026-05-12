@@ -1,7 +1,7 @@
 import { isMissingPostgrestRelationError } from '@/lib/postgrestErrors'
 import { supabase } from '@/lib/supabase'
 import { addGroupPlayer, removeGroupPlayer as removeGroupMembership } from '@/services/groups'
-import { cancelMatch, correctAdminScore, saveMatchScore } from '@/services/matches'
+import { correctAdminScore, saveMatchScore } from '@/services/matches'
 import type {
   Group,
   GroupCategory,
@@ -225,6 +225,84 @@ export async function getAdminGroups(tournamentId?: string): Promise<AdminGroupR
   }))
 }
 
+/**
+ * Grupos del torneo leyendo solo filas de `groups` / `group_players` / `matches` ligadas a ese torneo.
+ * Preferible en `/admin/groups` para no depender de un volcado global de todas las tablas.
+ */
+export async function getAdminGroupsForTournament(tournamentId: string): Promise<AdminGroupRecord[]> {
+  const [{ data: tournament, error: tErr }, { data: groupRows, error: gErr }, { data: categoryRows, error: cErr }] =
+    await Promise.all([
+      supabase.from('tournaments').select('*').eq('id', tournamentId).maybeSingle(),
+      supabase
+        .from('groups')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+        .order('order_index', { ascending: true }),
+      supabase
+        .from('group_categories')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+        .order('order_index', { ascending: true })
+        .order('name', { ascending: true }),
+    ])
+
+  if (tErr) throw tErr
+  if (gErr) throw gErr
+  if (cErr && !isMissingPostgrestRelationError(cErr)) throw cErr
+
+  const groups = (groupRows ?? []) as Group[]
+  const categories = (!cErr ? (categoryRows ?? []) : []) as GroupCategory[]
+  const categoryById = new Map(categories.map((c) => [c.id, c]))
+  const groupIds = groups.map((g) => g.id)
+
+  const [{ data: groupPlayers, error: gpErr }, { data: matches, error: mErr }] =
+    groupIds.length === 0
+      ? [{ data: [] as GroupPlayer[], error: null }, { data: [] as MatchRow[], error: null }]
+      : await Promise.all([
+          supabase
+            .from('group_players')
+            .select('*')
+            .in('group_id', groupIds)
+            .order('seed_order', { ascending: true })
+            .order('id', { ascending: true }),
+          supabase
+            .from('matches')
+            .select('*')
+            .eq('tournament_id', tournamentId)
+            .order('created_at', { ascending: false }),
+        ])
+
+  if (gpErr) throw gpErr
+  if (mErr) throw mErr
+
+  const gpList = (groupPlayers ?? []) as GroupPlayer[]
+  const matchList = (matches ?? []) as MatchRow[]
+  const userIds = [...new Set(gpList.map((p) => p.user_id))]
+  const { data: profilesData, error: pErr } =
+    userIds.length === 0
+      ? { data: [] as Profile[], error: null }
+      : await supabase.from('profiles').select('*').in('id', userIds)
+
+  if (pErr) throw pErr
+  const profileById = new Map((profilesData ?? []).map((p) => [p.id, p as Profile]))
+
+  const tournamentObj = tournament as Tournament | null
+
+  if (import.meta.env.DEV) {
+    console.log('[getAdminGroupsForTournament]', { tournamentId, groupCount: groups.length })
+  }
+
+  return groups.map((group) => ({
+    ...group,
+    tournament: tournamentObj,
+    category: group.group_category_id ? categoryById.get(group.group_category_id) ?? null : null,
+    players: gpList
+      .filter((player) => player.group_id === group.id)
+      .map((player) => ({ ...player, profile: profileById.get(player.user_id) ?? null })),
+    matches: matchList.filter((match) => match.group_id === group.id),
+  }))
+}
+
 export async function updateGroup(
   groupId: string,
   patch: Partial<Pick<Group, 'name' | 'order_index' | 'max_players' | 'group_category_id'>>,
@@ -272,10 +350,6 @@ export async function updateMatchStatus(
     .update({ status, updated_by: actorId })
     .eq('id', matchId)
   if (error) throw error
-}
-
-export async function cancelResult(matchId: string, actorUserId: string): Promise<void> {
-  return cancelMatch(matchId, actorUserId)
 }
 
 export async function getAdminResults(): Promise<AdminMatchRecord[]> {
@@ -345,16 +419,21 @@ export async function getAdminUsers(): Promise<AdminUserRecord[]> {
 
 export async function updateUser(
   userId: string,
-  patch: Partial<Pick<Profile, 'full_name' | 'email' | 'role'>>,
+  patch: Partial<Pick<Profile, 'full_name' | 'email' | 'role' | 'status'>>,
 ): Promise<void> {
   const { error } = await supabase.from('profiles').update(patch).eq('id', userId)
   if (error) throw error
 }
 
 export async function deactivateUser(userId: string): Promise<void> {
-  throw new Error(
-    `La desactivación de ${userId} requiere una columna de estado o una Edge Function segura.`,
-  )
+  const { data, error: userError } = await supabase.auth.getUser()
+  if (userError) throw userError
+  const actorId = data.user?.id ?? null
+  if (actorId !== null && actorId === userId) {
+    throw new Error('No puedes desactivar tu propia cuenta.')
+  }
+  const { error } = await supabase.from('profiles').update({ status: 'inactive' }).eq('id', userId)
+  if (error) throw error
 }
 
 export async function createUser(input: CreateUserInput): Promise<void> {
@@ -366,3 +445,5 @@ export async function changeUserPassword(input: ChangePasswordInput): Promise<vo
   void input
   throw new Error('Cambiar contraseñas requiere una Edge Function segura con permisos de servidor.')
 }
+
+export { deleteGroup } from '@/services/groups'

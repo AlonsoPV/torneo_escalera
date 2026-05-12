@@ -1,11 +1,14 @@
 import {
   AlertTriangle,
+  ArrowRightLeft,
   CalendarClock,
   CalendarDays,
   CheckCircle2,
   ChevronDown,
   Eye,
   Flag,
+  FlaskConical,
+  Grid3x3,
   Lock,
   Pencil,
   Plus,
@@ -29,10 +32,19 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { tournamentPath } from '@/lib/tournamentUrl'
+import { isDummyResultsSeedEnabled } from '@/lib/dummyResultsSeedEnv'
+import { isAdminRole } from '@/lib/permissions'
 import { computeAdminMatchBreakdown, getAdminMatches, getAdminOverviewData } from '@/services/admin'
+import { seedDummyResultsForTournament } from '@/services/dummyResultsSeed'
 import { createTournament, listTournaments, updateTournament } from '@/services/tournaments'
 import { useAuthStore } from '@/stores/authStore'
 import type { Tournament } from '@/types/database'
@@ -41,11 +53,16 @@ function CreateTournamentModal({
   onCreate,
   disabled,
 }: {
-  onCreate: (values: { name: string; category: string }) => void
+  onCreate: (values: {
+    name: string
+    category: string
+    initialGroups: 'none' | 'per_category'
+  }) => void
   disabled?: boolean
 }) {
   const [name, setName] = useState('')
   const [category, setCategory] = useState('')
+  const [initialGroups, setInitialGroups] = useState<'none' | 'per_category'>('none')
 
   return (
     <AdminFormModal
@@ -74,7 +91,10 @@ function CreateTournamentModal({
         className="space-y-4"
         onSubmit={(event) => {
           event.preventDefault()
-          onCreate({ name, category })
+          onCreate({ name, category, initialGroups })
+          setName('')
+          setCategory('')
+          setInitialGroups('none')
         }}
       >
         <div className="space-y-2">
@@ -98,6 +118,28 @@ function CreateTournamentModal({
             autoComplete="off"
           />
         </div>
+        <div className="space-y-2">
+          <Label htmlFor="admin-tournament-create-groups">Grupos iniciales</Label>
+          <Select
+            value={initialGroups}
+            onValueChange={(v) => setInitialGroups(v as 'none' | 'per_category')}
+          >
+            <SelectTrigger id="admin-tournament-create-groups" className="h-11 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">
+                Sin grupos (crear después en Grupos)
+              </SelectItem>
+              <SelectItem value="per_category">
+                Un grupo vacío por cada división (registros en la tabla groups)
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-slate-500">
+            Las divisiones por defecto (Primera, Ascenso, Fuerzas básicas) se crean al guardar el torneo.
+          </p>
+        </div>
         <Button id="admin-tournament-create-submit" name="submitCreateTournament" type="submit" className="w-full" disabled={disabled}>
           Crear torneo
         </Button>
@@ -110,10 +152,12 @@ function RenameTournamentModal({
   tournament,
   onSave,
   saving,
+  density = 'comfortable',
 }: {
   tournament: Tournament
   onSave: (name: string) => Promise<void>
   saving: boolean
+  density?: 'comfortable' | 'compact'
 }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(tournament.name)
@@ -121,6 +165,8 @@ function RenameTournamentModal({
   useEffect(() => {
     if (open) setName(tournament.name)
   }, [open, tournament.id, tournament.name])
+
+  const compact = density === 'compact'
 
   return (
     <AdminFormModal
@@ -130,12 +176,14 @@ function RenameTournamentModal({
         <Button
           id={`admin-tournament-btn-rename-${tournament.id}`}
           variant="outline"
-          size="sm"
+          size={compact ? 'icon-sm' : 'sm'}
           type="button"
           disabled={saving}
+          title="Renombrar torneo"
+          aria-label="Renombrar torneo"
         >
           <Pencil className="size-3.5" />
-          Renombrar
+          {!compact ? <span>Renombrar</span> : null}
         </Button>
       }
       title="Renombrar torneo"
@@ -179,6 +227,219 @@ function RenameTournamentModal({
   )
 }
 
+function AdminSeedDummyResultsButton({
+  tournamentId,
+  triggerClassName,
+  variant = 'full',
+}: {
+  tournamentId: string
+  triggerClassName?: string
+  variant?: 'full' | 'icon'
+}) {
+  const qc = useQueryClient()
+  const profile = useAuthStore((s) => s.profile)
+  const userId = useAuthStore((s) => s.user?.id)
+
+  const seedMut = useMutation({
+    mutationFn: async () => {
+      if (!userId) throw new Error('No autenticado.')
+      const role = profile?.role
+      if (!isAdminRole(role)) throw new Error('Solo el staff (admin) puede usar esta acción.')
+      return seedDummyResultsForTournament({
+        tournamentId,
+        actorUserId: userId,
+        actorRole: role,
+      })
+    },
+    onSuccess: async (res) => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['admin-matches'] }),
+        qc.invalidateQueries({ queryKey: ['admin-overview'] }),
+        qc.invalidateQueries({ queryKey: ['tournament-dashboard'] }),
+        qc.invalidateQueries({ queryKey: ['tournament-dashboard-options'] }),
+        qc.invalidateQueries({ queryKey: ['tournament', tournamentId] }),
+      ])
+      toast.success(
+        `Dummy listo: ${res.groupsProcessed} grupo(s) procesados, ${res.resultsGenerated} marcador(es), ${res.matchesGenerated} cruce(s) nuevos, ${res.groupsSkipped} grupo(s) omitidos.`,
+      )
+      if (res.errors.length > 0) {
+        toast.warning('Detalle de omisiones o errores', {
+          description: res.errors.slice(0, 12).join('\n'),
+        })
+      }
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Error al generar dummy'),
+  })
+
+  if (!isDummyResultsSeedEnabled() || !isAdminRole(profile?.role)) return null
+
+  return (
+    <AdminConfirmDialog
+      title="¿Generar resultados dummy?"
+      description="Esta acción generará resultados ficticios para probar rankings y generación del siguiente torneo. No sobrescribe partidos cerrados ni marcadores ya guardados."
+      confirmLabel="Generar dummy"
+      disabled={seedMut.isPending}
+      onConfirm={() => seedMut.mutate()}
+      trigger={
+        <Button
+          variant="outline"
+          size={variant === 'icon' ? 'icon-sm' : 'sm'}
+          type="button"
+          disabled={seedMut.isPending || !userId}
+          title="Generar resultados ficticios (solo pruebas)"
+          aria-label="Generar resultados dummy para pruebas"
+          className={cn(
+            'border-dashed border-amber-400/80 text-amber-950 hover:bg-amber-50 dark:border-amber-500/50 dark:text-amber-100 dark:hover:bg-amber-950/40',
+            triggerClassName,
+          )}
+        >
+          <FlaskConical className="size-3.5 shrink-0" />
+          {variant === 'full' ? <span className="truncate">Resultados dummy</span> : null}
+        </Button>
+      }
+    />
+  )
+}
+
+function TournamentActionsToolbar({
+  tournament,
+  renameSaving,
+  onRenameSave,
+  closePending,
+  onCloseConfirm,
+  layout,
+}: {
+  tournament: Tournament
+  renameSaving: boolean
+  onRenameSave: (name: string) => Promise<void>
+  closePending: boolean
+  onCloseConfirm: () => void
+  layout: 'table' | 'card'
+}) {
+  const finished = tournament.status === 'finished'
+
+  if (layout === 'table') {
+    return (
+      <div
+        role="toolbar"
+        aria-label={`Acciones del torneo ${tournament.name}`}
+        className="flex flex-nowrap items-center gap-1 py-0.5"
+      >
+        <RenameTournamentModal
+          tournament={tournament}
+          saving={renameSaving}
+          onSave={onRenameSave}
+          density="compact"
+        />
+        <Link
+          id={`admin-tournament-link-groups-${tournament.id}`}
+          data-name={`groupsRr-${tournament.id}`}
+          to={`/admin/groups?tournament=${tournament.id}`}
+          className={buttonVariants({
+            variant: 'outline',
+            size: 'sm',
+            className: 'h-7 shrink-0 gap-1 px-2 text-[0.8rem]',
+          })}
+        >
+          <Grid3x3 className="size-3.5 shrink-0" />
+          Grupos
+        </Link>
+        <Link
+          id={`admin-tournament-link-dashboard-${tournament.id}`}
+          data-name={`viewDashboard-${tournament.id}`}
+          to="/dashboard"
+          title="Ver en inicio"
+          aria-label="Ver en inicio"
+          className={buttonVariants({ variant: 'ghost', size: 'icon-sm', className: 'shrink-0 text-slate-600' })}
+        >
+          <Eye className="size-3.5" />
+        </Link>
+        <AdminSeedDummyResultsButton tournamentId={tournament.id} variant="icon" />
+        <span className="mx-0.5 hidden h-5 w-px shrink-0 bg-slate-200 sm:inline-block" aria-hidden />
+        <AdminConfirmDialog
+          title="¿Cerrar torneo?"
+          description="El torneo pasará a estado finalizado. Los resultados seguirán visibles para consulta."
+          confirmLabel="Cerrar torneo"
+          disabled={closePending || finished}
+          onConfirm={onCloseConfirm}
+          trigger={
+            <Button
+              id={`admin-tournament-btn-close-${tournament.id}`}
+              name={`closeTournament-${tournament.id}`}
+              variant="destructive"
+              size="icon-sm"
+              type="button"
+              disabled={finished}
+              title="Cerrar torneo"
+              aria-label="Cerrar torneo"
+              className="shrink-0"
+            >
+              <Lock className="size-3.5" />
+            </Button>
+          }
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div role="toolbar" aria-label={`Acciones del torneo ${tournament.name}`} className="flex flex-col gap-2">
+      <RenameTournamentModal tournament={tournament} saving={renameSaving} onSave={onRenameSave} density="comfortable" />
+      <Link
+        id={`admin-tournament-mobile-link-groups-${tournament.id}`}
+        className={buttonVariants({
+          variant: 'outline',
+          size: 'sm',
+          className: 'inline-flex h-9 w-full justify-center gap-2',
+        })}
+        to={`/admin/groups?tournament=${tournament.id}`}
+      >
+        <Grid3x3 className="size-3.5 shrink-0" />
+        Grupos y cruces
+      </Link>
+      <div className="grid grid-cols-2 gap-2">
+        <Link
+          id={`admin-tournament-mobile-link-dashboard-${tournament.id}`}
+          data-name={`viewDashboardMobile-${tournament.id}`}
+          className={buttonVariants({
+            variant: 'ghost',
+            size: 'sm',
+            className: 'inline-flex h-9 w-full justify-center gap-2 text-slate-700',
+          })}
+          to="/dashboard"
+        >
+          <Eye className="size-3.5 shrink-0" />
+          Ver en inicio
+        </Link>
+        <div className="flex min-w-0 items-stretch">
+          <AdminSeedDummyResultsButton tournamentId={tournament.id} variant="full" triggerClassName="h-9 w-full" />
+        </div>
+      </div>
+      <AdminConfirmDialog
+        title="¿Cerrar torneo?"
+        description="El torneo pasará a estado finalizado. Los resultados seguirán visibles para consulta."
+        confirmLabel="Cerrar torneo"
+        disabled={closePending || finished}
+        onConfirm={onCloseConfirm}
+        trigger={
+          <Button
+            id={`admin-tournament-mobile-btn-close-${tournament.id}`}
+            name={`closeTournamentMobile-${tournament.id}`}
+            variant="destructive"
+            size="sm"
+            type="button"
+            className="h-9 w-full gap-2"
+            disabled={finished}
+          >
+            <Lock className="size-3.5 shrink-0" />
+            Cerrar torneo
+          </Button>
+        }
+      />
+    </div>
+  )
+}
+
 export function AdminTournamentsPage() {
   const qc = useQueryClient()
   const userId = useAuthStore((s) => s.user?.id)
@@ -194,21 +455,39 @@ export function AdminTournamentsPage() {
   )
 
   const createMut = useMutation({
-    mutationFn: async (values: { name: string; category: string }) => {
+    mutationFn: async (values: {
+      name: string
+      category: string
+      initialGroups: 'none' | 'per_category'
+    }) => {
       if (!userId) throw new Error('No autenticado')
       return createTournament({
         name: values.name,
         category: values.category,
         status: 'draft',
         createdBy: userId,
+        initialGroups: values.initialGroups,
       })
     },
-    onSuccess: async () => {
-      toast.success('Torneo creado')
+    onSuccess: async (result) => {
+      const msg =
+        result.groupsCreated > 0
+          ? `Torneo creado con ${result.groupsCreated} grupo(s) en la base de datos`
+          : 'Torneo creado'
+      toast.success(msg)
+      if (import.meta.env.DEV) {
+        console.log('[AdminTournamentsPage] createTournament', {
+          tournamentId: result.tournament.id,
+          groupsCreated: result.groupsCreated,
+        })
+      }
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['admin-tournaments'] }),
         qc.invalidateQueries({ queryKey: ['admin-overview'] }),
         qc.invalidateQueries({ queryKey: ['admin-matches'] }),
+        qc.invalidateQueries({ queryKey: ['admin-groups'] }),
+        qc.invalidateQueries({ queryKey: ['group-categories'] }),
+        qc.invalidateQueries({ queryKey: ['tournaments'] }),
       ])
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Error al crear torneo'),
@@ -264,50 +543,16 @@ export function AdminTournamentsPage() {
     {
       key: 'actions',
       header: 'Acciones',
+      className: 'align-middle whitespace-nowrap',
       render: (tournament) => (
-        <div className="flex flex-wrap gap-2">
-          <RenameTournamentModal
-            tournament={tournament}
-            saving={renameMut.isPending}
-            onSave={(name) => renameMut.mutateAsync({ id: tournament.id, name })}
-          />
-          <Link
-            id={`admin-tournament-link-manage-${tournament.id}`}
-            data-name={`manageTournament-${tournament.id}`}
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
-            to={tournamentPath(tournament)}
-          >
-            Gestionar torneo
-          </Link>
-          <Link
-            id={`admin-tournament-link-dashboard-${tournament.id}`}
-            data-name={`viewDashboard-${tournament.id}`}
-            className={buttonVariants({ variant: 'ghost', size: 'sm' })}
-            to="/dashboard"
-          >
-            <Eye className="size-3.5" />
-            Ver en inicio
-          </Link>
-          <AdminConfirmDialog
-            title="¿Cerrar torneo?"
-            description="El torneo pasará a estado finalizado. Los resultados seguirán visibles para consulta."
-            confirmLabel="Cerrar torneo"
-            disabled={closeMut.isPending || tournament.status === 'finished'}
-            onConfirm={() => closeMut.mutate(tournament.id)}
-            trigger={
-              <Button
-                id={`admin-tournament-btn-close-${tournament.id}`}
-                name={`closeTournament-${tournament.id}`}
-                variant="destructive"
-                size="sm"
-                disabled={tournament.status === 'finished'}
-              >
-                <Lock className="size-3.5" />
-                Cerrar torneo
-              </Button>
-            }
-          />
-        </div>
+        <TournamentActionsToolbar
+          tournament={tournament}
+          renameSaving={renameMut.isPending}
+          onRenameSave={(name) => renameMut.mutateAsync({ id: tournament.id, name })}
+          closePending={closeMut.isPending}
+          onCloseConfirm={() => closeMut.mutate(tournament.id)}
+          layout="table"
+        />
       ),
     },
   ]
@@ -319,8 +564,19 @@ export function AdminTournamentsPage() {
       <AdminPageHeader
         eyebrow="Administración"
         title="Torneos"
-        description="Gestiona torneos, revisa el estado operativo (grupos, cruces y resultados) y abre el detalle para reglas."
-        actions={<CreateTournamentModal disabled={hasOpenTournament} onCreate={(values) => createMut.mutate(values)} />}
+        description="Gestiona torneos y revisa el estado operativo (grupos, cruces y resultados)."
+        actions={
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
+            <Link
+              to="/admin/next-tournament"
+              className={buttonVariants({ variant: 'outline', className: 'w-full justify-center sm:w-auto' })}
+            >
+              <ArrowRightLeft className="size-4" />
+              Crear siguiente torneo
+            </Link>
+            <CreateTournamentModal disabled={hasOpenTournament} onCreate={(values) => createMut.mutate(values)} />
+          </div>
+        }
       />
 
       {overviewQ.isLoading || matchesQ.isLoading ? (
@@ -486,48 +742,14 @@ export function AdminTournamentsPage() {
                       <p className="font-medium text-[#102A43]">{tournament.created_at.slice(0, 10)}</p>
                     </div>
                   </div>
-                  <div className="flex flex-col gap-2 border-t border-[#E2E8F0] pt-3 sm:flex-row sm:flex-wrap">
-                    <RenameTournamentModal
+                  <div className="border-t border-[#E2E8F0] pt-3">
+                    <TournamentActionsToolbar
                       tournament={tournament}
-                      saving={renameMut.isPending}
-                      onSave={(name) => renameMut.mutateAsync({ id: tournament.id, name })}
-                    />
-                    <Link
-                      id={`admin-tournament-mobile-link-manage-${tournament.id}`}
-                      data-name={`manageTournamentMobile-${tournament.id}`}
-                      className={buttonVariants({ variant: 'outline', size: 'sm', className: 'w-full justify-center sm:w-auto' })}
-                      to={tournamentPath(tournament)}
-                    >
-                      Gestionar torneo
-                    </Link>
-                    <Link
-                      id={`admin-tournament-mobile-link-dashboard-${tournament.id}`}
-                      data-name={`viewDashboardMobile-${tournament.id}`}
-                      className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'w-full justify-center sm:w-auto' })}
-                      to="/dashboard"
-                    >
-                      <Eye className="size-3.5" />
-                      Ver en inicio
-                    </Link>
-                    <AdminConfirmDialog
-                      title="¿Cerrar torneo?"
-                      description="El torneo pasará a estado finalizado. Los resultados seguirán visibles para consulta."
-                      confirmLabel="Cerrar torneo"
-                      disabled={closeMut.isPending || tournament.status === 'finished'}
-                      onConfirm={() => closeMut.mutate(tournament.id)}
-                      trigger={
-                        <Button
-                          id={`admin-tournament-mobile-btn-close-${tournament.id}`}
-                          name={`closeTournamentMobile-${tournament.id}`}
-                          variant="destructive"
-                          size="sm"
-                          className="w-full sm:w-auto"
-                          disabled={tournament.status === 'finished'}
-                        >
-                          <Lock className="size-3.5" />
-                          Cerrar torneo
-                        </Button>
-                      }
+                      renameSaving={renameMut.isPending}
+                      onRenameSave={(name) => renameMut.mutateAsync({ id: tournament.id, name })}
+                      closePending={closeMut.isPending}
+                      onCloseConfirm={() => closeMut.mutate(tournament.id)}
+                      layout="card"
                     />
                   </div>
                 </CardContent>

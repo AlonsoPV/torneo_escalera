@@ -19,6 +19,7 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { GroupMatchScheduleList } from '@/components/tournaments/GroupMatchScheduleList'
+import { TournamentRoundRobinBulkCard } from '@/components/admin/groups/TournamentRoundRobinBulkCard'
 import { addGroupPlayer, createGroup, listGroupPlayers } from '@/services/groups'
 import { generateRoundRobinMatches, type GenerateRrMode } from '@/services/matches'
 import { listProfilesForAdmin } from '@/services/profiles'
@@ -27,6 +28,7 @@ import {
   updateTournament,
   updateTournamentRules,
 } from '@/services/tournaments'
+import { getAdminGroups } from '@/services/admin'
 import type { Group } from '@/types/database'
 
 const rulesSchema = z.object({
@@ -57,6 +59,12 @@ export function TournamentAdminPanel(props: {
   const rulesQ = useQuery({
     queryKey: ['rules', tournamentId],
     queryFn: () => getTournamentRules(tournamentId),
+  })
+
+  const adminGroupsQ = useQuery({
+    queryKey: ['admin-groups'],
+    queryFn: () => getAdminGroups(tournamentId),
+    enabled: Boolean(tournamentId),
   })
 
   const profilesQ = useQuery({
@@ -123,6 +131,7 @@ export function TournamentAdminPanel(props: {
   const invalidateAll = async () => {
     await qc.invalidateQueries({ queryKey: ['tournament', tournamentId] })
     await qc.invalidateQueries({ queryKey: ['groups', tournamentId] })
+    await qc.invalidateQueries({ queryKey: ['admin-groups'] })
     await qc.invalidateQueries({ queryKey: ['groupPlayers', selectedGroupId] })
     await qc.invalidateQueries({ queryKey: ['matches', selectedGroupId] })
     await qc.invalidateQueries({ queryKey: ['rules', tournamentId] })
@@ -211,6 +220,16 @@ export function TournamentAdminPanel(props: {
 
   return (
     <div className="space-y-6">
+      {adminGroupsQ.data?.length ? (
+        <TournamentRoundRobinBulkCard
+          tournamentId={tournamentId}
+          groups={adminGroupsQ.data}
+          currentUserId={currentUserId}
+          disabled={adminGroupsQ.isFetching}
+          variant="embed"
+        />
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>Estado del torneo</CardTitle>

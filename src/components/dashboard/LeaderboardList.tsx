@@ -1,7 +1,10 @@
-import { Crown, Medal } from 'lucide-react'
+import { ChevronDown, ChevronUp, Crown, Medal } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 import type { TournamentLeaderboardEntry } from '@/services/dashboard/tournamentDashboardService'
 import { cn } from '@/lib/utils'
+
+const INITIAL_LEADERBOARD_VISIBLE = 5
 
 function podiumSurface(position: number) {
   if (position === 1) {
@@ -54,6 +57,14 @@ function StatCell({ label, value }: { label: string; value: number | string }) {
 }
 
 export function LeaderboardList({ rows }: { rows: TournamentLeaderboardEntry[] }) {
+  const [expanded, setExpanded] = useState(false)
+  const hasMore = rows.length > INITIAL_LEADERBOARD_VISIBLE
+  const visibleRows = hasMore && !expanded ? rows.slice(0, INITIAL_LEADERBOARD_VISIBLE) : rows
+
+  useEffect(() => {
+    setExpanded(false)
+  }, [rows.length])
+
   if (rows.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-border/70 bg-muted/10 px-4 py-10 text-center text-sm text-muted-foreground">
@@ -63,8 +74,9 @@ export function LeaderboardList({ rows }: { rows: TournamentLeaderboardEntry[] }
   }
 
   return (
-    <ul className="overflow-hidden rounded-xl border border-border/50 bg-card/40 dark:bg-card/20">
-      {rows.map((r) => {
+    <div className="overflow-hidden rounded-xl border border-border/50 bg-card/40 dark:bg-card/20">
+      <ul className="overflow-hidden">
+      {visibleRows.map((r) => {
         const sd = r.setsFor - r.setsAgainst
         const gd = r.gamesFor - r.gamesAgainst
         return (
@@ -133,6 +145,29 @@ export function LeaderboardList({ rows }: { rows: TournamentLeaderboardEntry[] }
           </li>
         )
       })}
-    </ul>
+      </ul>
+      {hasMore ? (
+        <div className="border-t border-border/40 bg-muted/5 px-2 py-2 sm:px-3">
+          <button
+            type="button"
+            className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+            onClick={() => setExpanded((e) => !e)}
+            aria-expanded={expanded}
+          >
+            {expanded ? (
+              <>
+                <ChevronUp className="size-4 shrink-0" aria-hidden />
+                Ver menos
+              </>
+            ) : (
+              <>
+                <ChevronDown className="size-4 shrink-0" aria-hidden />
+                Ver {rows.length - INITIAL_LEADERBOARD_VISIBLE} más · mostrar todas ({rows.length})
+              </>
+            )}
+          </button>
+        </div>
+      ) : null}
+    </div>
   )
 }

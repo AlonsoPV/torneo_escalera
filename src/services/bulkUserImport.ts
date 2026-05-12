@@ -151,23 +151,30 @@ export type BulkImportInvokeRow = {
   pts?: number | null
 }
 
+export type BulkImportResultRow = {
+  rowNumber: number
+  externalId: string
+  fullName: string
+  email: string
+  temporaryPassword: string
+  categoryName: string
+  status: 'success' | 'error'
+  error?: string
+  userId?: string
+  operation?: 'created' | 'updated'
+}
+
 export type BulkImportResponse = {
   batchId: string
   success: number
   errors: number
   affectedGroupIds: string[]
-  results: Array<{
-    rowNumber: number
-    externalId: string
-    fullName: string
-    email: string
-    temporaryPassword: string
-    categoryName: string
-    status: 'success' | 'error'
-    error?: string
-    userId?: string
-    operation?: 'created' | 'updated'
-  }>
+  results: BulkImportResultRow[]
+}
+
+/** Respuesta agregada cuando la importación se envía en varios lotes (progreso en cliente). */
+export type BulkImportMergedResponse = BulkImportResponse & {
+  batchIds: string[]
 }
 
 export async function invokeBulkCreateUsers(input: {
@@ -219,4 +226,96 @@ export async function invokeBulkCreateUsers(input: {
     throw new Error(msg)
   }
   return payload as unknown as BulkImportResponse
+}
+
+const DEFAULT_IMPORT_CHUNK = 40
+
+/**
+ * Envía filas en varias peticiones (tamaño máx. servidor 200) para mostrar progreso real en la UI.
+ * Entre lotes el servidor ya persistió categorías/grupos; los siguientes lotes reutilizan el mismo estado.
+ */
+export async function invokeBulkCreateUsersChunked(
+  input: {
+    tournamentId?: string | null
+    fileName?: string
+    createMissingCategories?: boolean
+    rows: BulkImportInvokeRow[]
+    signal?: AbortSignal
+  },
+  options?: {
+    chunkSize?: number
+    onProgress?: (info: {
+      completedRows: number
+      totalRows: number
+      chunkIndex: number
+      chunkTotal: number
+      phase: 'upload' | 'done_chunk'
+    }) => void
+  },
+): Promise<BulkImportMergedResponse> {
+  const { rows, signal, ...rest } = input
+  if (!rows.length) throw new Error('No hay filas para importar')
+
+  const chunkSize = Math.min(options?.chunkSize ?? DEFAULT_IMPORT_CHUNK, 200)
+  const chunks: BulkImportInvokeRow[][] = []
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    chunks.push(rows.slice(i, i + chunkSize))
+  }
+
+  const batchIds: string[] = []
+  let success = 0
+  let errors = 0
+  const results: BulkImportResultRow[] = []
+  const affectedGroupIds = new Set<string>()
+  const totalRows = rows.length
+  let completedRows = 0
+
+  for (let i = 0; i < chunks.length; i++) {
+    if (signal?.aborted) {
+      throw new DOMException('Importación cancelada', 'AbortError')
+    }
+    options?.onProgress?.({
+      completedRows,
+      totalRows,
+      chunkIndex: i,
+      chunkTotal: chunks.length,
+      phase: 'upload',
+    })
+
+    const part = await invokeBulkCreateUsers({
+      ...rest,
+      rows: chunks[i],
+      fileName:
+        chunks.length === 1
+          ? rest.fileName
+          : `${rest.fileName ?? 'importacion'} — parte ${i + 1}/${chunks.length}`,
+      signal,
+    })
+
+    batchIds.push(part.batchId)
+    success += part.success
+    errors += part.errors
+    results.push(...part.results)
+    for (const gid of part.affectedGroupIds ?? []) {
+      affectedGroupIds.add(gid)
+    }
+    completedRows += chunks[i].length
+
+    options?.onProgress?.({
+      completedRows,
+      totalRows,
+      chunkIndex: i + 1,
+      chunkTotal: chunks.length,
+      phase: 'done_chunk',
+    })
+  }
+
+  return {
+    batchId: batchIds[0] ?? '',
+    batchIds,
+    success,
+    errors,
+    results,
+    affectedGroupIds: [...affectedGroupIds],
+  }
 }

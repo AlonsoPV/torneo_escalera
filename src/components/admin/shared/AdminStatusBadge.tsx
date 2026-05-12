@@ -4,7 +4,16 @@ import { USER_ROLE_LABEL_ES } from '@/lib/permissions'
 import { cn } from '@/lib/utils'
 import type { MatchStatus, TournamentStatus, UserRole } from '@/types/database'
 
-type StatusValue = MatchStatus | TournamentStatus | UserRole | 'complete' | 'incomplete' | 'empty' | 'generated'
+type StatusValue =
+  | MatchStatus
+  | TournamentStatus
+  | UserRole
+  | 'complete'
+  | 'incomplete'
+  | 'empty'
+  | 'generated'
+  | 'matches_generated'
+  | 'inactive'
 
 const labels: Record<string, string> = {
   ...matchStatusLabels,
@@ -13,10 +22,12 @@ const labels: Record<string, string> = {
   active: 'Activo',
   finished: 'Finalizado',
   archived: 'Archivado',
+  inactive: 'Inactivo',
   complete: 'Completo',
   incomplete: 'Incompleto',
   empty: 'Sin jugadores',
   generated: 'Partidos',
+  matches_generated: 'Cruces generados',
 }
 
 const tones: Record<string, string> = {
@@ -30,6 +41,8 @@ const tones: Record<string, string> = {
   incomplete: 'border-amber-200 bg-amber-50 text-amber-700',
   empty: 'border-slate-200 bg-slate-50 text-slate-600',
   generated: 'border-blue-200 bg-blue-50 text-blue-700',
+  matches_generated: 'border-indigo-200 bg-indigo-50 text-indigo-800',
+  inactive: 'border-rose-200 bg-rose-50 text-rose-800',
 }
 
 export function AdminStatusBadge({ status, className }: { status: StatusValue; className?: string }) {

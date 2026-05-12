@@ -49,7 +49,7 @@ export function PlayerTournamentSelector({ contexts, value, onChange, className 
             const status = tournamentStatusLabel(c.tournament.status)
             const label = contextMenuLabel(c)
             return (
-              <SelectItem key={c.group.id} value={c.group.id}>
+              <SelectItem key={c.group.id} value={c.group.id} label={label}>
                 <span className="flex flex-col gap-0.5 text-left">
                   <span className="font-medium">{label}</span>
                   <span className="text-muted-foreground text-xs font-normal">{status}</span>

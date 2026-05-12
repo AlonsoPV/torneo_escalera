@@ -1,15 +1,16 @@
-import { Flag, Pencil, Plus, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { Flag, LayoutGrid, Pencil, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { GroupAdminCard } from '@/components/admin/groups/GroupAdminCard'
 import { GroupPlayerManager } from '@/components/admin/groups/GroupPlayerManager'
+import { TournamentRoundRobinBulkCard } from '@/components/admin/groups/TournamentRoundRobinBulkCard'
 import { AdminEmptyState } from '@/components/admin/shared/AdminEmptyState'
 import { AdminFormModal } from '@/components/admin/shared/AdminFormModal'
 import { AdminPageHeader } from '@/components/admin/shared/AdminPageHeader'
 import { AdminSectionTitle } from '@/components/admin/shared/AdminSectionTitle'
-import { AdminToolbar } from '@/components/admin/shared/AdminToolbar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -21,7 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { assignPlayerToGroup, getAdminGroups, removePlayerFromGroup, updateGroup, type AdminGroupRecord } from '@/services/admin'
+import { assignPlayerToGroup, deleteGroup, getAdminGroupsForTournament, removePlayerFromGroup, updateGroup, type AdminGroupRecord } from '@/services/admin'
 import {
   createGroupCategory,
   deleteGroupCategory,
@@ -29,12 +30,15 @@ import {
   listGroupCategories,
   updateGroupCategory,
 } from '@/services/groupCategories'
-import { createGroup } from '@/services/groups'
+import { createGroup, createMissingGroupsOnePerCategory } from '@/services/groups'
 import { generateRoundRobinMatches, type GenerateRrMode } from '@/services/matches'
 import { listProfilesForAdmin } from '@/services/profiles'
 import { listTournaments } from '@/services/tournaments'
 import type { GroupCategory } from '@/types/database'
 import { useAuthStore } from '@/stores/authStore'
+
+/** Placeholder controlado hasta que `useEffect` asigne el torneo por defecto (evita `value={undefined}` → warning de modo mixto). */
+const ADMIN_GROUPS_TOURNAMENT_PENDING = '__admin_groups_tournament_pending__'
 
 function GroupCategoriesPanel({
   categories,
@@ -192,7 +196,7 @@ function CreateGroupModal({
   categories,
   onCreate,
 }: {
-  tournamentId: string
+  tournamentId: string | null
   categories: GroupCategory[]
   onCreate: (name: string, groupCategoryId: string | null) => void
 }) {
@@ -202,7 +206,7 @@ function CreateGroupModal({
   return (
     <AdminFormModal
       trigger={
-        <Button className="w-full sm:w-auto" disabled={!tournamentId || tournamentId === 'all'}>
+        <Button className="w-full sm:w-auto" disabled={!tournamentId}>
           <Plus className="size-4" />
           Crear grupo
         </Button>
@@ -253,39 +257,72 @@ function CreateGroupModal({
 export function AdminGroupsPage() {
   const qc = useQueryClient()
   const currentUserId = useAuthStore((s) => s.user?.id ?? null)
-  const [tournamentId, setTournamentId] = useState('all')
-  const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [tournamentId, setTournamentId] = useState<string | null>(null)
   const [managedGroup, setManagedGroup] = useState<AdminGroupRecord | null>(null)
   const [managerOpen, setManagerOpen] = useState(false)
+  const managedGroupIdRef = useRef<string | null>(null)
 
-  const groupsQ = useQuery({ queryKey: ['admin-groups'], queryFn: () => getAdminGroups() })
+  useEffect(() => {
+    managedGroupIdRef.current = managedGroup?.id ?? null
+  }, [managedGroup?.id])
+
+  useEffect(() => {
+    setManagedGroup(null)
+    setManagerOpen(false)
+  }, [tournamentId])
+
+  const groupsQ = useQuery({
+    queryKey: ['admin-groups', tournamentId],
+    queryFn: () => getAdminGroupsForTournament(tournamentId!),
+    enabled: Boolean(tournamentId),
+  })
   const profilesQ = useQuery({ queryKey: ['profiles-admin'], queryFn: listProfilesForAdmin })
   const tournamentsQ = useQuery({ queryKey: ['admin-tournaments'], queryFn: listTournaments })
+
+  useEffect(() => {
+    const list = tournamentsQ.data
+    if (!list?.length) return
+    setTournamentId((prev) => {
+      if (prev && list.some((t) => t.id === prev)) return prev
+      const active = list.find((t) => t.status === 'active')
+      return active?.id ?? list[0].id
+    })
+  }, [tournamentsQ.data])
+
+  useEffect(() => {
+    const fromUrl = searchParams.get('tournament')
+    const list = tournamentsQ.data
+    if (!fromUrl || !list?.length) return
+    if (list.some((t) => t.id === fromUrl)) {
+      setTournamentId(fromUrl)
+    }
+  }, [searchParams, tournamentsQ.data])
 
   const categoriesQ = useQuery({
     queryKey: ['group-categories', tournamentId],
     queryFn: async () => {
-      if (tournamentId === 'all') return []
-      await ensureDefaultGroupCategories(tournamentId)
-      return listGroupCategories(tournamentId)
+      await ensureDefaultGroupCategories(tournamentId!)
+      return listGroupCategories(tournamentId!)
     },
-    enabled: tournamentId !== 'all',
+    enabled: Boolean(tournamentId),
   })
 
   const categories = categoriesQ.data ?? []
 
-  const managerCategoriesQ = useQuery({
-    queryKey: ['group-categories', managedGroup?.tournament_id],
+  const modalGroupCategoriesQ = useQuery({
+    queryKey: ['group-categories', 'manager', managedGroup?.tournament_id],
     queryFn: async () => {
       const tid = managedGroup!.tournament_id
       await ensureDefaultGroupCategories(tid)
       return listGroupCategories(tid)
     },
-    enabled: !!managedGroup?.tournament_id && managerOpen && tournamentId === 'all',
+    enabled: Boolean(managerOpen && managedGroup?.tournament_id),
+    staleTime: 15_000,
   })
 
-  const categoriesForManager =
-    tournamentId !== 'all' ? categories : (managerCategoriesQ.data ?? [])
+  const categoriesForManager = modalGroupCategoriesQ.data ?? []
+  const categoriesLoadingForManager = modalGroupCategoriesQ.isFetching && categoriesForManager.length === 0
 
   useEffect(() => {
     if (!managedGroup) return
@@ -301,7 +338,7 @@ export function AdminGroupsPage() {
   }
 
   const refreshCategories = async () => {
-    await qc.invalidateQueries({ queryKey: ['group-categories', tournamentId] })
+    await qc.invalidateQueries({ queryKey: ['group-categories'] })
   }
 
   const actionMut = useMutation({
@@ -315,7 +352,7 @@ export function AdminGroupsPage() {
 
   const createMut = useMutation({
     mutationFn: async (input: { name: string; groupCategoryId: string | null }) => {
-      if (tournamentId === 'all') throw new Error('Selecciona un torneo para crear grupo.')
+      if (!tournamentId) throw new Error('Selecciona un torneo para crear grupo.')
       await createGroup({
         tournamentId,
         name: input.name,
@@ -327,6 +364,36 @@ export function AdminGroupsPage() {
       await refreshGroups()
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Error al crear grupo'),
+  })
+
+  const bulkGroupsByCategoryMut = useMutation({
+    mutationFn: async () => {
+      if (!tournamentId) throw new Error('Selecciona un torneo para crear grupos.')
+      if (categories.length === 0) throw new Error('No hay categorías de grupo en este torneo.')
+      const existingGroups = groupsQ.data ?? []
+      return createMissingGroupsOnePerCategory({
+        tournamentId,
+        categories,
+        existingGroups: existingGroups.map((g) => ({
+          order_index: g.order_index,
+          group_category_id: g.group_category_id,
+        })),
+      })
+    },
+    onSuccess: async ({ created }) => {
+      if (created === 0) {
+        toast.message('Cada categoría ya tiene al menos un grupo', {
+          description: 'No era necesario crear filas nuevas.',
+        })
+      } else {
+        toast.success(
+          created === 1 ? 'Se creó 1 grupo en una categoría vacía.' : `Se crearon ${created} grupos (uno por categoría vacía).`,
+        )
+      }
+      await refreshGroups()
+    },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : 'Error al crear grupos por categoría'),
   })
 
   const categoryMut = useMutation({
@@ -364,23 +431,28 @@ export function AdminGroupsPage() {
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Error al generar cruces'),
   })
 
-  useEffect(() => {
-    setCategoryFilter('all')
-  }, [tournamentId])
-
-  const filteredGroups = useMemo(() => {
-    let list = (groupsQ.data ?? []).filter(
-      (group) => tournamentId === 'all' || group.tournament_id === tournamentId,
-    )
-    if (categoryFilter !== 'all') {
-      if (categoryFilter === 'none') {
-        list = list.filter((g) => !g.group_category_id)
-      } else {
-        list = list.filter((g) => g.group_category_id === categoryFilter)
+  const deleteGroupMut = useMutation({
+    mutationFn: (groupId: string) => deleteGroup(groupId),
+    onSuccess: async (_, groupId) => {
+      toast.success('Grupo eliminado')
+      if (managedGroupIdRef.current === groupId) {
+        setManagedGroup(null)
+        setManagerOpen(false)
       }
-    }
-    return list
-  }, [groupsQ.data, tournamentId, categoryFilter])
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['admin-groups'] }),
+        qc.invalidateQueries({ queryKey: ['admin-matches'] }),
+        qc.invalidateQueries({ queryKey: ['admin-overview'] }),
+        qc.invalidateQueries({ queryKey: ['admin-results'] }),
+        qc.invalidateQueries({ queryKey: ['tournament-dashboard'] }),
+        qc.invalidateQueries({ queryKey: ['tournament-dashboard-options'] }),
+        qc.invalidateQueries({ queryKey: ['matches'] }),
+      ])
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'No se pudo eliminar el grupo'),
+  })
+
+  const groupsInTournament = useMemo(() => groupsQ.data ?? [], [groupsQ.data])
 
   return (
     <div className="space-y-8 sm:space-y-10">
@@ -389,62 +461,68 @@ export function AdminGroupsPage() {
         title="Grupos"
         description="Crea grupos, asigna jugadores, genera cruces y revisa el estado de cada bloque del torneo."
         actions={
-          <CreateGroupModal
-            tournamentId={tournamentId}
-            categories={categories}
-            onCreate={(name, groupCategoryId) => createMut.mutate({ name, groupCategoryId })}
-          />
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+            {(tournamentsQ.data ?? []).length > 0 ? (
+              <Select
+                value={tournamentId ?? ADMIN_GROUPS_TOURNAMENT_PENDING}
+                onValueChange={(value) => {
+                  if (!value || value === ADMIN_GROUPS_TOURNAMENT_PENDING) return
+                  setTournamentId(value)
+                  setSearchParams((prev) => {
+                    const next = new URLSearchParams(prev)
+                    next.set('tournament', value)
+                    return next
+                  })
+                }}
+              >
+                <SelectTrigger className="h-11 w-full min-w-[12rem] sm:w-[min(100%,16rem)]">
+                  <SelectValue placeholder="Torneo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {!tournamentId ? (
+                    <SelectItem
+                      value={ADMIN_GROUPS_TOURNAMENT_PENDING}
+                      disabled
+                      className="pointer-events-none text-muted-foreground opacity-80"
+                    >
+                      Preparando torneo…
+                    </SelectItem>
+                  ) : null}
+                  {(tournamentsQ.data ?? []).map((tournament) => (
+                    <SelectItem key={tournament.id} value={tournament.id}>
+                      {tournament.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              title="Crea un grupo vacío en cada categoría que aún no tenga ninguno. Nombre: «Categoría — Grupo 1» (igual que en el asistente de siguiente torneo)."
+              className="w-full sm:w-auto"
+              disabled={
+                !tournamentId ||
+                categoriesQ.isLoading ||
+                categories.length === 0 ||
+                bulkGroupsByCategoryMut.isPending ||
+                createMut.isPending
+              }
+              onClick={() => bulkGroupsByCategoryMut.mutate()}
+            >
+              <LayoutGrid className="size-4" />
+              Todos los grupos por categoría
+            </Button>
+            <CreateGroupModal
+              tournamentId={tournamentId}
+              categories={categories}
+              onCreate={(name, groupCategoryId) => createMut.mutate({ name, groupCategoryId })}
+            />
+          </div>
         }
       />
 
-      <section className="space-y-4" aria-labelledby="groups-toolbar-heading">
-        <AdminSectionTitle
-          id="groups-toolbar-heading"
-          title="Filtros"
-          description="Enfoca un torneo para crear grupos o revisar los existentes."
-        />
-        <AdminToolbar className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end">
-          <div className="w-full min-w-0 space-y-2 sm:max-w-md lg:flex-1">
-            <Label className="text-xs font-medium text-slate-600">Torneo</Label>
-            <Select value={tournamentId} onValueChange={(value) => setTournamentId(value ?? 'all')}>
-              <SelectTrigger className="h-11 w-full">
-                <SelectValue placeholder="Torneo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los torneos</SelectItem>
-                {(tournamentsQ.data ?? []).map((tournament) => (
-                  <SelectItem key={tournament.id} value={tournament.id}>
-                    {tournament.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="w-full min-w-0 space-y-2 sm:max-w-xs">
-            <Label className="text-xs font-medium text-slate-600">Filtrar por categoría</Label>
-            <Select
-              value={categoryFilter}
-              onValueChange={(value) => setCategoryFilter(value ?? 'all')}
-              disabled={tournamentId === 'all'}
-            >
-              <SelectTrigger className="h-11 w-full">
-                <SelectValue placeholder="Categoría" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
-                <SelectItem value="none">Sin categoría</SelectItem>
-                {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </AdminToolbar>
-      </section>
-
-      {tournamentId !== 'all' ? (
+      {tournamentId ? (
         <section className="space-y-4" aria-labelledby="group-categories-heading">
           <AdminSectionTitle
             id="group-categories-heading"
@@ -478,6 +556,23 @@ export function AdminGroupsPage() {
         </section>
       ) : null}
 
+      {tournamentId && groupsInTournament.length > 0 ? (
+        <section className="space-y-4" aria-labelledby="bulk-rr-heading">
+          <AdminSectionTitle
+            id="bulk-rr-heading"
+            title="Cruces round-robin masivos"
+            description="Genera o completa la distribución de partidos para todos los grupos del torneo seleccionado, según modo y alcance."
+          />
+          <TournamentRoundRobinBulkCard
+            tournamentId={tournamentId}
+            groups={groupsQ.data ?? []}
+            currentUserId={currentUserId}
+            disabled={groupsQ.isLoading || generateMut.isPending}
+            variant="admin"
+          />
+        </section>
+      ) : null}
+
       <section className="space-y-4" aria-labelledby="groups-grid-heading">
         <AdminSectionTitle id="groups-grid-heading" title="Grupos del torneo" description="Tarjetas con estado y acceso a gestión detallada." />
 
@@ -493,15 +588,27 @@ export function AdminGroupsPage() {
             <Skeleton key={index} className="h-64 rounded-2xl" />
           ))}
         </div>
-      ) : filteredGroups.length === 0 ? (
+      ) : tournamentsQ.isSuccess && (tournamentsQ.data ?? []).length === 0 ? (
+        <AdminEmptyState
+          title="No hay torneos."
+          description="Crea un torneo desde administración para poder organizar grupos."
+          icon={Flag}
+        />
+      ) : !tournamentId ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Skeleton key={index} className="h-64 rounded-2xl" />
+          ))}
+        </div>
+      ) : groupsInTournament.length === 0 ? (
         <AdminEmptyState
           title="Aún no hay grupos creados."
-          description="Crea el primer grupo para comenzar a organizar el torneo."
+          description="Usa «Todos los grupos por categoría» para crear uno por cada división, o crea un grupo a mano."
           icon={Flag}
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filteredGroups.map((group) => (
+          {groupsInTournament.map((group) => (
             <GroupAdminCard
               key={group.id}
               group={group}
@@ -509,6 +616,8 @@ export function AdminGroupsPage() {
                 setManagedGroup(nextGroup)
                 setManagerOpen(true)
               }}
+              onDelete={(g) => deleteGroupMut.mutate(g.id)}
+              isDeleting={deleteGroupMut.isPending && deleteGroupMut.variables === group.id}
             />
           ))}
         </div>
@@ -518,6 +627,7 @@ export function AdminGroupsPage() {
       <GroupPlayerManager
         group={managedGroup}
         categories={categoriesForManager}
+        categoriesLoading={categoriesLoadingForManager}
         profiles={profilesQ.data ?? []}
         open={managerOpen}
         onOpenChange={setManagerOpen}

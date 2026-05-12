@@ -10,12 +10,14 @@ import { AdminGroupsPage } from '@/pages/admin/AdminGroupsPage'
 import { AdminMatchesPage } from '@/pages/admin/AdminMatchesPage'
 import { AdminNotificationsPage } from '@/pages/admin/AdminNotificationsPage'
 import { AdminOverviewPage } from '@/pages/admin/AdminOverviewPage'
+import { AdminMatchResultsImportPage } from '@/pages/admin/AdminMatchResultsImportPage'
 import { AdminResultsPage } from '@/pages/admin/AdminResultsPage'
 import { AdminRulesPage } from '@/pages/admin/AdminRulesPage'
 import { AdminSettingsPage } from '@/pages/admin/AdminSettingsPage'
 import { AdminTournamentsPage } from '@/pages/admin/AdminTournamentsPage'
 import { AdminUsersPage } from '@/pages/admin/AdminUsersPage'
 import { AdminCategoriesPage } from '@/pages/admin/AdminCategoriesPage'
+import { NextTournamentPage } from '@/pages/admin/NextTournamentPage'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
@@ -57,10 +59,12 @@ export const router = createBrowserRouter([
                   { index: true, element: <Navigate to="/admin/overview" replace /> },
                   { path: 'overview', element: <AdminOverviewPage /> },
                   { path: 'tournaments', element: <AdminTournamentsPage /> },
+                  { path: 'next-tournament', element: <NextTournamentPage /> },
                   { path: 'rules', element: <AdminRulesPage /> },
                   { path: 'groups', element: <AdminGroupsPage /> },
                   { path: 'matches', element: <AdminMatchesPage /> },
                   { path: 'results', element: <AdminResultsPage /> },
+                  { path: 'results/import', element: <AdminMatchResultsImportPage /> },
                   { path: 'users', element: <AdminUsersPage /> },
                   { path: 'categories', element: <AdminCategoriesPage /> },
                   { path: 'notifications', element: <AdminNotificationsPage /> },

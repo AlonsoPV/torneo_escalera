@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Clock3, ListFilter, Search, Trophy } from 'lucide-react'
+import { CheckCircle2, ClipboardList, ListFilter, Search, Trophy } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -154,51 +154,37 @@ export function AdminResultsPage() {
       <section className="space-y-3 sm:space-y-4" aria-labelledby="results-metrics-heading">
         <AdminSectionTitle
           id="results-metrics-heading"
-          title="Qué requiere tu atención"
-          description="Prioriza pendientes de revisión y valida el flujo de confirmación."
+          title="Resumen"
+          description="Totales de partidos, captura por jugador A y cierres oficiales."
         />
         {resultsQ.isLoading ? (
           <div className={ADMIN_METRIC_GRID_3}>
-            {Array.from({ length: 6 }).map((_, index) => (
+            {Array.from({ length: 3 }).map((_, index) => (
               <Skeleton key={index} className="h-[5.5rem] rounded-2xl sm:h-24" />
             ))}
           </div>
         ) : (
           <div className={ADMIN_METRIC_GRID_3}>
             <AdminMetricCard
-              label="Marcadores con flujo"
-              value={breakdown.withOutcome}
+              label="Total de partidos"
+              value={breakdown.total}
               icon={Trophy}
               tone="neutral"
-              description="En captura, revisión o cerrados"
+              description="Todos los cruces generados"
             />
             <AdminMetricCard
-              label="Pendientes de revisión"
-              value={breakdown.needsAdminAttention}
-              icon={AlertTriangle}
-              tone="warning"
-              description="Listos para cerrar o en disputa"
+              label="Partidos con marcador"
+              value={breakdown.withOutcome}
+              icon={ClipboardList}
+              tone="info"
+              description="Jugador A registró marcador (y estados siguientes del flujo)"
             />
             <AdminMetricCard
-              label="Cerrados (ranking)"
+              label="Partidos cerrados"
               value={breakdown.closed}
               icon={CheckCircle2}
               tone="success"
-              description="Oficialmente cerrados"
-            />
-            <AdminMetricCard
-              label="Esperando rival"
-              value={breakdown.scoreSubmitted}
-              icon={Clock3}
-              tone="info"
-              description="Marcadores enviados por jugador A"
-            />
-            <AdminMetricCard
-              label="Total partidos"
-              value={breakdown.total}
-              icon={CheckCircle2}
-              tone="neutral"
-              description="Base de cruces del sistema"
+              description="Validados y cerrados oficialmente"
             />
           </div>
         )}

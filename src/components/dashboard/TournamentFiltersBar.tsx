@@ -1,4 +1,4 @@
-import { Calendar } from 'lucide-react'
+import { useMemo } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { TournamentDashboardMatchStatusFilter } from '@/services/dashboard/tournamentDashboardService'
-import type { Group, Tournament } from '@/types/database'
+import type { Group, GroupCategory, Tournament } from '@/types/database'
 import { cn } from '@/lib/utils'
 
 const MATCH_FILTER_OPTIONS: { value: TournamentDashboardMatchStatusFilter; label: string }[] = [
@@ -35,14 +35,6 @@ function chipTriggerClass(active: boolean) {
   )
 }
 
-function dateChipClass(active: boolean) {
-  return cn(
-    'inline-flex min-h-10 min-w-0 cursor-pointer items-center gap-1.5 px-2.5 py-1.5 sm:min-h-8',
-    FILTER_CONTROL_BASE,
-    active && 'border-emerald-500/50 bg-emerald-500/[0.06] ring-1 ring-emerald-500/15',
-  )
-}
-
 function clearButtonClass() {
   return cn(
     'h-auto min-h-10 shrink-0 rounded-xl border-border/80 bg-card px-3 py-1.5 text-sm font-medium shadow-sm sm:min-h-8',
@@ -63,6 +55,13 @@ function labelForGroupId(id: unknown, groups: Group[]): string {
   return groups.find((g) => g.id === s)?.name ?? '—'
 }
 
+function labelForGroupCategoryId(id: unknown, categories: GroupCategory[]): string {
+  if (id == null || id === '' || id === 'all') return 'Todas'
+  if (id === 'none') return 'Sin categoría'
+  const s = String(id)
+  return categories.find((c) => c.id === s)?.name ?? '—'
+}
+
 function labelForMatchStatus(v: unknown): string {
   if (v == null || v === '' || v === 'all') return 'Todos'
   const s = String(v) as TournamentDashboardMatchStatusFilter
@@ -72,31 +71,41 @@ function labelForMatchStatus(v: unknown): string {
 export function TournamentFiltersBar({
   tournaments,
   tournamentId,
+  groupCategories,
+  groupCategoryId,
   groups,
   groupId,
-  matchDay,
   matchStatus,
   isFetching,
   onTournamentChange,
+  onGroupCategoryChange,
   onGroupChange,
-  onMatchDayChange,
   onMatchStatusChange,
   onClearFilters,
 }: {
   tournaments: Tournament[]
   tournamentId: string
+  groupCategories: GroupCategory[]
+  groupCategoryId: 'all' | 'none' | string
   groups: Group[]
   groupId: 'all' | string
-  matchDay: string
   matchStatus: TournamentDashboardMatchStatusFilter
   isFetching?: boolean
   onTournamentChange: (id: string) => void
+  onGroupCategoryChange: (id: 'all' | 'none' | string) => void
   onGroupChange: (id: 'all' | string) => void
-  onMatchDayChange: (v: string) => void
   onMatchStatusChange: (s: TournamentDashboardMatchStatusFilter) => void
   onClearFilters: () => void
 }) {
-  const filtersActive = groupId !== 'all' || matchStatus !== 'all' || Boolean(matchDay)
+  const sortedCategories = useMemo(
+    () =>
+      [...groupCategories].sort(
+        (a, b) => a.order_index - b.order_index || a.name.localeCompare(b.name, 'es'),
+      ),
+    [groupCategories],
+  )
+  const filtersActive =
+    groupCategoryId !== 'all' || groupId !== 'all' || matchStatus !== 'all'
   const tournamentName = labelForTournamentId(tournamentId, tournaments)
 
   return (
@@ -123,7 +132,7 @@ export function TournamentFiltersBar({
                   <span className="shrink-0 text-muted-foreground">Torneo</span>
                   <span className="shrink-0 text-foreground">:</span>
                   <SelectValue placeholder="—" className="min-w-0 truncate">
-                    {(id: unknown) => labelForTournamentId(id, tournaments)}
+                    {labelForTournamentId(tournamentId, tournaments)}
                   </SelectValue>
                 </span>
               </SelectTrigger>
@@ -138,13 +147,43 @@ export function TournamentFiltersBar({
             </div>
 
             <div className="snap-start shrink-0">
+            <Select
+              value={groupCategoryId}
+              onValueChange={(v) => onGroupCategoryChange((v ?? 'all') as 'all' | 'none' | string)}
+            >
+              <SelectTrigger
+                size="sm"
+                className={chipTriggerClass(groupCategoryId !== 'all')}
+                aria-label="Categoría de grupo"
+              >
+                <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
+                  <span className="shrink-0 text-muted-foreground">Categoría</span>
+                  <span className="shrink-0 text-foreground">:</span>
+                  <SelectValue placeholder="Todas" className="min-w-0 truncate">
+                    {labelForGroupCategoryId(groupCategoryId, groupCategories)}
+                  </SelectValue>
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="none">Sin categoría</SelectItem>
+                {sortedCategories.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            </div>
+
+            <div className="snap-start shrink-0">
             <Select value={groupId} onValueChange={(v) => onGroupChange((v ?? 'all') as 'all' | string)}>
               <SelectTrigger size="sm" className={chipTriggerClass(groupId !== 'all')} aria-label="Grupo">
                 <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
                   <span className="shrink-0 text-muted-foreground">Grupo</span>
                   <span className="shrink-0 text-foreground">:</span>
                   <SelectValue placeholder="Todos" className="min-w-0 truncate">
-                    {(id: unknown) => labelForGroupId(id, groups)}
+                    {labelForGroupId(groupId, groups)}
                   </SelectValue>
                 </span>
               </SelectTrigger>
@@ -157,27 +196,6 @@ export function TournamentFiltersBar({
                 ))}
               </SelectContent>
             </Select>
-            </div>
-
-            <div className="snap-start shrink-0">
-            <label
-              className={dateChipClass(Boolean(matchDay))}
-              title="Filtra resultados recientes por fecha de registro. Vacío = todos los días."
-            >
-              <Calendar className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-              <span className="shrink-0 text-muted-foreground">Día</span>
-              <span className="shrink-0 text-foreground">:</span>
-              <input
-                type="date"
-                value={matchDay}
-                onChange={(e) => onMatchDayChange(e.target.value)}
-                className={cn(
-                  'h-7 min-w-[8.75rem] max-w-[10rem] cursor-pointer border-0 bg-transparent p-0 text-sm font-medium text-foreground outline-none',
-                  '[color-scheme:light] dark:[color-scheme:dark]',
-                )}
-                aria-label="Día de registro (vacío = todos)"
-              />
-            </label>
             </div>
 
             <div className="snap-start shrink-0">
@@ -194,7 +212,7 @@ export function TournamentFiltersBar({
                   <span className="shrink-0 text-muted-foreground">Estado</span>
                   <span className="shrink-0 text-foreground">:</span>
                   <SelectValue placeholder="Todos" className="min-w-0 truncate">
-                    {(v: unknown) => labelForMatchStatus(v)}
+                    {labelForMatchStatus(matchStatus)}
                   </SelectValue>
                 </span>
               </SelectTrigger>
@@ -232,7 +250,7 @@ export function TournamentFiltersBar({
           </div>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          Día: vacío = todos (fecha de registro del marcador).
+          Categoría: acota métricas, ranking y lista de grupos a una división.
         </p>
       </CardContent>
     </Card>

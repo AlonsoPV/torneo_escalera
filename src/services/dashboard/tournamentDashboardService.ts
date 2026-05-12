@@ -14,6 +14,8 @@ import {
 export type TournamentDashboardMatchStatusFilter = 'all' | MatchRow['status']
 
 export type TournamentDashboardFiltersInput = {
+  /** Ámbito por categoría de grupo del torneo (división). */
+  groupCategoryId?: 'all' | 'none' | string
   groupId: 'all' | string
   matchStatus: TournamentDashboardMatchStatusFilter
   /** Día concreto (`YYYY-MM-DD`); filtra por `updated_at` ese día (zona local). */
@@ -200,8 +202,16 @@ export async function getTournamentDashboardData(
   if (!rules) throw new Error('Reglas del torneo no encontradas')
 
   const tournament = tournamentRes.data as Tournament
-  const groups = (groupsRes.data ?? []) as Group[]
+  const groupsRaw = (groupsRes.data ?? []) as Group[]
   if (groupsRes.error) throw groupsRes.error
+
+  const cat = filters.groupCategoryId ?? 'all'
+  const groups: Group[] =
+    cat === 'all'
+      ? groupsRaw
+      : cat === 'none'
+        ? groupsRaw.filter((g) => !g.group_category_id)
+        : groupsRaw.filter((g) => g.group_category_id === cat)
 
   const groupIdList = groups.map((g) => g.id)
 

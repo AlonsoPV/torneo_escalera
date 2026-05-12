@@ -111,8 +111,12 @@ function SelectLabel({
 function SelectItem({
   className,
   children,
+  label,
   ...props
 }: SelectPrimitive.Item.Props) {
+  const labelForValue =
+    label ??
+    (typeof children === 'string' || typeof children === 'number' ? String(children) : undefined)
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
@@ -121,6 +125,7 @@ function SelectItem({
         className
       )}
       {...props}
+      label={labelForValue}
     >
       <SelectPrimitive.ItemText className="flex flex-1 shrink-0 gap-2 whitespace-nowrap">
         {children}

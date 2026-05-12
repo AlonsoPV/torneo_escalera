@@ -2,6 +2,10 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { GroupProgressItem } from '@/utils/groupProgress'
 import { cn } from '@/lib/utils'
+import { ChevronDown, ChevronUp } from 'lucide-react'
+import { useEffect, useState } from 'react'
+
+const INITIAL_GROUPS_VISIBLE = 3
 
 function stateBadge(state: GroupProgressItem['state']) {
   switch (state) {
@@ -62,6 +66,14 @@ function GroupProgressItemRow({ g }: { g: GroupProgressItem }) {
 }
 
 export function GroupProgressCard({ items }: { items: GroupProgressItem[] }) {
+  const [expanded, setExpanded] = useState(false)
+  const hasMore = items.length > INITIAL_GROUPS_VISIBLE
+  const visibleItems = hasMore && !expanded ? items.slice(0, INITIAL_GROUPS_VISIBLE) : items
+
+  useEffect(() => {
+    setExpanded(false)
+  }, [items.length])
+
   return (
     <Card className="border-border/80 shadow-sm">
       <CardHeader className="space-y-1 px-4 pb-3 pt-0 sm:px-6">
@@ -74,11 +86,35 @@ export function GroupProgressCard({ items }: { items: GroupProgressItem[] }) {
             Aún no hay grupos creados.
           </p>
         ) : (
-          <ul className="space-y-3">
-            {items.map((g) => (
-              <GroupProgressItemRow key={g.groupId} g={g} />
-            ))}
-          </ul>
+          <>
+            <ul className="space-y-3">
+              {visibleItems.map((g) => (
+                <GroupProgressItemRow key={g.groupId} g={g} />
+              ))}
+            </ul>
+            {hasMore ? (
+              <div className="mt-3 border-t border-border/40 pt-2">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                  onClick={() => setExpanded((e) => !e)}
+                  aria-expanded={expanded}
+                >
+                  {expanded ? (
+                    <>
+                      <ChevronUp className="size-4 shrink-0" aria-hidden />
+                      Ver menos
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="size-4 shrink-0" aria-hidden />
+                      Ver {items.length - INITIAL_GROUPS_VISIBLE} más · mostrar todos ({items.length})
+                    </>
+                  )}
+                </button>
+              </div>
+            ) : null}
+          </>
         )}
       </CardContent>
     </Card>

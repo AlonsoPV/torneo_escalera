@@ -1,4 +1,6 @@
 import { supabase } from '@/lib/supabase'
+import { createMissingGroupsOnePerCategory } from '@/services/groups'
+import { ensureDefaultGroupCategories, listGroupCategories } from '@/services/groupCategories'
 import type { Json } from '@/types/database'
 import type { Tournament, TournamentRules, TournamentStatus } from '@/types/database'
 
@@ -29,21 +31,39 @@ export async function getTournament(id: string): Promise<Tournament | null> {
   return data
 }
 
-export async function createTournament(input: {
+export type CreateTournamentInput = {
   name: string
   description?: string
   category?: string
   season?: string
   status?: TournamentStatus
   createdBy: string
-}): Promise<Tournament> {
-  const { count, error: openError } = await supabase
-    .from('tournaments')
-    .select('id', { count: 'exact', head: true })
-    .neq('status', 'finished')
-  if (openError) throw openError
-  if ((count ?? 0) > 0) {
-    throw new Error('Ya existe un torneo activo o en borrador. Ciérralo antes de crear otro.')
+  previousTournamentId?: string | null
+  periodLabel?: string | null
+  /**
+   * `none`: solo torneo + reglas + categorías por defecto (sin filas en `groups`).
+   * `per_category`: un grupo vacío por cada categoría de división (tabla `groups`).
+   */
+  initialGroups?: 'none' | 'per_category'
+}
+
+export type CreateTournamentResult = {
+  tournament: Tournament
+  /** Grupos nuevos insertados en `public.groups` (solo si `initialGroups === 'per_category'`). */
+  groupsCreated: number
+}
+
+export async function createTournament(input: CreateTournamentInput): Promise<CreateTournamentResult> {
+  const skipOpenGuard = Boolean(input.previousTournamentId)
+  if (!skipOpenGuard) {
+    const { count, error: openError } = await supabase
+      .from('tournaments')
+      .select('id', { count: 'exact', head: true })
+      .neq('status', 'finished')
+    if (openError) throw openError
+    if ((count ?? 0) > 0) {
+      throw new Error('Ya existe un torneo activo o en borrador. Ciérralo antes de crear otro.')
+    }
   }
 
   const { data, error } = await supabase
@@ -55,6 +75,8 @@ export async function createTournament(input: {
       season: input.season ?? null,
       status: input.status ?? 'draft',
       created_by: input.createdBy,
+      previous_tournament_id: input.previousTournamentId ?? null,
+      period_label: input.periodLabel ?? null,
     })
     .select('*')
     .single()
@@ -66,13 +88,61 @@ export async function createTournament(input: {
   })
   if (rulesError) throw rulesError
 
-  return tournament
+  try {
+    if (!input.previousTournamentId) {
+      await ensureDefaultGroupCategories(tournament.id)
+    }
+  } catch (catErr) {
+    console.error('[createTournament] ensureDefaultGroupCategories', catErr)
+    throw new Error(
+      'El torneo se creó pero no se pudieron preparar las categorías de grupo. Complétalas en Administración → Grupos.',
+    )
+  }
+
+  let groupsCreated = 0
+  const seedGroups = input.initialGroups ?? 'none'
+
+  if (seedGroups === 'per_category') {
+    try {
+      const categories = await listGroupCategories(tournament.id)
+      const { created } = await createMissingGroupsOnePerCategory({
+        tournamentId: tournament.id,
+        categories,
+        existingGroups: [],
+      })
+      groupsCreated = created
+    } catch (grpErr) {
+      console.error('[createTournament] initial groups', grpErr)
+      throw new Error(
+        'El torneo y las categorías están listos, pero no se pudieron crear los grupos iniciales. Créalos en Administración → Grupos.',
+      )
+    }
+  }
+
+  if (import.meta.env.DEV) {
+    console.log('[createTournament] ok', {
+      tournamentId: tournament.id,
+      initialGroups: seedGroups,
+      groupsCreated,
+    })
+  }
+
+  return { tournament, groupsCreated }
 }
 
 export async function updateTournament(
   id: string,
   patch: Partial<
-    Pick<Tournament, 'name' | 'description' | 'category' | 'status' | 'season'>
+    Pick<
+      Tournament,
+      | 'name'
+      | 'description'
+      | 'category'
+      | 'status'
+      | 'season'
+      | 'previous_tournament_id'
+      | 'period_label'
+    >
   >,
 ): Promise<void> {
   const { error } = await supabase.from('tournaments').update(patch).eq('id', id)
@@ -124,9 +194,16 @@ export type TournamentRulesUpdatePayload = Partial<
   >
 >
 
+function formatPostgrestError(error: { message: string; details?: string; hint?: string; code?: string }): string {
+  const parts = [error.message, error.details, error.hint].filter(Boolean)
+  return parts.join(' — ')
+}
+
 export async function updateTournamentRules(tournamentId: string, patch: TournamentRulesUpdatePayload): Promise<void> {
   const { error } = await supabase.from('tournament_rules').update(patch).eq('tournament_id', tournamentId)
-  if (error) throw error
+  if (error) {
+    throw new Error(formatPostgrestError(error))
+  }
 }
 
 /** Restaura valores recomendados del producto (no borra la fila). */

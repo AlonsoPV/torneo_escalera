@@ -1,5 +1,6 @@
-import { Users } from 'lucide-react'
+import { Trash2, Users } from 'lucide-react'
 
+import { AdminConfirmDialog } from '@/components/admin/shared/AdminConfirmDialog'
 import { AdminStatusBadge } from '@/components/admin/shared/AdminStatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,11 +15,16 @@ function getGroupStatus(group: AdminGroupRecord) {
 export function GroupAdminCard({
   group,
   onManage,
+  onDelete,
+  isDeleting = false,
 }: {
   group: AdminGroupRecord
   onManage: (group: AdminGroupRecord) => void
+  onDelete?: (group: AdminGroupRecord) => void
+  isDeleting?: boolean
 }) {
   const generated = group.matches.length > 0
+  const canDeleteGroup = group.players.length === 0
 
   return (
     <Card className="border-[#E2E8F0] bg-white shadow-sm">
@@ -36,7 +42,7 @@ export function GroupAdminCard({
         </div>
         <div className="flex flex-wrap gap-2">
           <AdminStatusBadge status={getGroupStatus(group)} />
-          {generated ? <AdminStatusBadge status="generated" /> : null}
+          {generated ? <AdminStatusBadge status="matches_generated" /> : null}
           {group.category?.name ? (
             <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-[#475569]">
               {group.category.name}
@@ -63,9 +69,51 @@ export function GroupAdminCard({
           <span className="text-[#64748B]">Partidos</span>
           <span className="font-medium text-[#102A43]">{group.matches.length}</span>
         </div>
-        <Button variant="outline" className="w-full" onClick={() => onManage(group)}>
-          Gestionar grupo
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+          <Button variant="outline" className="w-full sm:flex-1" onClick={() => onManage(group)}>
+            Gestionar grupo
+          </Button>
+          {onDelete ? (
+            canDeleteGroup ? (
+              <AdminConfirmDialog
+                title="¿Eliminar este grupo?"
+                description={`Se eliminará «${group.name}» del torneo y los ${group.matches.length} partidos vinculados (si los hay). No se puede deshacer.`}
+                confirmLabel="Eliminar grupo"
+                disabled={isDeleting}
+                onConfirm={() => onDelete(group)}
+                trigger={
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full gap-2 border-red-200 text-red-800 hover:bg-red-50 sm:w-auto sm:flex-initial"
+                    aria-label={`Eliminar grupo ${group.name}`}
+                    disabled={isDeleting}
+                  >
+                    <Trash2 className="size-4 shrink-0" aria-hidden />
+                    Eliminar
+                  </Button>
+                }
+              />
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full gap-2 border-slate-200 text-slate-400 sm:w-auto"
+                disabled
+                title="Quita primero a todos los jugadores del grupo para poder eliminarlo."
+                aria-label="Eliminar grupo no disponible: hay jugadores inscritos"
+              >
+                <Trash2 className="size-4 shrink-0" aria-hidden />
+                Eliminar
+              </Button>
+            )
+          ) : null}
+        </div>
+        {onDelete && !canDeleteGroup ? (
+          <p className="text-center text-xs text-[#64748B]">
+            Para eliminar el grupo, primero quita a los {group.players.length} jugador{group.players.length === 1 ? '' : 'es'} en «Gestionar grupo».
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   )
