@@ -14,6 +14,7 @@ export function sortGroupStandingsForMovement(standings: RankingRow[]): RankingR
     const ad = a.gamesFor - a.gamesAgainst
     const bd = b.gamesFor - b.gamesAgainst
     if (bd !== ad) return bd - ad
+    if (a.seed_order !== b.seed_order) return a.seed_order - b.seed_order
     return a.displayName.localeCompare(b.displayName)
   })
   return sorted.map((r, i) => ({ ...r, position: i + 1 }))

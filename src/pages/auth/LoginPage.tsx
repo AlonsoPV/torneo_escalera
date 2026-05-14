@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { signInWithPhone } from '@/lib/auth'
+import { resolvePostLoginPath, signInWithPhone } from '@/lib/auth'
 import { normalizePhone } from '@/lib/phone'
 import { clearLocalAuthAndGoToLogin } from '@/lib/authSessionRecovery'
 import { cn } from '@/lib/utils'
@@ -26,6 +26,7 @@ type Form = z.infer<typeof schema>
 
 export function LoginPage() {
   const session = useAuthStore((s) => s.session)
+  const profile = useAuthStore((s) => s.profile)
   const initialized = useAuthStore((s) => s.initialized)
   const location = useLocation()
   const navigate = useNavigate()
@@ -34,7 +35,7 @@ export function LoginPage() {
   const form = useForm<Form>({ resolver: zodResolver(schema), defaultValues: { phone: '', password: '' } })
 
   if (initialized && session) {
-    return <Navigate to={from} replace />
+    return <Navigate to={resolvePostLoginPath(profile, from)} replace />
   }
 
   if (!isSupabaseConfigured) {
@@ -80,12 +81,11 @@ export function LoginPage() {
       if (authData.session) {
         useAuthStore.getState().setSession(authData.session)
         await useAuthStore.getState().refreshProfile()
+        const p = useAuthStore.getState().profile
         toast.success('Sesión iniciada')
-        navigate(from, { replace: true })
+        navigate(resolvePostLoginPath(p, from), { replace: true })
       } else {
-        toast.warning('Revisa tu correo para confirmar la cuenta antes de entrar.', {
-          description: 'En Supabase: Authentication → Providers → Email → desactiva "Confirm email" si quieres entrar al instante.',
-        })
+        toast.warning('No pudimos completar el acceso. Intenta de nuevo o contacta al administrador si sigue fallando.')
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al iniciar sesión')
@@ -205,10 +205,10 @@ export function LoginPage() {
                   {form.formState.isSubmitting ? (
                     <>
                       <Loader2 className="size-4 animate-spin" aria-hidden />
-                      Entrando…
+                      Iniciando sesión…
                     </>
                   ) : (
-                    'Entrar'
+                    'Iniciar sesión'
                   )}
                 </Button>
                 <Button

@@ -148,6 +148,7 @@ export function groupStandingToRankingRow(row: GroupStandingRow): RankingRow {
     groupPlayerId: row.playerId,
     userId: row.playerId,
     displayName: row.displayName,
+    seed_order: row.seed_order,
     played: row.played,
     won: row.won,
     lost: row.lost,

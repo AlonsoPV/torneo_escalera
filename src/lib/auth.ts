@@ -1,6 +1,11 @@
+import type { AuthError } from '@supabase/supabase-js'
+
 import { supabase } from '@/lib/supabase'
+import { isAdminRole } from '@/lib/permissions'
 import { invokeResolveAuthEmailByPhone } from '@/services/authEdge'
 import type { Profile } from '@/types/database'
+
+const GENERIC_CREDENTIALS_ERROR = 'Número o contraseña incorrectos.'
 
 export async function fetchProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
@@ -12,19 +17,47 @@ export async function fetchProfile(userId: string): Promise<Profile | null> {
   return data
 }
 
-export async function signInWithEmail(email: string, password: string) {
+function mapAuthPasswordError(error: AuthError): Error {
+  const m = (error.message ?? '').toLowerCase()
+  if (
+    m.includes('invalid login credentials') ||
+    m.includes('invalid credentials') ||
+    m.includes('wrong password') ||
+    m.includes('email not confirmed')
+  ) {
+    return new Error(GENERIC_CREDENTIALS_ERROR)
+  }
+  if (m.includes('@') || m.includes('email')) {
+    return new Error(GENERIC_CREDENTIALS_ERROR)
+  }
+  return new Error(error.message || GENERIC_CREDENTIALS_ERROR)
+}
+
+async function signInWithPasswordInternal(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   })
-  if (error) throw error
+  if (error) throw mapAuthPasswordError(error)
   return data
 }
 
-/** Login por celular: resuelve el correo actual en Auth vía Edge Function y llama a signInWithPassword. */
+/** Destino tras login: mismo criterio que IndexRedirect, respetando `from` solo en rutas permitidas por rol. */
+export function resolvePostLoginPath(profile: Profile | null, fromPath: string): string {
+  const admin = profile ? isAdminRole(profile.role) : false
+  const fallback = admin ? '/admin' : '/player'
+  if (!fromPath || fromPath === '/') return fallback
+  if (admin && (fromPath.startsWith('/admin') || fromPath === '/dashboard')) return fromPath
+  if (!admin && !fromPath.startsWith('/admin') && (fromPath.startsWith('/player') || fromPath === '/dashboard')) {
+    return fromPath
+  }
+  return fallback
+}
+
+/** Login por celular: resuelve email en Auth vía Edge Function (solo servidor) y llama a signInWithPassword. */
 export async function signInWithPhone(phone: string, password: string) {
   const authEmail = await invokeResolveAuthEmailByPhone(phone)
-  return signInWithEmail(authEmail, password)
+  return signInWithPasswordInternal(authEmail, password)
 }
 
 export async function signUpWithEmail(

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 import { GroupProgressCard } from '@/components/dashboard/GroupProgressCard'
 import { RecentMatchesCard } from '@/components/dashboard/RecentMatchesCard'
@@ -22,6 +23,7 @@ function defaultTournamentId(tournaments: Tournament[]): string | null {
 }
 
 export function TournamentDashboardPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const tq = useQuery({ queryKey: ['tournament-dashboard-options'], queryFn: listTournamentOptionsForDashboard })
   const tournaments = tq.data ?? []
 
@@ -32,11 +34,15 @@ export function TournamentDashboardPage() {
 
   useEffect(() => {
     if (!tq.isSuccess || tournaments.length === 0) return
+    const fromUrl = searchParams.get('tournament') ?? searchParams.get('torneo')
     setTournamentId((prev) => {
+      if (fromUrl && tournaments.some((t) => t.id === fromUrl)) {
+        return fromUrl
+      }
       if (prev && tournaments.some((t) => t.id === prev)) return prev
       return defaultTournamentId(tournaments)
     })
-  }, [tq.isSuccess, tournaments])
+  }, [tq.isSuccess, tournaments, searchParams])
 
   const categoriesQ = useQuery({
     queryKey: ['group-categories', 'dashboard', tournamentId],
@@ -78,6 +84,14 @@ export function TournamentDashboardPage() {
 
   const data = dq.data
 
+  useEffect(() => {
+    const gid = searchParams.get('group') ?? searchParams.get('grupo')
+    if (!gid || !data?.groups?.length || !tournamentId) return
+    if (data.tournament.id !== tournamentId) return
+    if (!data.groups.some((g) => g.id === gid)) return
+    setGroupId(gid)
+  }, [searchParams, data?.groups, data?.tournament?.id, tournamentId])
+
   const leaderboardGroupTitle =
     groupId === 'all' ? 'general' : data?.groups.find((g) => g.id === groupId)?.name ?? 'Grupo'
 
@@ -85,6 +99,15 @@ export function TournamentDashboardPage() {
     setGroupCategoryId('all')
     setGroupId('all')
     setMatchStatus('all')
+    setSearchParams(
+      (prev) => {
+        const n = new URLSearchParams(prev)
+        n.delete('group')
+        n.delete('grupo')
+        return n
+      },
+      { replace: true },
+    )
   }
 
   if (tq.isLoading) {

@@ -21,7 +21,3 @@ export function normalizePhone(raw: string): NormalizePhoneResult {
   }
   return { ok: true, digits }
 }
-
-export function technicalAuthEmailFromDigits(digits: string): string {
-  return `${digits}@mega-varonil.local`
-}

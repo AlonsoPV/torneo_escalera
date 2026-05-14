@@ -2,21 +2,19 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-import { MatchHistoryCard } from '@/components/player/MatchHistoryCard'
-import { PlayerActionSection } from '@/components/player/PlayerActionSection'
-import { PlayerGroupCard } from '@/components/player/PlayerGroupCard'
-import { PlayerHeaderCard } from '@/components/player/PlayerHeaderCard'
+import { PlayerGroupSection } from '@/components/player/PlayerGroupSection'
+import { PlayerHeroSummary } from '@/components/player/PlayerHeroSummary'
+import { PlayerMatchesPanel } from '@/components/player/PlayerMatchesPanel'
+import { PlayerQuickMetrics } from '@/components/player/PlayerQuickMetrics'
 import { PlayerRecoveryEmailBanner } from '@/components/player/PlayerRecoveryEmailBanner'
-import { PlayerStandingMiniCard } from '@/components/player/PlayerStandingMiniCard'
-import { PlayerSummaryCards } from '@/components/player/PlayerSummaryCards'
 import { PlayerTournamentMovementCard } from '@/components/player/PlayerTournamentMovementCard'
 import { PlayerTournamentSelector } from '@/components/player/PlayerTournamentSelector'
 import { buttonVariants } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { recoveryEmailComplete } from '@/lib/profileEmail'
+import { dashboardPathWithGroupScope } from '@/lib/dashboardUrl'
 import { tournamentPathWithGroup } from '@/lib/tournamentUrl'
 import { isAdminRole } from '@/lib/permissions'
-import { canAcceptScore, canSubmitScore } from '@/lib/matchStatus'
 import { defaultGroupIdFromContexts, listPlayerDashboardContexts } from '@/services/dashboardPlayer'
 import { getPlayerViewModelSession } from '@/services/playerViewModel'
 import { useAuthStore } from '@/stores/authStore'
@@ -194,16 +192,15 @@ export function PlayerDashboardPage() {
   }
 
   const vm = viewQ.data
-  const { data, summary, upcoming, history, myStanding, leader, pointsBehindLeader } = vm
+  const { data, summary, history } = vm
   const t = data.tournament
   const g = data.group
   const r = data.rules
   const membership = data.membership
   const players = data.players
   const groupHubHref = tournamentPathWithGroup(t, g.id)
-  const actionRequired = upcoming.filter(
-    (match) => canSubmitScore(match, userId) || canAcceptScore(match, userId),
-  )
+  const heroVerGrupoDashboardHref = dashboardPathWithGroupScope(t.id, g.id)
+
   const refreshPlayerDashboard = async () => {
     await qc.invalidateQueries({ queryKey: ['playerContexts', userId] })
     await qc.invalidateQueries({ queryKey: ['playerViewModel', userId] })
@@ -214,13 +211,13 @@ export function PlayerDashboardPage() {
   }
 
   return (
-    <div id="page-player" data-name="page-player" className="space-y-5 sm:space-y-6">
-      <PlayerHeaderCard
+    <div id="page-player" data-name="page-player" className="space-y-6">
+      <PlayerHeroSummary
         firstName={name0}
         tournamentName={t.name}
         groupName={g.name}
         tournament={t}
-        groupDetailHref={groupHubHref}
+        groupDetailHref={heroVerGrupoDashboardHref}
         toolbar={
           contexts.length > 1 ? (
             <PlayerTournamentSelector
@@ -234,47 +231,27 @@ export function PlayerDashboardPage() {
 
       {profile && !recoveryEmailComplete(profile) ? <PlayerRecoveryEmailBanner /> : null}
 
-      <PlayerSummaryCards summary={summary} />
+      <PlayerQuickMetrics summary={summary} />
 
-      {userId ? (
-        <PlayerTournamentMovementCard playerId={userId} tournamentId={t.id} />
-      ) : null}
+      {userId ? <PlayerTournamentMovementCard playerId={userId} tournamentId={t.id} /> : null}
 
-      <div className="grid grid-cols-1 items-start gap-5 sm:gap-6 xl:grid-cols-12">
-        <div className="space-y-5 sm:space-y-6 xl:col-span-8">
-          <PlayerActionSection
-            matches={actionRequired}
-            players={players}
-            rules={r}
-            myGroupPlayerId={membership.id}
-            userId={userId}
-            groupName={g.name}
-            onAfterAction={refreshPlayerDashboard}
-          />
-
-          <MatchHistoryCard
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+        <div className="space-y-6 xl:col-span-4">
+          <PlayerGroupSection groupName={g.name} ranking={data.ranking} currentUserId={userId} />
+        </div>
+        <div className="xl:col-span-8">
+          <PlayerMatchesPanel
             matches={history}
             players={players}
             myGroupPlayerId={membership.id}
             userId={userId}
             rules={r}
+            groupName={g.name}
+            groupDetailHref={groupHubHref}
+            groupKey={g.id}
+            onAfterAction={refreshPlayerDashboard}
           />
         </div>
-
-        <aside className="space-y-5 sm:space-y-6 xl:col-span-4">
-          <PlayerGroupCard
-            groupName={g.name}
-            players={players}
-            ranking={data.ranking}
-            currentUserId={userId}
-            groupDetailHref={groupHubHref}
-          />
-          <PlayerStandingMiniCard
-            you={myStanding}
-            leader={leader}
-            pointsBehindLeader={pointsBehindLeader}
-          />
-        </aside>
       </div>
     </div>
   )

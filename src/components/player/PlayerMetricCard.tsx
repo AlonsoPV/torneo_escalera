@@ -39,26 +39,68 @@ const toneClasses: Record<Tone, { card: string; icon: string; value: string }> =
 
 export function PlayerMetricCard({
   label,
+  labelShort,
   value,
   icon: Icon,
   tone,
+  compact = false,
+  className,
 }: {
   label: string
+  /** Etiqueta más corta en pantallas estrechas (compact). */
+  labelShort?: string
   value: string
   icon: LucideIcon
   tone: Tone
+  compact?: boolean
+  className?: string
 }) {
   const t = toneClasses[tone]
 
   return (
-    <div className={cn('rounded-2xl border p-3 shadow-sm sm:p-4', t.card)}>
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-[#64748B]">{label}</p>
-        <span className={cn('flex size-8 shrink-0 items-center justify-center rounded-xl', t.icon)}>
-          <Icon className="size-4" aria-hidden />
+    <div
+      className={cn(
+        'flex h-full min-h-0 flex-col rounded-xl border shadow-sm sm:rounded-2xl',
+        compact ? 'p-2 max-[380px]:px-1.5 max-[380px]:py-1.5 sm:p-2.5' : 'p-3 sm:p-4',
+        t.card,
+        className,
+      )}
+    >
+      <div className="flex items-start justify-between gap-0.5 sm:gap-1">
+        <p
+          className={cn(
+            'min-w-0 flex-1 font-semibold uppercase tracking-wide text-[#64748B]',
+            compact ? 'text-[9px] leading-[1.15] sm:text-[10px]' : 'text-xs',
+          )}
+        >
+          {compact && labelShort ? (
+            <>
+              <span className="max-sm:inline sm:hidden">{labelShort}</span>
+              <span className="hidden sm:inline">{label}</span>
+            </>
+          ) : (
+            label
+          )}
+        </p>
+        <span
+          className={cn(
+            'flex shrink-0 items-center justify-center rounded-lg',
+            compact ? 'size-5 rounded-md max-[380px]:size-[18px] sm:size-6' : 'size-8 rounded-xl',
+            t.icon,
+          )}
+        >
+          <Icon className={compact ? 'size-2.5 max-[380px]:size-[11px] sm:size-3' : 'size-4'} aria-hidden />
         </span>
       </div>
-      <p className={cn('mt-2 text-2xl font-bold tabular-nums tracking-tight sm:text-3xl', t.value)}>
+      <p
+        className={cn(
+          'min-w-0 font-bold tabular-nums tracking-tight',
+          compact
+            ? 'mt-0.5 text-[0.9375rem] leading-tight max-[380px]:text-sm sm:mt-1 sm:text-lg'
+            : 'mt-2 text-2xl sm:text-3xl',
+          t.value,
+        )}
+      >
         {value}
       </p>
     </div>

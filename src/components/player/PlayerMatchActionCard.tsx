@@ -45,6 +45,7 @@ export function PlayerMatchActionCard({
   userId,
   groupName,
   onAfterAction,
+  className,
 }: {
   match: MatchRow
   players: GroupPlayer[]
@@ -53,6 +54,7 @@ export function PlayerMatchActionCard({
   userId: string
   groupName: string
   onAfterAction: () => Promise<void>
+  className?: string
 }) {
   const [scoreOpen, setScoreOpen] = useState(false)
   const [rejectOpen, setRejectOpen] = useState(false)
@@ -122,7 +124,12 @@ export function PlayerMatchActionCard({
   }
 
   return (
-    <article className="rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
+    <article
+      className={cn(
+        'rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm transition-shadow hover:shadow-md',
+        className,
+      )}
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -130,7 +137,7 @@ export function PlayerMatchActionCard({
             <StatusBadge match={match} />
           </div>
           <h3 className="truncate text-base font-semibold text-[#102A43]">vs. {rival?.display_name ?? 'Rival'}</h3>
-          <p className="text-sm text-[#64748B]">{actionCopy}</p>
+          <p className="text-sm font-medium leading-snug text-[#102A43]">{actionCopy}</p>
         </div>
         {match.score_raw?.length || match.game_type === 'sudden_death' ? (
           <div className="rounded-xl bg-[#F6F3EE]/70 px-3 py-2 text-left sm:text-right">

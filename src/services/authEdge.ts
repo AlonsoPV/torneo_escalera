@@ -1,3 +1,5 @@
+import { FunctionsHttpError } from '@supabase/supabase-js'
+
 import { supabase } from '@/lib/supabase'
 import type { UserRole } from '@/types/database'
 
@@ -7,19 +9,60 @@ function requireAnonKey(): string {
   return k
 }
 
+async function readFunctionsErrorBody(error: unknown): Promise<{ error?: string; code?: string } | null> {
+  if (!(error instanceof FunctionsHttpError)) return null
+  const res = error.context as Response
+  try {
+    const ct = res.headers.get('Content-Type') ?? ''
+    if (!ct.includes('application/json')) return null
+    return (await res.clone().json()) as { error?: string; code?: string }
+  } catch {
+    return null
+  }
+}
+
+const GENERIC_PHONE_NOT_FOUND = 'No encontramos una cuenta con ese número.'
+
 export async function invokeResolveAuthEmailByPhone(phone: string): Promise<string> {
   const anonKey = requireAnonKey()
-  const { data, error } = await supabase.functions.invoke<{ auth_email?: string; error?: string }>(
-    'resolve-auth-email-by-phone',
-    {
-      body: { phone },
-      headers: { apikey: anonKey },
-    },
-  )
-  if (error) throw new Error(error.message)
-  const authEmail = data?.auth_email
-  if (!authEmail) throw new Error(data?.error ?? 'No encontramos una cuenta con ese número.')
-  return authEmail
+  const { data, error } = await supabase.functions.invoke<{
+    success?: boolean
+    auth_email?: string
+    error?: string
+  }>('resolve-auth-email-by-phone', {
+    body: { phone },
+    headers: { apikey: anonKey },
+  })
+
+  const payload = data && typeof data === 'object' ? data : null
+  const authEmail = payload?.auth_email?.trim()
+
+  if (authEmail && payload?.success !== false) {
+    return authEmail
+  }
+
+  let failMsg = payload?.error ?? GENERIC_PHONE_NOT_FOUND
+  if (error) {
+    const parsed = await readFunctionsErrorBody(error)
+    if (parsed?.error) failMsg = parsed.error
+    throw new Error(failMsg)
+  }
+
+  if (payload?.success === false) {
+    throw new Error(failMsg)
+  }
+
+  throw new Error(GENERIC_PHONE_NOT_FOUND)
+}
+
+export class PasswordResetRequestError extends Error {
+  readonly code?: string
+
+  constructor(message: string, code?: string) {
+    super(message)
+    this.name = 'PasswordResetRequestError'
+    this.code = code
+  }
 }
 
 export async function invokePasswordResetRequest(identifier: string, redirectTo: string): Promise<void> {
@@ -33,9 +76,21 @@ export async function invokePasswordResetRequest(identifier: string, redirectTo:
     body: { identifier, redirectTo },
     headers: { apikey: anonKey },
   })
-  if (error) throw new Error(error.message)
-  if (data?.error) {
-    throw new Error(data.error)
+
+  if (!error && data?.error) {
+    throw new PasswordResetRequestError(data.error, data.code)
+  }
+
+  if (error instanceof FunctionsHttpError) {
+    const parsed = await readFunctionsErrorBody(error)
+    if (parsed?.error) {
+      throw new PasswordResetRequestError(parsed.error, parsed.code)
+    }
+    throw new PasswordResetRequestError('No se pudo procesar la solicitud')
+  }
+
+  if (error) {
+    throw new PasswordResetRequestError(error.message)
   }
 }
 

@@ -7,6 +7,7 @@ export type RankingRow = {
   groupPlayerId: string
   userId: string
   displayName: string
+  seed_order: number
   played: number
   won: number
   lost: number
@@ -25,6 +26,7 @@ function emptyStats(gp: GroupPlayer): MutableStats {
     groupPlayerId: gp.id,
     userId: gp.user_id,
     displayName: gp.display_name,
+    seed_order: gp.seed_order,
     played: 0,
     won: 0,
     lost: 0,
@@ -114,13 +116,11 @@ export function computeGroupRanking(players: GroupPlayer[], matches: MatchRow[],
 
   const rows = Array.from(byId.values()).sort((x, y) => {
     if (y.points !== x.points) return y.points - x.points
-    if (y.won !== x.won) return y.won - x.won
-    const xsd = x.setsFor - x.setsAgainst
-    const ysd = y.setsFor - y.setsAgainst
-    if (ysd !== xsd) return ysd - xsd
+    if (y.gamesFor !== x.gamesFor) return y.gamesFor - x.gamesFor
     const xgd = x.gamesFor - x.gamesAgainst
     const ygd = y.gamesFor - y.gamesAgainst
     if (ygd !== xgd) return ygd - xgd
+    if (x.seed_order !== y.seed_order) return x.seed_order - y.seed_order
     return x.displayName.localeCompare(y.displayName)
   })
 

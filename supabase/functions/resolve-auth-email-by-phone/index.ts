@@ -41,7 +41,7 @@ function rateLimit(key: string, max: number, windowMs: number): boolean {
 }
 
 function err(message: string, status: number) {
-  return new Response(JSON.stringify({ error: message }), {
+  return new Response(JSON.stringify({ success: false, error: message }), {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
@@ -94,5 +94,5 @@ Deno.serve(async (req) => {
     return err('No encontramos una cuenta con ese número.', 404)
   }
 
-  return ok({ auth_email: userData.user.email })
+  return ok({ success: true, auth_email: userData.user.email })
 })
