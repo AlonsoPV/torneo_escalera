@@ -1,3 +1,5 @@
+import { useMemo } from 'react'
+
 import {
   Select,
   SelectContent,
@@ -23,9 +25,12 @@ function contextMenuLabel(c: PlayerDashboardContextSummary): string {
 }
 
 export function PlayerTournamentSelector({ contexts, value, onChange, className }: Props) {
-  if (contexts.length <= 1) return null
+  const triggerLabel = useMemo(() => {
+    const c = contexts.find((x) => x.group.id === value)
+    return c ? contextMenuLabel(c) : undefined
+  }, [contexts, value])
 
-  const selected = contexts.find((c) => c.group.id === value)
+  if (contexts.length <= 1) return null
 
   return (
     <div className={cn('flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3', className)}>
@@ -38,11 +43,9 @@ export function PlayerTournamentSelector({ contexts, value, onChange, className 
       >
         <SelectTrigger
           size="sm"
-          className="h-10 w-full min-w-[200px] max-w-md border-[#E2E8F0] bg-white text-[#102A43] sm:w-auto"
+          className="h-10 min-w-[200px] max-w-[280px] w-auto border-[#E2E8F0] bg-white text-[#102A43]"
         >
-          <SelectValue placeholder="Selecciona torneo">
-            {selected ? contextMenuLabel(selected) : null}
-          </SelectValue>
+          <SelectValue placeholder="Selecciona torneo">{triggerLabel ?? undefined}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {contexts.map((c) => {

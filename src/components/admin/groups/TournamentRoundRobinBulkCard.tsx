@@ -6,7 +6,6 @@ import { toast } from 'sonner'
 import { AdminConfirmDialog } from '@/components/admin/shared/AdminConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -115,8 +114,8 @@ export function TournamentRoundRobinBulkCard({
 
   const cardClass =
     variant === 'admin'
-      ? 'border-[#E2E8F0] bg-white shadow-sm'
-      : 'border-border/80 bg-card shadow-sm'
+      ? 'border-border/20 bg-background'
+      : 'border-border/80 bg-card'
 
   const runButton = (
     <Button
@@ -140,7 +139,7 @@ export function TournamentRoundRobinBulkCard({
   )
 
   return (
-    <Card className={cn('rounded-2xl', cardClass)}>
+    <Card className={cn('rounded-xl border shadow-none', cardClass)}>
       <CardHeader className="space-y-1">
         <CardTitle className="flex items-center gap-2 text-base text-[#102A43]">
           <Grid3x3 className="size-5 text-[#1F5A4C]" />
@@ -164,28 +163,40 @@ export function TournamentRoundRobinBulkCard({
           </p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label className="text-slate-700">Modo</Label>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="bulk-rr-mode" className="mb-1 block text-xs text-muted-foreground">
+              Modo
+            </label>
             <Select value={mode} onValueChange={(v) => setMode(v as GenerateRrMode)}>
-              <SelectTrigger className="border-slate-200 bg-white">
-                <SelectValue />
+              <SelectTrigger id="bulk-rr-mode" className="min-w-[180px] w-full border-border/60 bg-background">
+                <SelectValue placeholder="Selecciona modo" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="fill">Solo cruces faltantes (no borra existentes)</SelectItem>
-                <SelectItem value="reset">Regenerar (elimina partidos del grupo y recrea cruces)</SelectItem>
+                <SelectItem value="fill" label="Solo cruces faltantes (no borra existentes)">
+                  Solo cruces faltantes (no borra existentes)
+                </SelectItem>
+                <SelectItem value="reset" label="Regenerar (elimina partidos del grupo y recrea cruces)">
+                  Regenerar (elimina partidos del grupo y recrea cruces)
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <Label className="text-slate-700">Alcance</Label>
+          <div>
+            <label htmlFor="bulk-rr-scope" className="mb-1 block text-xs text-muted-foreground">
+              Alcance
+            </label>
             <Select value={scope} onValueChange={(v) => setScope(v as GenerateRrTournamentScope)}>
-              <SelectTrigger className="border-slate-200 bg-white">
-                <SelectValue />
+              <SelectTrigger id="bulk-rr-scope" className="min-w-[180px] w-full border-border/60 bg-background">
+                <SelectValue placeholder="Selecciona alcance" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="complete_groups_only">Solo grupos completos (jugadores = cupo)</SelectItem>
-                <SelectItem value="all_eligible">Todos los grupos con 2–5 jugadores</SelectItem>
+                <SelectItem value="complete_groups_only" label="Solo grupos completos (jugadores = cupo)">
+                  Solo grupos completos (jugadores = cupo)
+                </SelectItem>
+                <SelectItem value="all_eligible" label="Todos los grupos con 2–5 jugadores">
+                  Todos los grupos con 2–5 jugadores
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -1,10 +1,43 @@
+// @ts-nocheck — tipado Postgrest/Supabase sin Database genérico; runtime validado por Deno en deploy.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
 
-import { corsHeaders } from '../_shared/cors.ts'
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+} as const
+
+type NormalizePhoneResult =
+  | { ok: true; digits: string }
+  | { ok: false; error: string }
+
+function normalizePhone(raw: string): NormalizePhoneResult {
+  let s = String(raw ?? '').trim()
+  s = s.replace(/[\s\-().]/g, '')
+  if (s.startsWith('+52')) {
+    s = s.slice(3)
+  }
+  let digits = s.replace(/\D/g, '')
+  while (digits.startsWith('52') && digits.length > 10) {
+    digits = digits.slice(2)
+  }
+  if (digits.length < 10) {
+    return { ok: false, error: 'El número debe tener al menos 10 dígitos.' }
+  }
+  if (digits.length > 13) {
+    return { ok: false, error: 'El número no puede tener más de 13 dígitos.' }
+  }
+  return { ok: true, digits }
+}
+
+function technicalAuthEmailFromDigits(digits: string): string {
+  return `${digits}@mega-varonil.local`
+}
 
 type RowInput = {
   rowNumber: number
   externalId: string
+  phone: string
   fullName: string
   role: string
   categoryName: string
@@ -77,14 +110,10 @@ function parseCarryStatInput(
   return { ok: false, msg: `${label} inválido` }
 }
 
-function emailForExternalId(ext: string): string {
-  const safe = ext.trim().replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 64) || 'user'
-  return `${safe}@mega-varonil.local`
-}
-
 type ResultRow = {
   rowNumber: number
   externalId: string
+  phone: string
   fullName: string
   email: string
   temporaryPassword: string
@@ -292,12 +321,14 @@ Deno.serve(async (req) => {
       let role = (row.role?.trim() || 'player').toLowerCase()
       if (!ALLOWED.has(role)) role = 'player'
       const cname = normalizeLabel(row.categoryName ?? '')
+      const phoneParsed = normalizePhone(String(row.phone ?? ''))
 
-      const baseResult = (email: string, temp: string): Omit<ResultRow, 'status' | 'error' | 'userId'> => ({
+      const baseResult = (phoneDigits: string, temp: string): Omit<ResultRow, 'status' | 'error' | 'userId'> => ({
         rowNumber: row.rowNumber,
         externalId: ext,
+        phone: phoneDigits,
         fullName: name,
-        email,
+        email: '',
         temporaryPassword: temp,
         categoryName: cname,
       })
@@ -323,12 +354,12 @@ Deno.serve(async (req) => {
         continue
       }
 
-      if (!ext || !name || !cname) {
+      if (!name || !cname) {
         errors += 1
         results.push({
           ...baseResult('', ''),
           status: 'error',
-          error: 'ID, Nombre y Categoría son obligatorios',
+          error: 'Nombre y categoría son obligatorios',
         })
         await insertBulkRow(adminClient, {
           batchId,
@@ -344,18 +375,41 @@ Deno.serve(async (req) => {
         continue
       }
 
+      if (!phoneParsed.ok) {
+        errors += 1
+        results.push({
+          ...baseResult('', ''),
+          status: 'error',
+          error: phoneParsed.error,
+        })
+        await insertBulkRow(adminClient, {
+          batchId,
+          rowNumber: row.rowNumber,
+          external_id: ext || null,
+          full_name: name || null,
+          role,
+          groupName: rowGroupAudit,
+          categoryName: cname,
+          status: 'error',
+          errorMessage: phoneParsed.error,
+        })
+        continue
+      }
+
+      const digits = phoneParsed.digits
+
       const pjIn = parseCarryStatInput('PJ', row.pj, 'nonNegative')
       if (!pjIn.ok) {
         errors += 1
         results.push({
-          ...baseResult('', ''),
+          ...baseResult(digits, ''),
           status: 'error',
           error: pjIn.msg,
         })
         await insertBulkRow(adminClient, {
           batchId,
           rowNumber: row.rowNumber,
-          external_id: ext,
+          external_id: ext || null,
           full_name: name,
           role,
           groupName: rowGroupAudit,
@@ -369,14 +423,14 @@ Deno.serve(async (req) => {
       if (!ptsIn.ok) {
         errors += 1
         results.push({
-          ...baseResult('', ''),
+          ...baseResult(digits, ''),
           status: 'error',
           error: ptsIn.msg,
         })
         await insertBulkRow(adminClient, {
           batchId,
           rowNumber: row.rowNumber,
-          external_id: ext,
+          external_id: ext || null,
           full_name: name,
           role,
           groupName: rowGroupAudit,
@@ -389,25 +443,50 @@ Deno.serve(async (req) => {
       const pjVal = pjIn.n
       const ptsVal = ptsIn.n
 
-      const { data: existingProf } = await adminClient
-        .from('profiles')
-        .select('id, email, role')
-        .eq('external_id', ext)
-        .maybeSingle()
+      const { data: byExt } = ext
+        ? await adminClient.from('profiles').select('id').eq('external_id', ext).maybeSingle()
+        : { data: null }
+      const { data: byPhone } = await adminClient.from('profiles').select('id').eq('phone', digits).maybeSingle()
+
+      const extId = byExt ? (byExt as { id: string }).id : null
+      const phoneId = byPhone ? (byPhone as { id: string }).id : null
+
+      if (ext && extId && phoneId && extId !== phoneId) {
+        errors += 1
+        results.push({
+          ...baseResult(digits, ''),
+          status: 'error',
+          error: 'El ID externo y el celular corresponden a usuarios distintos',
+        })
+        await insertBulkRow(adminClient, {
+          batchId,
+          rowNumber: row.rowNumber,
+          external_id: ext || null,
+          full_name: name,
+          role,
+          groupName: rowGroupAudit,
+          categoryName: cname,
+          status: 'error',
+          errorMessage: 'Conflicto ID / celular',
+        })
+        continue
+      }
+
+      const existingProf = extId ? byExt : phoneId ? byPhone : null
 
       const passwordRaw = String(row.password ?? '').trim()
       if (!existingProf) {
         if (!isValidBulkImportPassword(passwordRaw)) {
           errors += 1
           results.push({
-            ...baseResult('', ''),
+            ...baseResult(digits, ''),
             status: 'error',
             error: 'Contraseña inválida: debe ser exactamente 8 dígitos numéricos',
           })
           await insertBulkRow(adminClient, {
             batchId,
             rowNumber: row.rowNumber,
-            external_id: ext,
+            external_id: ext || null,
             full_name: name,
             role,
             groupName: rowGroupAudit,
@@ -421,14 +500,14 @@ Deno.serve(async (req) => {
         if (passwordRaw !== '' && !isValidBulkImportPassword(passwordRaw)) {
           errors += 1
           results.push({
-            ...baseResult('', ''),
+            ...baseResult(digits, ''),
             status: 'error',
             error: 'Contraseña: usa 8 dígitos o déjala vacía para no cambiar la actual',
           })
           await insertBulkRow(adminClient, {
             batchId,
             rowNumber: row.rowNumber,
-            external_id: ext,
+            external_id: ext || null,
             full_name: name,
             role,
             groupName: rowGroupAudit,
@@ -469,14 +548,14 @@ Deno.serve(async (req) => {
       if (!categoryId) {
         errors += 1
         results.push({
-          ...baseResult('', ''),
+          ...baseResult(digits, ''),
           status: 'error',
           error: `Categoría "${cname}" no existe`,
         })
         await insertBulkRow(adminClient, {
           batchId,
           rowNumber: row.rowNumber,
-          external_id: ext,
+          external_id: ext || null,
           full_name: name,
           role,
           groupName: rowGroupAudit,
@@ -494,14 +573,14 @@ Deno.serve(async (req) => {
         if (!tournamentId) {
           errors += 1
           results.push({
-            ...baseResult('', ''),
+            ...baseResult(digits, ''),
             status: 'error',
             error: 'Torneo requerido para asignar grupo',
           })
           await insertBulkRow(adminClient, {
             batchId,
             rowNumber: row.rowNumber,
-            external_id: ext,
+            external_id: ext || null,
             full_name: name,
             role,
             groupName: rowGroupAudit,
@@ -536,14 +615,14 @@ Deno.serve(async (req) => {
             errors += 1
             const msg = cgErr?.message ?? 'No se pudo crear el grupo'
             results.push({
-              ...baseResult('', ''),
+              ...baseResult(digits, ''),
               status: 'error',
               error: msg,
             })
             await insertBulkRow(adminClient, {
               batchId,
               rowNumber: row.rowNumber,
-              external_id: ext,
+              external_id: ext || null,
               full_name: name,
               role,
               groupName: rowGroupAudit,
@@ -561,10 +640,11 @@ Deno.serve(async (req) => {
         }
         let alreadyInThisGroup = false
         if (existingProf) {
+          const uidExisting = (existingProf as { id: string }).id
           const { data: ugp } = await adminClient
             .from('group_players')
             .select('id')
-            .eq('user_id', (existingProf as { id: string }).id)
+            .eq('user_id', uidExisting)
             .eq('group_id', gr.id)
             .maybeSingle()
           alreadyInThisGroup = Boolean(ugp)
@@ -574,14 +654,14 @@ Deno.serve(async (req) => {
         if (!alreadyInThisGroup && curCap >= cap) {
           errors += 1
           results.push({
-            ...baseResult('', ''),
+            ...baseResult(digits, ''),
             status: 'error',
             error: `El grupo "${gname}" está lleno (${cap})`,
           })
           await insertBulkRow(adminClient, {
             batchId,
             rowNumber: row.rowNumber,
-            external_id: ext,
+            external_id: ext || null,
             full_name: name,
             role,
             groupName: rowGroupAudit,
@@ -595,14 +675,37 @@ Deno.serve(async (req) => {
       }
 
       if (existingProf) {
-        const uid = existingProf.id as string
-        const userEmail = String(existingProf.email ?? '').trim() || emailForExternalId(ext)
+        const uid = (existingProf as { id: string }).id
+
+        const { data: phoneTaken } = await adminClient.from('profiles').select('id').eq('phone', digits).neq('id', uid).maybeSingle()
+        if (phoneTaken) {
+          errors += 1
+          results.push({
+            ...baseResult(digits, ''),
+            status: 'error',
+            error: 'Ese celular ya está asignado a otro usuario',
+          })
+          await insertBulkRow(adminClient, {
+            batchId,
+            rowNumber: row.rowNumber,
+            external_id: ext || null,
+            full_name: name,
+            role,
+            groupName: rowGroupAudit,
+            categoryName: cname,
+            status: 'error',
+            errorMessage: 'Celular duplicado',
+          })
+          continue
+        }
 
         const profilePayload: Record<string, unknown> = {
           full_name: name,
           role,
           category_id: categoryId,
           status: 'active',
+          phone: digits,
+          external_id: ext || null,
         }
         if (pjVal !== null) profilePayload.import_carry_pj = pjVal
         if (ptsVal !== null) profilePayload.import_carry_pts = ptsVal
@@ -611,14 +714,14 @@ Deno.serve(async (req) => {
         if (upErr) {
           errors += 1
           results.push({
-            ...baseResult(userEmail, passwordRaw || '—'),
+            ...baseResult(digits, passwordRaw || '—'),
             status: 'error',
             error: upErr.message,
           })
           await insertBulkRow(adminClient, {
             batchId,
             rowNumber: row.rowNumber,
-            external_id: ext,
+            external_id: ext || null,
             full_name: name,
             role,
             groupName: rowGroupAudit,
@@ -634,14 +737,14 @@ Deno.serve(async (req) => {
           if (pwErr) {
             errors += 1
             results.push({
-              ...baseResult(userEmail, passwordRaw),
+              ...baseResult(digits, passwordRaw),
               status: 'error',
               error: pwErr.message,
             })
             await insertBulkRow(adminClient, {
               batchId,
               rowNumber: row.rowNumber,
-              external_id: ext,
+              external_id: ext || null,
               full_name: name,
               role,
               groupName: rowGroupAudit,
@@ -664,14 +767,14 @@ Deno.serve(async (req) => {
         if (gErr) {
           errors += 1
           results.push({
-            ...baseResult(userEmail, passwordRaw || '—'),
+            ...baseResult(digits, passwordRaw || '—'),
             status: 'error',
             error: gErr,
           })
           await insertBulkRow(adminClient, {
             batchId,
             rowNumber: row.rowNumber,
-            external_id: ext,
+            external_id: ext || null,
             full_name: name,
             role,
             groupName: rowGroupAudit,
@@ -684,7 +787,7 @@ Deno.serve(async (req) => {
 
         success += 1
         results.push({
-          ...baseResult(userEmail, passwordRaw || '—'),
+          ...baseResult(digits, passwordRaw || '—'),
           status: 'success',
           userId: uid,
           operation: 'updated',
@@ -692,7 +795,7 @@ Deno.serve(async (req) => {
         await insertBulkRow(adminClient, {
           batchId,
           rowNumber: row.rowNumber,
-          external_id: ext,
+          external_id: ext || null,
           full_name: name,
           role,
           groupName: rowGroupAudit,
@@ -704,38 +807,41 @@ Deno.serve(async (req) => {
         continue
       }
 
-      const email = emailForExternalId(ext)
-
-      const { data: dupEmail } = await adminClient.from('profiles').select('id').eq('email', email).maybeSingle()
-      if (dupEmail) {
+      const { data: dupPhone } = await adminClient.from('profiles').select('id').eq('phone', digits).maybeSingle()
+      if (dupPhone) {
         errors += 1
         results.push({
-          ...baseResult(email, ''),
+          ...baseResult(digits, ''),
           status: 'error',
-          error: 'Email derivado ya existe para otro perfil',
+          error: 'Ese celular ya está registrado',
         })
         await insertBulkRow(adminClient, {
           batchId,
           rowNumber: row.rowNumber,
-          external_id: ext,
+          external_id: ext || null,
           full_name: name,
           role,
           groupName: rowGroupAudit,
           categoryName: cname,
           status: 'error',
-          errorMessage: 'Email colisión',
+          errorMessage: 'Celular duplicado',
         })
         continue
       }
 
+      const technicalEmail = technicalAuthEmailFromDigits(digits)
+
       const { data: created, error: authErr } = await adminClient.auth.admin.createUser({
-        email,
+        email: technicalEmail,
         password: passwordRaw,
         email_confirm: true,
         user_metadata: {
           full_name: name,
           bulk_import: 'true',
           role,
+          phone: digits,
+          category_id: categoryId,
+          ...(ext ? { external_id: ext } : {}),
         },
       })
 
@@ -743,14 +849,14 @@ Deno.serve(async (req) => {
         errors += 1
         const msg = authErr?.message ?? 'Error creando usuario'
         results.push({
-          ...baseResult(email, passwordRaw),
+          ...baseResult(digits, passwordRaw),
           status: 'error',
           error: msg,
         })
         await insertBulkRow(adminClient, {
           batchId,
           rowNumber: row.rowNumber,
-          external_id: ext,
+          external_id: ext || null,
           full_name: name,
           role,
           groupName: rowGroupAudit,
@@ -765,11 +871,14 @@ Deno.serve(async (req) => {
 
       const profilePayload: Record<string, unknown> = {
         full_name: name,
-        email,
+        email: null,
         role,
-        external_id: ext,
+        external_id: ext || null,
         category_id: categoryId,
+        phone: digits,
         status: 'active',
+        must_complete_email: true,
+        email_verified: false,
       }
       if (pjVal !== null) profilePayload.import_carry_pj = pjVal
       if (ptsVal !== null) profilePayload.import_carry_pts = ptsVal
@@ -780,14 +889,14 @@ Deno.serve(async (req) => {
         errors += 1
         await adminClient.auth.admin.deleteUser(uid)
         results.push({
-          ...baseResult(email, passwordRaw),
+          ...baseResult(digits, passwordRaw),
           status: 'error',
           error: upErr.message,
         })
         await insertBulkRow(adminClient, {
           batchId,
           rowNumber: row.rowNumber,
-          external_id: ext,
+          external_id: ext || null,
           full_name: name,
           role,
           groupName: rowGroupAudit,
@@ -810,14 +919,14 @@ Deno.serve(async (req) => {
         errors += 1
         await adminClient.auth.admin.deleteUser(uid)
         results.push({
-          ...baseResult(email, passwordRaw),
+          ...baseResult(digits, passwordRaw),
           status: 'error',
           error: gErr,
         })
         await insertBulkRow(adminClient, {
           batchId,
           rowNumber: row.rowNumber,
-          external_id: ext,
+          external_id: ext || null,
           full_name: name,
           role,
           groupName: rowGroupAudit,
@@ -830,7 +939,7 @@ Deno.serve(async (req) => {
 
       success += 1
       results.push({
-        ...baseResult(email, passwordRaw),
+        ...baseResult(digits, passwordRaw),
         status: 'success',
         userId: uid,
         operation: 'created',
@@ -838,7 +947,7 @@ Deno.serve(async (req) => {
       await insertBulkRow(adminClient, {
         batchId,
         rowNumber: row.rowNumber,
-        external_id: ext,
+        external_id: ext || null,
         full_name: name,
         role,
         groupName: rowGroupAudit,

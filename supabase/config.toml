@@ -5,3 +5,21 @@
 
 [functions.admin-bulk-create-users]
 verify_jwt = false
+
+[functions.resolve-auth-email-by-phone]
+verify_jwt = false
+
+[functions.password-reset-request]
+verify_jwt = false
+
+# JWT se valida dentro de cada función (Bearer + getUser). verify_jwt en true hace que el
+# gateway rechace OPTIONS sin Authorization → el navegador muestra error CORS en preflight.
+
+[functions.admin-create-user]
+verify_jwt = false
+
+[functions.update-user-recovery-email]
+verify_jwt = false
+
+[functions.admin-change-user-password]
+verify_jwt = false

@@ -48,12 +48,12 @@ export function MatchRulesCard() {
             value={matchFormat}
             onValueChange={(v) => setValue('match_format', v as MatchFormatId, { shouldDirty: true, shouldValidate: true })}
           >
-            <SelectTrigger id="rules-match-format" className="h-11">
-              <SelectValue>{MATCH_FORMAT_LABEL[matchFormat] ?? matchFormat}</SelectValue>
+            <SelectTrigger id="rules-match-format" className="h-11 min-w-[180px]">
+              <SelectValue placeholder="Selecciona formato" />
             </SelectTrigger>
             <SelectContent>
               {matchFormatOrder.map((id) => (
-                <SelectItem key={id} value={id}>
+                <SelectItem key={id} value={id} label={MATCH_FORMAT_LABEL[id]}>
                   {MATCH_FORMAT_LABEL[id]}
                 </SelectItem>
               ))}
@@ -68,12 +68,12 @@ export function MatchRulesCard() {
             value={setType}
             onValueChange={(v) => setValue('set_type', v as SetTypeId, { shouldDirty: true })}
           >
-            <SelectTrigger id="rules-set-type" className="h-11">
-              <SelectValue>{SET_TYPE_LABEL[setType] ?? setType}</SelectValue>
+            <SelectTrigger id="rules-set-type" className="h-11 min-w-[180px]">
+              <SelectValue placeholder="Selecciona tipo de set" />
             </SelectTrigger>
             <SelectContent>
               {setTypeOrder.map((id) => (
-                <SelectItem key={id} value={id}>
+                <SelectItem key={id} value={id} label={SET_TYPE_LABEL[id]}>
                   {SET_TYPE_LABEL[id]}
                 </SelectItem>
               ))}
@@ -88,13 +88,19 @@ export function MatchRulesCard() {
             value={String(gamesPerSet)}
             onValueChange={(v) => setValue('games_per_set', Number(v) as 4 | 6 | 8, { shouldDirty: true, shouldValidate: true })}
           >
-            <SelectTrigger id="rules-games-per-set" className="h-11">
-              <SelectValue>{gamesPerSet}</SelectValue>
+            <SelectTrigger id="rules-games-per-set" className="h-11 min-w-[180px]">
+              <SelectValue placeholder="Games por set" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="4">4</SelectItem>
-              <SelectItem value="6">6</SelectItem>
-              <SelectItem value="8">8</SelectItem>
+              <SelectItem value="4" label="4">
+                4
+              </SelectItem>
+              <SelectItem value="6" label="6">
+                6
+              </SelectItem>
+              <SelectItem value="8" label="8">
+                8
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -108,12 +114,16 @@ export function MatchRulesCard() {
               setValue('min_game_difference', Number(v) as 1 | 2, { shouldDirty: true, shouldValidate: true })
             }
           >
-            <SelectTrigger id="rules-min-diff" className="h-11">
-              <SelectValue>{minDiff === 2 ? '2 games' : '1 game'}</SelectValue>
+            <SelectTrigger id="rules-min-diff" className="h-11 min-w-[180px]">
+              <SelectValue placeholder="Diferencia mínima" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="1">1 game</SelectItem>
-              <SelectItem value="2">2 games</SelectItem>
+              <SelectItem value="1" label="1 game">
+                1 game
+              </SelectItem>
+              <SelectItem value="2" label="2 games">
+                2 games
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -140,12 +150,16 @@ export function MatchRulesCard() {
               value={tiebreakAt === 5 ? '5' : '6'}
               onValueChange={(v) => setValue('tiebreak_at', v === '5' ? 5 : 6, { shouldDirty: true, shouldValidate: true })}
             >
-              <SelectTrigger id="rules-tiebreak-at" className="h-11 max-w-md">
-                <SelectValue>{tiebreakAt === 5 ? '5-5' : '6-6 (clásico)'}</SelectValue>
+              <SelectTrigger id="rules-tiebreak-at" className="h-11 max-w-md min-w-[180px]">
+                <SelectValue placeholder="Momento del tie-break" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="6">6-6 (clásico)</SelectItem>
-                <SelectItem value="5">5-5</SelectItem>
+                <SelectItem value="6" label="6-6 (clásico)">
+                  6-6 (clásico)
+                </SelectItem>
+                <SelectItem value="5" label="5-5">
+                  5-5
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -160,12 +174,12 @@ export function MatchRulesCard() {
               setValue('final_set_format', v as FinalSetFormatId, { shouldDirty: true, shouldValidate: true })
             }
           >
-            <SelectTrigger id="rules-final-set" className="h-11">
-              <SelectValue>{FINAL_SET_LABEL[finalFmt] ?? finalFmt}</SelectValue>
+            <SelectTrigger id="rules-final-set" className="h-11 min-w-[180px]">
+              <SelectValue placeholder="Formato del set decisivo" />
             </SelectTrigger>
             <SelectContent>
               {finalSetOrder.map((id) => (
-                <SelectItem key={id} value={id}>
+                <SelectItem key={id} value={id} label={FINAL_SET_LABEL[id]}>
                   {FINAL_SET_LABEL[id]}
                 </SelectItem>
               ))}
@@ -183,12 +197,16 @@ export function MatchRulesCard() {
                 setValue('sudden_death_points', Number(v) as 7 | 10, { shouldDirty: true, shouldValidate: true })
               }
             >
-              <SelectTrigger id="rules-sudden-pts" className="h-11 max-w-md">
-                <SelectValue>{suddenDeathLabel(suddenPts)}</SelectValue>
+              <SelectTrigger id="rules-sudden-pts" className="h-11 max-w-md min-w-[180px]">
+                <SelectValue placeholder="Puntos del super tie-break" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="7">{suddenDeathLabel(7)}</SelectItem>
-                <SelectItem value="10">{suddenDeathLabel(10)}</SelectItem>
+                <SelectItem value="7" label={suddenDeathLabel(7)}>
+                  {suddenDeathLabel(7)}
+                </SelectItem>
+                <SelectItem value="10" label={suddenDeathLabel(10)}>
+                  {suddenDeathLabel(10)}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>

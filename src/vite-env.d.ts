@@ -5,8 +5,6 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_ANON_KEY?: string
   /** "true" embebe la demo fija en el panel sin grupo activo. */
   readonly VITE_DEMO_MODE?: string
-  /** "true" habilita utilidades de datos ficticios para pruebas (p. ej. resultados dummy). */
-  readonly VITE_ENABLE_DUMMY_DATA?: string
 }
 
 interface ImportMeta {

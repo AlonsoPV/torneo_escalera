@@ -237,12 +237,12 @@ export function AdminPage() {
                         }
                       }}
                     >
-                      <SelectTrigger className="w-36 min-w-0">
-                        <SelectValue>{userRoleLabelEs(p.role)}</SelectValue>
+                      <SelectTrigger className="min-w-[140px] w-36 max-w-[280px]">
+                        <SelectValue placeholder="Rol" />
                       </SelectTrigger>
                       <SelectContent>
                         {ADMIN_PAGE_ROLE_OPTIONS.map((r) => (
-                          <SelectItem key={r} value={r}>
+                          <SelectItem key={r} value={r} label={userRoleLabelEs(r)}>
                             {userRoleLabelEs(r)}
                           </SelectItem>
                         ))}

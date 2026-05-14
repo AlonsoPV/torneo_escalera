@@ -6,6 +6,7 @@ import { AdminSectionTitle } from '@/components/admin/shared/AdminSectionTitle'
 import { AdminEmptyState } from '@/components/admin/shared/AdminEmptyState'
 import { EditUserModal } from '@/components/admin/users/EditUserModal'
 import { Card, CardContent } from '@/components/ui/card'
+import { formatRecoveryEmailDisplay } from '@/lib/profileEmail'
 import {
   Table,
   TableBody,
@@ -25,8 +26,8 @@ type Props = {
   onUpdateUser: (input: {
     user: AdminUserRecord
     fullName: string
-    email: string
     role: UserRole
+    categoryId: string
     groupId?: string
   }) => void
 }
@@ -111,8 +112,9 @@ export function AvailablePlayersPoolSection({ users, groups, isLoading, onUpdate
                   <TableRow key={user.id}>
                     <TableCell>
                       <div>
-                        <p className="font-medium text-[#102A43]">{user.full_name ?? user.email ?? '—'}</p>
-                        <p className="text-xs text-slate-500">{user.email}</p>
+                        <p className="font-medium text-[#102A43]">{user.full_name ?? user.phone ?? '—'}</p>
+                        <p className="text-xs text-slate-500 tabular-nums">{user.phone ?? '—'}</p>
+                        <p className="text-xs text-slate-400">{formatRecoveryEmailDisplay(user.email)}</p>
                       </div>
                     </TableCell>
                     <TableCell className="font-mono text-xs text-[#64748B]">
@@ -130,6 +132,7 @@ export function AvailablePlayersPoolSection({ users, groups, isLoading, onUpdate
                       <EditUserModal
                         user={user}
                         groups={groups}
+                        categories={categoriesQ.data ?? []}
                         onSubmit={(values) => onUpdateUser({ user, ...values })}
                       />
                     </TableCell>

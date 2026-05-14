@@ -26,6 +26,13 @@ import type { Group, GroupCategory, Profile } from '@/types/database'
 
 const NONE = '__none__'
 
+function profileAssignLabel(p: { full_name?: string | null; email?: string | null }) {
+  const name = p.full_name?.trim()
+  const mail = p.email?.trim()
+  if (name && mail) return `${name} · ${mail}`
+  return name || mail || 'Jugador'
+}
+
 export function GroupPlayerManager({
   group,
   categories,
@@ -80,11 +87,6 @@ export function GroupPlayerManager({
     return list.sort((a, b) => a.order_index - b.order_index || a.name.localeCompare(b.name, 'es'))
   }, [categories, group?.category])
 
-  const selectedCategoryLabel =
-    categorySelect === NONE
-      ? null
-      : categoryOptions.find((c) => c.id === categorySelect)?.name ?? group?.category?.name ?? null
-
   if (!group) return null
 
   const isFull = group.players.length >= group.max_players
@@ -135,13 +137,15 @@ export function GroupPlayerManager({
                     <Skeleton className="h-11 w-full rounded-lg" aria-hidden />
                   ) : (
                     <Select value={categorySelect} onValueChange={(v) => setCategorySelect(v ?? NONE)}>
-                      <SelectTrigger id="group-category" className="h-11 w-full">
-                        <SelectValue placeholder="Sin categoría">{selectedCategoryLabel}</SelectValue>
+                      <SelectTrigger id="group-category" className="h-11 min-w-[180px] w-full">
+                        <SelectValue placeholder="Sin categoría" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={NONE}>Sin categoría</SelectItem>
+                        <SelectItem value={NONE} label="Sin categoría">
+                          Sin categoría
+                        </SelectItem>
                         {categoryOptions.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
+                          <SelectItem key={c.id} value={c.id} label={c.name}>
                             {c.name}
                           </SelectItem>
                         ))}
@@ -218,13 +222,13 @@ export function GroupPlayerManager({
             </div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <Select value={selectedUserId} onValueChange={(value) => setSelectedUserId(value ?? '')} disabled={isFull}>
-                <SelectTrigger className="h-11 w-full">
+                <SelectTrigger className="h-11 min-w-[180px] w-full">
                   <SelectValue placeholder={isFull ? 'Grupo completo' : 'Selecciona jugador'} />
                 </SelectTrigger>
                 <SelectContent>
                   {availableProfiles.map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id}>
-                      {profile.full_name ?? profile.email ?? 'Jugador'}
+                    <SelectItem key={profile.id} value={profile.id} label={profileAssignLabel(profile)}>
+                      {profileAssignLabel(profile)}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -396,7 +396,7 @@ export function TournamentDetailPage() {
                   <RuleTile
                     label="Captura por jugadores"
                     value={rq.data.allow_player_score_entry ? 'Permitida' : 'No'}
-                    hint="Si está permitida, el Jugador A envía o corrige desde la matriz"
+                    hint="Si está permitida, cualquier jugador del cruce envía o corrige desde la matriz"
                   />
                 </div>
               ) : (

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { invokeResolveAuthEmailByPhone } from '@/services/authEdge'
 import type { Profile } from '@/types/database'
 
 export async function fetchProfile(userId: string): Promise<Profile | null> {
@@ -18,6 +19,12 @@ export async function signInWithEmail(email: string, password: string) {
   })
   if (error) throw error
   return data
+}
+
+/** Login por celular: resuelve el correo actual en Auth vía Edge Function y llama a signInWithPassword. */
+export async function signInWithPhone(phone: string, password: string) {
+  const authEmail = await invokeResolveAuthEmailByPhone(phone)
+  return signInWithEmail(authEmail, password)
 }
 
 export async function signUpWithEmail(

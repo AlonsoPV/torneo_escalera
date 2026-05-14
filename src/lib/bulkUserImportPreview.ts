@@ -1,10 +1,12 @@
 import type { UserRole } from '@/types/database'
 
+import { normalizePhone } from '@/lib/phone'
 import { isValidImportNumericPassword, normalizeImportLabel } from '@/lib/userImportTemplate'
 
 export type BulkImportParsedRow = {
   rowNumber: number
   externalId: string
+  phone: string
   fullName: string
   role: string
   categoryName: string
@@ -17,6 +19,7 @@ export type BulkImportParsedRow = {
 export type BulkImportPreviewRow = {
   rowNumber: number
   externalId: string
+  phone: string
   fullName: string
   role: string
   categoryName: string
@@ -38,6 +41,7 @@ export type BulkImportGroupMeta = {
 export type BulkImportContext = {
   categoryNamesLower: Set<string>
   externalIdsInUse: Set<string>
+  phonesInUse: Set<string>
   /** Vacío si no hay torneo seleccionado en la UI de importación */
   groupsByNorm: Map<string, BulkImportGroupMeta>
 }
@@ -84,6 +88,7 @@ export function buildBulkImportPreview(
 ): BulkImportPreviewRow[] {
   const preview: BulkImportPreviewRow[] = []
   const seenExt = new Set<string>()
+  const seenPhones = new Set<string>()
   const passwordCounts = new Map<string, number>()
   const groupLive = new Map<string, number>()
   const draftGroupCounts = new Map<string, number>()
@@ -94,6 +99,9 @@ export function buildBulkImportPreview(
   for (const row of rows) {
     const messages: string[] = []
     const ext = row.externalId.trim()
+    const phoneRaw = row.phone.trim()
+    const phoneNorm = normalizePhone(phoneRaw)
+    const phoneDigits = phoneNorm.ok ? phoneNorm.digits : ''
     const name = row.fullName.trim()
     const pwd = String(row.password ?? '').trim()
     const cRaw = normalizeImportLabel(row.categoryName)
@@ -113,13 +121,21 @@ export function buildBulkImportPreview(
       messages.push('No puedes asignar super_admin desde la importación (requiere super admin).')
     }
 
-    if (!ext) messages.push('ID obligatorio.')
+    if (!phoneRaw) {
+      messages.push('Celular obligatorio.')
+    } else if (!phoneNorm.ok) {
+      messages.push(phoneNorm.error)
+    }
+
     if (!name) messages.push('Nombre obligatorio.')
     if (!cRaw) messages.push('Categoría obligatoria.')
+
     const idExists = ext ? context.externalIdsInUse.has(ext.toLowerCase()) : false
+    const phoneExists = phoneDigits ? context.phonesInUse.has(phoneDigits) : false
+
     if (!pwd) {
-      if (!idExists) {
-        messages.push('Contraseña obligatoria (8 dígitos numéricos).')
+      if (!idExists && !phoneExists) {
+        messages.push('Contraseña obligatoria (8 dígitos numéricos) para altas nuevas.')
       } else {
         messages.push('Sin contraseña en archivo: se conservará la contraseña actual del usuario.')
       }
@@ -130,10 +146,21 @@ export function buildBulkImportPreview(
       passwordCounts.set(pwd, n)
       if (n > 1) messages.push('La misma contraseña se repite en otra fila del archivo.')
     }
-    if (idExists) {
+
+    if (idExists || phoneExists) {
       messages.push(
-        'ID ya en el sistema: esta fila se procesará como actualización (solo se cambia la contraseña si indicas una nueva válida en el archivo).',
+        'Este registro ya existe en el sistema (por ID y/o celular): se procesará como actualización si no hay conflictos.',
       )
+    }
+
+    if (phoneDigits) {
+      if (seenPhones.has(phoneDigits)) messages.push('Celular duplicado en el archivo.')
+      seenPhones.add(phoneDigits)
+    }
+
+    if (ext) {
+      if (seenExt.has(ext.toLowerCase())) messages.push('ID duplicado en el archivo.')
+      seenExt.add(ext.toLowerCase())
     }
 
     const wantsGroup = Boolean(gRaw)
@@ -149,9 +176,9 @@ export function buildBulkImportPreview(
         if (grp) {
           const current = groupLive.get(grp.id) ?? grp.playerCount
           if (current >= grp.maxPlayers) {
-            if (idExists) {
+            if (idExists || phoneExists) {
               messages.push(
-                `Cupo: el grupo “${gRaw}” está al máximo (${grp.maxPlayers}); si este ID ya está inscrito ahí, no hace falta plaza libre.`,
+                `Cupo: el grupo “${gRaw}” está al máximo (${grp.maxPlayers}); si este jugador ya está inscrito ahí, puede no aplicar.`,
               )
             } else {
               messages.push(`El grupo “${gRaw}” está lleno (${grp.maxPlayers} jugadores).`)
@@ -163,9 +190,9 @@ export function buildBulkImportPreview(
           const curDraft = draftGroupCounts.get(key) ?? 0
           const maxNew = 5
           if (curDraft >= maxNew) {
-            if (idExists) {
+            if (idExists || phoneExists) {
               messages.push(
-                `Cupo: el grupo nuevo “${gRaw}” quedaría al máximo (${maxNew}) con este lote; si este ID ya pertenece a ese grupo, puede no aplicar.`,
+                `Cupo: el grupo nuevo “${gRaw}” quedaría al máximo (${maxNew}) con este lote; si este jugador ya pertenece a ese grupo, puede no aplicar.`,
               )
             } else {
               messages.push(
@@ -183,11 +210,6 @@ export function buildBulkImportPreview(
           messages.push(`El grupo “${gRaw}” no existe en el torneo seleccionado.`)
         }
       }
-    }
-
-    if (ext) {
-      if (seenExt.has(ext.toLowerCase())) messages.push('ID duplicado en el archivo.')
-      seenExt.add(ext.toLowerCase())
     }
 
     const catOk = context.categoryNamesLower.has(cRaw.toLowerCase())
@@ -211,6 +233,9 @@ export function buildBulkImportPreview(
       'está lleno',
       'pj:',
       'pts:',
+      'superaría el cupo',
+      'no puede tener más',
+      'debe tener al menos',
     ]
     if (messages.some((m) => hard.some((h) => m.toLowerCase().includes(h)))) state = 'error'
     else if (messages.length > 0) state = 'warning'
@@ -218,6 +243,7 @@ export function buildBulkImportPreview(
     preview.push({
       rowNumber: row.rowNumber,
       externalId: ext,
+      phone: phoneDigits || phoneRaw,
       fullName: name,
       password: pwd,
       role,

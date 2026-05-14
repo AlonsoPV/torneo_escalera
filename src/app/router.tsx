@@ -16,13 +16,13 @@ import { AdminRulesPage } from '@/pages/admin/AdminRulesPage'
 import { AdminSettingsPage } from '@/pages/admin/AdminSettingsPage'
 import { AdminTournamentsPage } from '@/pages/admin/AdminTournamentsPage'
 import { AdminUsersPage } from '@/pages/admin/AdminUsersPage'
-import { AdminCategoriesPage } from '@/pages/admin/AdminCategoriesPage'
 import { NextTournamentPage } from '@/pages/admin/NextTournamentPage'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
 import { TournamentDashboardPage } from '@/pages/dashboard/TournamentDashboardPage'
 import { TournamentSimulationPage } from '@/pages/simulation/TournamentSimulationPage'
+import { PlayerAccountPage } from '@/pages/player/PlayerAccountPage'
 import { PlayerDashboardPage } from '@/pages/player/PlayerDashboardPage'
 
 export const router = createBrowserRouter([
@@ -46,6 +46,7 @@ export const router = createBrowserRouter([
           { path: 'simulation', element: <TournamentSimulationPage /> },
           { path: 'dashboard', element: <TournamentDashboardPage /> },
           { path: 'player', element: <PlayerDashboardPage /> },
+          { path: 'player/cuenta', element: <PlayerAccountPage /> },
           { path: 'tournaments/:tournamentId/:tournamentSlug', element: <Navigate to="/dashboard" replace /> },
           { path: 'tournaments/:tournamentId', element: <Navigate to="/dashboard" replace /> },
           { path: 'tournaments', element: <Navigate to="/dashboard" replace /> },
@@ -66,7 +67,6 @@ export const router = createBrowserRouter([
                   { path: 'results', element: <AdminResultsPage /> },
                   { path: 'results/import', element: <AdminMatchResultsImportPage /> },
                   { path: 'users', element: <AdminUsersPage /> },
-                  { path: 'categories', element: <AdminCategoriesPage /> },
                   { path: 'notifications', element: <AdminNotificationsPage /> },
                   { path: 'exports', element: <AdminExportsPage /> },
                   { path: 'settings', element: <AdminSettingsPage /> },

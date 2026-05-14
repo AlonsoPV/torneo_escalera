@@ -28,7 +28,7 @@ const FILTER_CONTROL_BASE =
 
 function chipTriggerClass(active: boolean) {
   return cn(
-    'h-auto min-h-10 max-w-[min(100%,18rem)] shrink-0 px-2.5 py-1.5 sm:min-h-8',
+    'h-auto min-h-10 min-w-0 max-w-[min(100%,18rem)] shrink-0 px-2.5 py-1.5 sm:min-h-8',
     FILTER_CONTROL_BASE,
     '*:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate *:data-[slot=select-value]:font-medium *:data-[slot=select-value]:text-foreground',
     active && 'border-emerald-500/50 bg-emerald-500/[0.06] ring-1 ring-emerald-500/15',
@@ -47,25 +47,6 @@ function labelForTournamentId(id: unknown, tournaments: Tournament[]): string {
   if (id == null || id === '') return '—'
   const s = String(id)
   return tournaments.find((t) => t.id === s)?.name ?? '—'
-}
-
-function labelForGroupId(id: unknown, groups: Group[]): string {
-  if (id == null || id === '' || id === 'all') return 'Todos'
-  const s = String(id)
-  return groups.find((g) => g.id === s)?.name ?? '—'
-}
-
-function labelForGroupCategoryId(id: unknown, categories: GroupCategory[]): string {
-  if (id == null || id === '' || id === 'all') return 'Todas'
-  if (id === 'none') return 'Sin categoría'
-  const s = String(id)
-  return categories.find((c) => c.id === s)?.name ?? '—'
-}
-
-function labelForMatchStatus(v: unknown): string {
-  if (v == null || v === '' || v === 'all') return 'Todos'
-  const s = String(v) as TournamentDashboardMatchStatusFilter
-  return MATCH_FILTER_OPTIONS.find((o) => o.value === s)?.label ?? 'Todos'
 }
 
 export function TournamentFiltersBar({
@@ -107,6 +88,17 @@ export function TournamentFiltersBar({
   const filtersActive =
     groupCategoryId !== 'all' || groupId !== 'all' || matchStatus !== 'all'
   const tournamentName = labelForTournamentId(tournamentId, tournaments)
+  /** Texto mostrado en el chip; evita que Base UI muestre el UUID si falla el `label` del ítem. */
+  const tournamentChipLabel = tournaments.find((t) => t.id === tournamentId)?.name
+  const groupCategoryChipLabel =
+    groupCategoryId === 'all'
+      ? undefined
+      : groupCategoryId === 'none'
+        ? 'Sin categoría'
+        : sortedCategories.find((c) => c.id === groupCategoryId)?.name
+  const groupChipLabel = groupId === 'all' ? undefined : groups.find((g) => g.id === groupId)?.name
+  const matchStatusChipLabel =
+    matchStatus === 'all' ? undefined : MATCH_FILTER_OPTIONS.find((o) => o.value === matchStatus)?.label
 
   return (
     <Card className="border-border/80 shadow-sm ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
@@ -131,14 +123,14 @@ export function TournamentFiltersBar({
                 <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
                   <span className="shrink-0 text-muted-foreground">Torneo</span>
                   <span className="shrink-0 text-foreground">:</span>
-                  <SelectValue placeholder="—" className="min-w-0 truncate">
-                    {labelForTournamentId(tournamentId, tournaments)}
+                  <SelectValue placeholder="—" className="min-w-0 flex-1 truncate">
+                    {tournamentChipLabel ?? undefined}
                   </SelectValue>
                 </span>
               </SelectTrigger>
               <SelectContent>
                 {tournaments.map((x) => (
-                  <SelectItem key={x.id} value={x.id}>
+                  <SelectItem key={x.id} value={x.id} label={x.name}>
                     {x.name}
                   </SelectItem>
                 ))}
@@ -159,16 +151,20 @@ export function TournamentFiltersBar({
                 <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
                   <span className="shrink-0 text-muted-foreground">Categoría</span>
                   <span className="shrink-0 text-foreground">:</span>
-                  <SelectValue placeholder="Todas" className="min-w-0 truncate">
-                    {labelForGroupCategoryId(groupCategoryId, groupCategories)}
+                  <SelectValue placeholder="Todas" className="min-w-0 flex-1 truncate">
+                    {groupCategoryChipLabel ?? undefined}
                   </SelectValue>
                 </span>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
-                <SelectItem value="none">Sin categoría</SelectItem>
+                <SelectItem value="all" label="Todas">
+                  Todas
+                </SelectItem>
+                <SelectItem value="none" label="Sin categoría">
+                  Sin categoría
+                </SelectItem>
                 {sortedCategories.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
+                  <SelectItem key={c.id} value={c.id} label={c.name}>
                     {c.name}
                   </SelectItem>
                 ))}
@@ -182,15 +178,17 @@ export function TournamentFiltersBar({
                 <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
                   <span className="shrink-0 text-muted-foreground">Grupo</span>
                   <span className="shrink-0 text-foreground">:</span>
-                  <SelectValue placeholder="Todos" className="min-w-0 truncate">
-                    {labelForGroupId(groupId, groups)}
+                  <SelectValue placeholder="Todos" className="min-w-0 flex-1 truncate">
+                    {groupChipLabel ?? undefined}
                   </SelectValue>
                 </span>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="all" label="Todos">
+                  Todos
+                </SelectItem>
                 {groups.map((g) => (
-                  <SelectItem key={g.id} value={g.id}>
+                  <SelectItem key={g.id} value={g.id} label={g.name}>
                     {g.name}
                   </SelectItem>
                 ))}
@@ -211,14 +209,14 @@ export function TournamentFiltersBar({
                 <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
                   <span className="shrink-0 text-muted-foreground">Estado</span>
                   <span className="shrink-0 text-foreground">:</span>
-                  <SelectValue placeholder="Todos" className="min-w-0 truncate">
-                    {labelForMatchStatus(matchStatus)}
+                  <SelectValue placeholder="Todos" className="min-w-0 flex-1 truncate">
+                    {matchStatusChipLabel ?? undefined}
                   </SelectValue>
                 </span>
               </SelectTrigger>
               <SelectContent>
                 {MATCH_FILTER_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
+                  <SelectItem key={o.value} value={o.value} label={o.label}>
                     {o.label}
                   </SelectItem>
                 ))}

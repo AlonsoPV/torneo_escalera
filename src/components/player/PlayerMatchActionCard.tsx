@@ -61,19 +61,23 @@ export function PlayerMatchActionCard({
 
   const rival = getOpponentInMatch(match, myGroupPlayerId, players)
   const perspectiveScore = getPlayerPerspectiveScore(match, userId)
-  const userIsA = isMatchPlayerA(match, userId)
   const canSubmit = rules.allow_player_score_entry && canSubmitScore(match, userId)
   const canAccept = rules.allow_player_score_entry && canAcceptScore(match, userId)
   const canReject = rules.allow_player_score_entry && canRejectScore(match, userId)
+
+  const iSubmittedPending =
+    match.status === 'score_submitted' &&
+    (match.score_submitted_by === userId ||
+      (match.score_submitted_by == null && isMatchPlayerA(match, userId)))
 
   const actionCopy = (() => {
     if (match.status === 'closed') return 'Resultado oficial. Este marcador ya impacta el ranking.'
     if (match.status === 'cancelled') return 'Este partido fue cancelado.'
     if (match.status === 'score_disputed') {
-      return userIsA ? 'El rival rechazó el marcador. Revisa el motivo y corrige para reenviar.' : 'Marcador en revisión.'
+      return canSubmit ? 'El rival rechazó el marcador. Revisa el motivo y corrige para reenviar.' : 'Marcador en revisión.'
     }
     if (match.status === 'score_submitted') {
-      return userIsA
+      return iSubmittedPending
         ? 'Marcador enviado a tu rival. Cuando lo acepte, el resultado quedará confirmado por jugadores y pendiente del organizador.'
         : 'Tu rival envió el marcador. Revísalo y acéptalo si es correcto, o recházalo para que lo corrija.'
     }
@@ -104,7 +108,9 @@ export function PlayerMatchActionCard({
     setBusy(true)
     try {
       await rejectPlayerScore({ matchId: match.id, disputeReason: reason })
-      toast.message('Marcador rechazado', { description: 'El Jugador A podrá corregir y reenviar.' })
+      toast.message('Marcador rechazado', {
+        description: 'El jugador que envió el marcador podrá corregirlo y reenviarlo.',
+      })
       setRejectOpen(false)
       setRejectReason('')
       await onAfterAction()
@@ -134,7 +140,7 @@ export function PlayerMatchActionCard({
         ) : null}
       </div>
 
-      {match.status === 'score_disputed' && userIsA && match.dispute_reason ? (
+      {match.status === 'score_disputed' && canSubmit && match.dispute_reason ? (
         <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
           <p className="text-xs font-semibold uppercase tracking-wide">Motivo del rechazo</p>
           <p className="mt-1">{match.dispute_reason}</p>

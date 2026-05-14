@@ -17,10 +17,9 @@ import {
   X,
 } from 'lucide-react'
 import { Fragment, useCallback, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -92,17 +91,17 @@ function formatBytes(n: number): string {
 }
 
 function downloadImportReportCsv(result: BulkImportMergedResponse, fileLabel: string) {
-  const headers = ['Fila', 'ID', 'Nombre', 'Estado', 'Mensaje', 'Email', 'Operación']
+  const headers = ['Fila', 'ID', 'Celular', 'Nombre', 'Estado', 'Mensaje', 'Operación']
   const lines = [
     headers.join(','),
     ...result.results.map((r) => {
       const cells = [
         String(r.rowNumber),
         r.externalId,
+        r.phone ?? '',
         r.fullName,
         r.status === 'success' ? 'OK' : 'Error',
         r.error ?? '',
-        r.email ?? '',
         r.operation === 'updated' ? 'Actualizado' : r.operation === 'created' ? 'Creado' : '',
       ]
       return cells.map((c) => (/[,"\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c)).join(',')
@@ -243,6 +242,14 @@ export function BulkImportWizard() {
     return tournamentsQ.data?.find((t) => t.id === auditTournamentId)?.name ?? 'Torneo'
   }, [auditTournamentId, tournamentsQ.data])
 
+  /** Texto del trigger alineado con cada SelectItem (nombre · estado). */
+  const auditTournamentSelectLabel = useMemo(() => {
+    if (!auditTournamentId.trim()) return undefined
+    const t = tournamentsQ.data?.find((x) => x.id === auditTournamentId)
+    if (!t) return undefined
+    return `${t.name} · ${tournamentStatusLabel(t.status)}`
+  }, [auditTournamentId, tournamentsQ.data])
+
   const bumpReachable = useCallback((n: number) => {
     setMaxReachableStep((prev) => Math.max(prev, n))
   }, [])
@@ -275,6 +282,7 @@ export function BulkImportWizard() {
         .map((r) => ({
           rowNumber: r.rowNumber,
           externalId: r.externalId,
+          phone: r.phone,
           fullName: r.fullName,
           role: r.role,
           categoryName: r.categoryName,
@@ -383,7 +391,7 @@ export function BulkImportWizard() {
     const rows: CredentialExportRow[] = ok.map((r) => ({
       ID: r.externalId,
       Nombre: r.fullName,
-      Email: r.email,
+      Celular: r.phone ?? '',
       Contraseña: r.temporaryPassword === '—' ? '(sin cambio)' : r.temporaryPassword,
       Categoría: r.categoryName,
       Acción: r.operation === 'updated' ? 'Actualizado' : 'Creado',
@@ -444,16 +452,6 @@ export function BulkImportWizard() {
                 <Download className="size-4" />
                 Plantilla CSV
               </Button>
-              <Link
-                to="/admin/categories"
-                className={buttonVariants({
-                  variant: 'outline',
-                  size: 'sm',
-                  className: 'inline-flex h-8 items-center justify-center gap-2 px-3',
-                })}
-              >
-                Categorías
-              </Link>
               <Button type="button" variant="ghost" size="sm" className="text-slate-600" onClick={resetAll} disabled={importMut.isPending}>
                 <X className="size-4" />
                 Reiniciar
@@ -493,16 +491,21 @@ export function BulkImportWizard() {
                     setResult(null)
                   }}
                 >
-                  <SelectTrigger className="h-11 border-slate-200 bg-white">
-                    <SelectValue placeholder="Ninguno" />
+                  <SelectTrigger className="h-11 min-w-[180px] w-auto border-slate-200 bg-white">
+                    <SelectValue placeholder="Ninguno">{auditTournamentSelectLabel ?? undefined}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">Ninguno (pool global)</SelectItem>
-                    {(tournamentsQ.data ?? []).map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.name} · {tournamentStatusLabel(t.status)}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="__none__" label="Ninguno (pool global)">
+                      Ninguno (pool global)
+                    </SelectItem>
+                    {(tournamentsQ.data ?? []).map((t) => {
+                      const rowLabel = `${t.name} · ${tournamentStatusLabel(t.status)}`
+                      return (
+                        <SelectItem key={t.id} value={t.id} label={rowLabel}>
+                          {rowLabel}
+                        </SelectItem>
+                      )
+                    })}
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-slate-500">Necesario si el archivo asigna grupos a un torneo concreto.</p>
@@ -723,6 +726,7 @@ export function BulkImportWizard() {
                         <TableRow className="bg-slate-50/95 hover:bg-slate-50/95">
                           <TableHead className="w-10">#</TableHead>
                           <TableHead>ID</TableHead>
+                          <TableHead>Celular</TableHead>
                           <TableHead>Nombre</TableHead>
                           <TableHead>Rol</TableHead>
                           <TableHead>Categoría</TableHead>
@@ -741,7 +745,8 @@ export function BulkImportWizard() {
                             )}
                           >
                             <TableCell className="tabular-nums text-slate-500">{r.rowNumber}</TableCell>
-                            <TableCell className="font-mono text-xs">{r.externalId}</TableCell>
+                            <TableCell className="font-mono text-xs">{r.externalId || '—'}</TableCell>
+                            <TableCell className="font-mono text-xs tabular-nums">{r.phone || '—'}</TableCell>
                             <TableCell className="text-sm">{r.fullName}</TableCell>
                             <TableCell className="text-sm">{roleLabel(r.role)}</TableCell>
                             <TableCell className="text-sm">{r.categoryName}</TableCell>
@@ -935,6 +940,7 @@ export function BulkImportWizard() {
                       <TableRow className="bg-red-50/80">
                         <TableHead className="w-10">#</TableHead>
                         <TableHead>ID</TableHead>
+                        <TableHead>Celular</TableHead>
                         <TableHead>Nombre</TableHead>
                         <TableHead>Motivo</TableHead>
                       </TableRow>
@@ -943,9 +949,10 @@ export function BulkImportWizard() {
                       {result.results
                         .filter((r) => r.status === 'error')
                         .map((r) => (
-                          <TableRow key={`${r.rowNumber}-${r.externalId}`}>
+                          <TableRow key={`${r.rowNumber}-${r.externalId}-${r.phone}`}>
                             <TableCell className="tabular-nums">{r.rowNumber}</TableCell>
-                            <TableCell className="font-mono text-xs">{r.externalId}</TableCell>
+                            <TableCell className="font-mono text-xs">{r.externalId || '—'}</TableCell>
+                            <TableCell className="font-mono text-xs">{r.phone ?? '—'}</TableCell>
                             <TableCell>{r.fullName}</TableCell>
                             <TableCell className="text-xs text-red-800">{r.error ?? '—'}</TableCell>
                           </TableRow>

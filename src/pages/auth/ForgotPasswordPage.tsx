@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { ArrowLeft, Loader2, Mail, Trophy } from 'lucide-react'
+import { ArrowLeft, Loader2, Trophy } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, Navigate } from 'react-router-dom'
@@ -10,14 +10,15 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { requestPasswordReset } from '@/lib/auth'
+import { getPasswordResetRedirectUrl } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { invokePasswordResetRequest } from '@/services/authEdge'
 import { useAuthStore } from '@/stores/authStore'
 import { AuthPageShell } from '@/pages/auth/AuthPageShell'
 
 const schema = z.object({
-  email: z.string().min(1, 'Introduce tu email').email('Email no válido'),
+  identifier: z.string().min(1, 'Introduce tu celular o correo'),
 })
 
 type Form = z.infer<typeof schema>
@@ -27,7 +28,7 @@ export function ForgotPasswordPage() {
   const initialized = useAuthStore((s) => s.initialized)
   const [sent, setSent] = useState(false)
 
-  const form = useForm<Form>({ resolver: zodResolver(schema), defaultValues: { email: '' } })
+  const form = useForm<Form>({ resolver: zodResolver(schema), defaultValues: { identifier: '' } })
 
   if (initialized && session) {
     return <Navigate to="/" replace />
@@ -55,11 +56,11 @@ export function ForgotPasswordPage() {
 
   const submit = form.handleSubmit(async (values) => {
     try {
-      await requestPasswordReset(values.email)
+      await invokePasswordResetRequest(values.identifier.trim(), getPasswordResetRedirectUrl())
       setSent(true)
-      toast.success('Correo enviado')
+      toast.success('Si existe una cuenta con ese dato, revisa tu correo.')
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'No se pudo enviar el correo')
+      toast.error(e instanceof Error ? e.message : 'No se pudo procesar la solicitud')
     }
   })
 
@@ -76,8 +77,8 @@ export function ForgotPasswordPage() {
             </div>
             <CardDescription className="text-base leading-relaxed">
               {sent
-                ? 'Si existe una cuenta con ese correo, recibirás un enlace para elegir una nueva contraseña.'
-                : 'Indica el email de tu cuenta y te enviaremos un enlace de recuperación.'}
+                ? 'Si existe una cuenta con ese número o correo, recibirás un enlace para elegir una nueva contraseña.'
+                : 'Indica tu número de celular o el correo de recuperación que registraste.'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -97,28 +98,22 @@ export function ForgotPasswordPage() {
             ) : (
               <form className="space-y-5" onSubmit={submit} noValidate>
                 <div className="space-y-2">
-                  <Label htmlFor="forgot-email">Email</Label>
-                  <div className="relative">
-                    <Mail
-                      className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                      aria-hidden
-                    />
-                    <Input
-                      id="forgot-email"
-                      type="email"
-                      autoComplete="email"
-                      placeholder="tu@email.com"
-                      className={cn(
-                        'h-10 pl-9',
-                        form.formState.errors.email && 'border-destructive aria-invalid:border-destructive',
-                      )}
-                      aria-invalid={!!form.formState.errors.email}
-                      {...form.register('email')}
-                    />
-                  </div>
-                  {form.formState.errors.email ? (
+                  <Label htmlFor="forgot-id">Celular o correo</Label>
+                  <Input
+                    id="forgot-id"
+                    type="text"
+                    autoComplete="username"
+                    placeholder="5512345678 o tu@correo.com"
+                    className={cn(
+                      'h-10',
+                      form.formState.errors.identifier && 'border-destructive aria-invalid:border-destructive',
+                    )}
+                    aria-invalid={!!form.formState.errors.identifier}
+                    {...form.register('identifier')}
+                  />
+                  {form.formState.errors.identifier ? (
                     <p className="text-xs text-destructive" role="alert">
-                      {form.formState.errors.email.message}
+                      {form.formState.errors.identifier.message}
                     </p>
                   ) : null}
                 </div>

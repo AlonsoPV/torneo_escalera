@@ -6,15 +6,17 @@ import { MatchHistoryCard } from '@/components/player/MatchHistoryCard'
 import { PlayerActionSection } from '@/components/player/PlayerActionSection'
 import { PlayerGroupCard } from '@/components/player/PlayerGroupCard'
 import { PlayerHeaderCard } from '@/components/player/PlayerHeaderCard'
+import { PlayerRecoveryEmailBanner } from '@/components/player/PlayerRecoveryEmailBanner'
 import { PlayerStandingMiniCard } from '@/components/player/PlayerStandingMiniCard'
 import { PlayerSummaryCards } from '@/components/player/PlayerSummaryCards'
 import { PlayerTournamentMovementCard } from '@/components/player/PlayerTournamentMovementCard'
 import { PlayerTournamentSelector } from '@/components/player/PlayerTournamentSelector'
 import { buttonVariants } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { recoveryEmailComplete } from '@/lib/profileEmail'
 import { tournamentPathWithGroup } from '@/lib/tournamentUrl'
 import { isAdminRole } from '@/lib/permissions'
-import { canAcceptScore, canSubmitScore, isMatchPlayerA } from '@/lib/matchStatus'
+import { canAcceptScore, canSubmitScore } from '@/lib/matchStatus'
 import { defaultGroupIdFromContexts, listPlayerDashboardContexts } from '@/services/dashboardPlayer'
 import { getPlayerViewModelSession } from '@/services/playerViewModel'
 import { useAuthStore } from '@/stores/authStore'
@@ -199,10 +201,8 @@ export function PlayerDashboardPage() {
   const membership = data.membership
   const players = data.players
   const groupHubHref = tournamentPathWithGroup(t, g.id)
-  const actionRequired = upcoming.filter((match) =>
-    canSubmitScore(match, userId) ||
-    canAcceptScore(match, userId) ||
-    (match.status === 'score_disputed' && isMatchPlayerA(match, userId)),
+  const actionRequired = upcoming.filter(
+    (match) => canSubmitScore(match, userId) || canAcceptScore(match, userId),
   )
   const refreshPlayerDashboard = async () => {
     await qc.invalidateQueries({ queryKey: ['playerContexts', userId] })
@@ -231,6 +231,8 @@ export function PlayerDashboardPage() {
           ) : undefined
         }
       />
+
+      {profile && !recoveryEmailComplete(profile) ? <PlayerRecoveryEmailBanner /> : null}
 
       <PlayerSummaryCards summary={summary} />
 

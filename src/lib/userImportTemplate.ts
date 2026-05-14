@@ -13,13 +13,13 @@ export function isValidImportNumericPassword(s: string): boolean {
   return /^\d{8}$/.test(String(s ?? '').trim())
 }
 
-const TEMPLATE_HEADERS = ['ID', 'Nombre', 'Rol', 'Categoría', 'Contraseña', 'Grupo', 'PJ', 'Pts'] as const
+const TEMPLATE_HEADERS = ['ID', 'Nombre', 'Celular', 'Rol', 'Categoría', 'Contraseña', 'Grupo', 'PJ', 'Pts'] as const
 
 const SAMPLE_ROWS = [
-  ['001', 'Carlos Ramírez', 'player', 'Varonil', '10000001', 'Grupo A', '2', '6'],
-  ['002', 'Rodrigo Pérez', 'player', 'Varonil', '10000002', '', '', ''],
-  ['003', 'Ana López', 'player', 'Femenil', '10000003', '', '0', '3'],
-  ['010', 'Actualización (ID ya en sistema)', 'player', 'Varonil', '', '', '', ''],
+  ['001', 'Carlos Ramírez', '5512345678', 'player', 'Varonil', '10000001', 'Grupo A', '2', '6'],
+  ['002', 'Rodrigo Pérez', '5587654321', 'player', 'Varonil', '10000002', '', '', ''],
+  ['003', 'Ana López', '5511122233', 'player', 'Femenil', '10000003', '', '0', '3'],
+  ['', 'Actualización solo celular', '5599887766', 'player', 'Varonil', '', '', '', ''],
 ]
 
 /** Descarga plantilla CSV (UTF-8 con BOM para Excel). */
@@ -43,14 +43,14 @@ export function downloadUserImportTemplate(): void {
 export type CredentialExportRow = {
   ID: string
   Nombre: string
-  Email: string
+  Celular: string
   Contraseña: string
   Categoría: string
   Acción: string
 }
 
 export function downloadBulkCredentialsCsv(rows: CredentialExportRow[]): void {
-  const headers: (keyof CredentialExportRow)[] = ['ID', 'Nombre', 'Email', 'Contraseña', 'Categoría', 'Acción']
+  const headers: (keyof CredentialExportRow)[] = ['ID', 'Nombre', 'Celular', 'Contraseña', 'Categoría', 'Acción']
   const lines = [
     headers.join(','),
     ...rows.map((r) =>

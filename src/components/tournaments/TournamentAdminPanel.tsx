@@ -31,6 +31,13 @@ import {
 import { getAdminGroups } from '@/services/admin'
 import type { Group } from '@/types/database'
 
+function profileAssignLabel(p: { full_name?: string | null; email?: string | null }) {
+  const name = p.full_name?.trim()
+  const mail = p.email?.trim()
+  if (name && mail) return `${name} · ${mail}`
+  return name || mail || 'Usuario sin nombre'
+}
+
 const rulesSchema = z.object({
   best_of_sets: z.coerce.number().refine((n) => [1, 3, 5].includes(n)),
   set_points: z.coerce.number().int().min(1),
@@ -104,9 +111,6 @@ export function TournamentAdminPanel(props: {
     groups[0]?.id ?? null,
   )
 
-  const selectedGroup = groups.find((g) => g.id === selectedGroupId) ?? null
-  const bestOfSets = rulesForm.watch('best_of_sets')
-
   useEffect(() => {
     if (!selectedGroupId && groups[0]?.id) setSelectedGroupId(groups[0].id)
   }, [groups, selectedGroupId])
@@ -122,11 +126,6 @@ export function TournamentAdminPanel(props: {
   })
 
   const assignUserId = assignForm.watch('userId')
-  const selectedAssignProfile = profilesQ.data?.find((x) => x.id === assignUserId)
-  const assignUserLabel =
-    assignUserId && selectedAssignProfile
-      ? (selectedAssignProfile.full_name ?? selectedAssignProfile.email ?? assignUserId)
-      : null
 
   const invalidateAll = async () => {
     await qc.invalidateQueries({ queryKey: ['tournament', tournamentId] })
@@ -261,13 +260,19 @@ export function TournamentAdminPanel(props: {
                       rulesForm.setValue('best_of_sets', Number(v) as 1 | 3 | 5)
                     }
                   >
-                    <SelectTrigger>
-                      <SelectValue>{String(bestOfSets)}</SelectValue>
+                    <SelectTrigger className="min-w-[180px] w-full max-w-md">
+                      <SelectValue placeholder="Sets" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1">1</SelectItem>
-                      <SelectItem value="3">3</SelectItem>
-                      <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="1" label="1">
+                      1
+                    </SelectItem>
+                    <SelectItem value="3" label="3">
+                      3
+                    </SelectItem>
+                    <SelectItem value="5" label="5">
+                      5
+                    </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -353,14 +358,12 @@ export function TournamentAdminPanel(props: {
               value={selectedGroupId ?? ''}
               onValueChange={(v) => setSelectedGroupId(v)}
             >
-              <SelectTrigger className="w-full min-w-0 max-w-md">
-                <SelectValue placeholder="Selecciona grupo">
-                  {selectedGroup ? selectedGroup.name : null}
-                </SelectValue>
+              <SelectTrigger className="min-w-[180px] w-full max-w-md">
+                <SelectValue placeholder="Selecciona grupo" />
               </SelectTrigger>
               <SelectContent>
                 {groups.map((g) => (
-                  <SelectItem key={g.id} value={g.id}>
+                  <SelectItem key={g.id} value={g.id} label={g.name}>
                     {g.name}
                   </SelectItem>
                 ))}
@@ -382,13 +385,13 @@ export function TournamentAdminPanel(props: {
                   if (p) assignForm.setValue('displayName', p.full_name ?? p.email ?? '')
                 }}
               >
-                <SelectTrigger className="w-full min-w-0 max-w-md">
-                  <SelectValue placeholder="Selecciona usuario">{assignUserLabel}</SelectValue>
+                <SelectTrigger className="min-w-[180px] w-full max-w-md">
+                  <SelectValue placeholder="Selecciona usuario" />
                 </SelectTrigger>
                 <SelectContent>
                   {(profilesQ.data ?? []).map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.full_name?.trim() || p.email?.trim() || 'Usuario sin nombre'}
+                    <SelectItem key={p.id} value={p.id} label={profileAssignLabel(p)}>
+                      {profileAssignLabel(p)}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -1,5 +1,5 @@
 import { KeyRound } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type MouseEventHandler, type ReactElement } from 'react'
 import { toast } from 'sonner'
 
 import { AdminFormModal } from '@/components/admin/shared/AdminFormModal'
@@ -7,24 +7,44 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
+type TriggerProps = ReactElement<{
+  onClick?: MouseEventHandler<HTMLElement>
+}>
+
 export function ChangePasswordModal({
   userId,
   onSubmit,
+  trigger,
+  open,
+  onOpenChange,
 }: {
   userId: string
   onSubmit: (values: { userId: string; newPassword: string }) => void
+  trigger?: TriggerProps | false
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
 
+  const defaultTrigger = (
+    <Button variant="outline" size="sm">
+      <KeyRound className="size-3.5" />
+      Cambiar contraseña
+    </Button>
+  )
+
   return (
     <AdminFormModal
-      trigger={
-        <Button variant="outline" size="sm">
-          <KeyRound className="size-3.5" />
-          Cambiar contraseña
-        </Button>
-      }
+      trigger={trigger === false ? undefined : trigger ?? defaultTrigger}
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          setPassword('')
+          setConfirmPassword('')
+        }
+        onOpenChange?.(nextOpen)
+      }}
       title="Cambiar contraseña"
       description="No se muestran contraseñas actuales. Solo se podrá crear una nueva contraseña temporal."
     >

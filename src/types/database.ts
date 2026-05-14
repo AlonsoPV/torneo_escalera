@@ -9,6 +9,13 @@ export type TournamentMovementType =
   | 'capped_top'
   | 'capped_bottom'
 
+export type TournamentMovementReason =
+  | 'top_2_promote'
+  | 'third_stays'
+  | 'bottom_2_demote'
+  | 'top_group_limit'
+  | 'bottom_group_limit'
+
 export type MatchStatus =
   | 'pending_score'
   | 'score_submitted'
@@ -55,6 +62,9 @@ export interface Database {
           id: string
           full_name: string | null
           email: string | null
+          phone: string | null
+          email_verified: boolean
+          must_complete_email: boolean
           role: UserRole
           created_at: string
           external_id: string | null
@@ -69,6 +79,9 @@ export interface Database {
           id: string
           full_name?: string | null
           email?: string | null
+          phone?: string | null
+          email_verified?: boolean
+          must_complete_email?: boolean
           role?: UserRole
           created_at?: string
           external_id?: string | null
@@ -82,6 +95,9 @@ export interface Database {
         Update: {
           full_name?: string | null
           email?: string | null
+          phone?: string | null
+          email_verified?: boolean
+          must_complete_email?: boolean
           role?: UserRole
           external_id?: string | null
           category_id?: string | null
@@ -104,6 +120,8 @@ export interface Database {
           created_at: string
           previous_tournament_id: string | null
           period_label: string | null
+          finished_at: string | null
+          closed_by: string | null
         }
         Insert: {
           id?: string
@@ -116,6 +134,8 @@ export interface Database {
           created_at?: string
           previous_tournament_id?: string | null
           period_label?: string | null
+          finished_at?: string | null
+          closed_by?: string | null
         }
         Update: {
           name?: string
@@ -126,6 +146,50 @@ export interface Database {
           created_by?: string | null
           previous_tournament_id?: string | null
           period_label?: string | null
+          finished_at?: string | null
+          closed_by?: string | null
+        }
+      }
+      tournament_final_standings: {
+        Row: {
+          id: string
+          tournament_id: string
+          group_id: string
+          group_order_index: number
+          player_id: string
+          position: number
+          points: number
+          games_for: number
+          games_against: number
+          games_difference: number
+          wins: number
+          losses: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          tournament_id: string
+          group_id: string
+          group_order_index: number
+          player_id: string
+          position: number
+          points?: number
+          games_for?: number
+          games_against?: number
+          games_difference?: number
+          wins?: number
+          losses?: number
+          created_at?: string
+        }
+        Update: {
+          group_order_index?: number
+          position?: number
+          points?: number
+          games_for?: number
+          games_against?: number
+          games_difference?: number
+          wins?: number
+          losses?: number
         }
       }
       tournament_movements: {
@@ -142,7 +206,11 @@ export interface Database {
           games_for: number
           games_difference: number
           movement_type: TournamentMovementType
+          movement_reason: TournamentMovementReason | null
           raw_movement: string | null
+          to_group_id: string | null
+          from_group_order_index: number | null
+          to_group_order_index: number | null
           created_at: string
         }
         Insert: {
@@ -153,11 +221,15 @@ export interface Database {
           from_category_id?: string | null
           to_category_id?: string | null
           from_group_id?: string | null
+          to_group_id?: string | null
+          from_group_order_index?: number | null
+          to_group_order_index?: number | null
           from_position: number
           points?: number
           games_for?: number
           games_difference?: number
           movement_type: TournamentMovementType
+          movement_reason?: TournamentMovementReason | null
           raw_movement?: string | null
           created_at?: string
         }
@@ -165,11 +237,15 @@ export interface Database {
           from_category_id?: string | null
           to_category_id?: string | null
           from_group_id?: string | null
+          to_group_id?: string | null
+          from_group_order_index?: number | null
+          to_group_order_index?: number | null
           from_position?: number
           points?: number
           games_for?: number
           games_difference?: number
           movement_type?: TournamentMovementType
+          movement_reason?: TournamentMovementReason | null
           raw_movement?: string | null
         }
       }

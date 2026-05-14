@@ -1,3 +1,4 @@
+import { invokeAdminChangeUserPassword, invokeAdminCreateUser } from '@/services/authEdge'
 import { isMissingPostgrestRelationError } from '@/lib/postgrestErrors'
 import { supabase } from '@/lib/supabase'
 import { addGroupPlayer, removeGroupPlayer as removeGroupMembership } from '@/services/groups'
@@ -56,10 +57,12 @@ export type AdminOverviewData = {
 
 export type CreateUserInput = {
   fullName: string
-  email: string
+  phone: string
   temporaryPassword: string
   role: UserRole
+  categoryId: string
   groupId?: string
+  tournamentId?: string | null
 }
 
 export type ChangePasswordInput = {
@@ -127,34 +130,77 @@ function buildMatchRecords(input: {
 
 export async function getAdminOverviewData(): Promise<AdminOverviewData> {
   const data = await listAllAdminData()
-  const matchRecords = buildMatchRecords(data)
-  const playerCounts = new Map<string, number>()
+  const activeTournamentsList = data.tournaments.filter((t) => t.status === 'active')
+  const activeIds = new Set(activeTournamentsList.map((t) => t.id))
 
+  if (activeIds.size === 0) {
+    return {
+      totalPlayers: 0,
+      totalGroups: 0,
+      totalMatches: 0,
+      matchesWithoutDate: 0,
+      playedMatches: 0,
+      pendingResults: 0,
+      confirmedResults: 0,
+      incompleteGroups: 0,
+      activeTournaments: 0,
+      totalTournaments: data.tournaments.length,
+      recentMatches: [],
+      pendingActions: [
+        'No hay ningún torneo activo. Activa un torneo en Administración → Torneos para ver métricas del torneo en curso.',
+      ],
+    }
+  }
+
+  const scopedGroups = data.groups.filter((g) => activeIds.has(g.tournament_id))
+  const scopedGroupIds = new Set(scopedGroups.map((g) => g.id))
+  const scopedMatches = data.matches.filter((m) => activeIds.has(m.tournament_id))
+
+  const playerCounts = new Map<string, number>()
   for (const player of data.groupPlayers) {
+    if (!scopedGroupIds.has(player.group_id)) continue
     playerCounts.set(player.group_id, (playerCounts.get(player.group_id) ?? 0) + 1)
   }
 
-  const pendingResults = data.matches.filter((m) =>
+  const distinctPlayersInActive = new Set<string>()
+  for (const player of data.groupPlayers) {
+    if (scopedGroupIds.has(player.group_id)) distinctPlayersInActive.add(player.user_id)
+  }
+
+  const matchRecords = buildMatchRecords({
+    matches: scopedMatches,
+    tournaments: data.tournaments,
+    groups: data.groups,
+    groupPlayers: data.groupPlayers,
+    profiles: data.profiles,
+  })
+
+  const pendingResults = scopedMatches.filter((m) =>
     ['player_confirmed', 'score_disputed'].includes(m.status),
   ).length
-  const totalMatches = data.matches.length
-  const matchesWithoutDate = data.matches.filter((m) => m.status === 'pending_score').length
-  const incompleteGroups = data.groups.filter((g) => (playerCounts.get(g.id) ?? 0) < g.max_players).length
+  const totalMatches = scopedMatches.length
+  const matchesWithoutDate = scopedMatches.filter((m) => m.status === 'pending_score').length
+  const incompleteGroups = scopedGroups.filter((g) => (playerCounts.get(g.id) ?? 0) < g.max_players).length
 
   const pendingActions: string[] = []
+  if (activeTournamentsList.length > 1) {
+    pendingActions.push(
+      `Hay ${activeTournamentsList.length} torneos activos; estas métricas suman todos ellos. Deja solo uno en «activo» si quieres una vista de un único torneo.`,
+    )
+  }
   if (incompleteGroups > 0) pendingActions.push(`${incompleteGroups} grupos requieren jugadores`)
   if (pendingResults > 0) pendingActions.push(`${pendingResults} resultados esperan revisión`)
 
   return {
-    totalPlayers: data.profiles.filter((p) => p.role === 'player').length,
-    totalGroups: data.groups.length,
+    totalPlayers: distinctPlayersInActive.size,
+    totalGroups: scopedGroups.length,
     totalMatches,
     matchesWithoutDate,
-    playedMatches: data.matches.filter((m) => m.status === 'closed').length,
+    playedMatches: scopedMatches.filter((m) => m.status === 'closed').length,
     pendingResults,
-    confirmedResults: data.matches.filter((m) => m.status === 'closed').length,
+    confirmedResults: scopedMatches.filter((m) => m.status === 'closed').length,
     incompleteGroups,
-    activeTournaments: data.tournaments.filter((t) => t.status === 'active').length,
+    activeTournaments: activeTournamentsList.length,
     totalTournaments: data.tournaments.length,
     recentMatches: matchRecords.filter((m) => m.score_raw || m.status !== 'pending_score').slice(0, 5),
     pendingActions,
@@ -419,7 +465,7 @@ export async function getAdminUsers(): Promise<AdminUserRecord[]> {
 
 export async function updateUser(
   userId: string,
-  patch: Partial<Pick<Profile, 'full_name' | 'email' | 'role' | 'status'>>,
+  patch: Partial<Pick<Profile, 'full_name' | 'role' | 'status' | 'category_id'>>,
 ): Promise<void> {
   const { error } = await supabase.from('profiles').update(patch).eq('id', userId)
   if (error) throw error
@@ -437,13 +483,11 @@ export async function deactivateUser(userId: string): Promise<void> {
 }
 
 export async function createUser(input: CreateUserInput): Promise<void> {
-  void input
-  throw new Error('Crear usuarios requiere una Edge Function segura con permisos de servidor.')
+  await invokeAdminCreateUser(input)
 }
 
 export async function changeUserPassword(input: ChangePasswordInput): Promise<void> {
-  void input
-  throw new Error('Cambiar contraseñas requiere una Edge Function segura con permisos de servidor.')
+  await invokeAdminChangeUserPassword({ userId: input.userId, newPassword: input.newPassword })
 }
 
 export { deleteGroup } from '@/services/groups'

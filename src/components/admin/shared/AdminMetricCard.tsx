@@ -15,6 +15,8 @@ export const ADMIN_METRIC_GRID_3 =
 
 /** Tarjeta de métrica admin: fila compacta tipo “stat” en todos los breakpoints; grid define columnas. */
 export type AdminMetricCardProps = {
+  /** Identificador estable para la tarjeta (pruebas / automatización). */
+  id?: string
   label: string
   value: string | number
   /** Ícono como componente Lucide o nodo React. */
@@ -53,6 +55,7 @@ function renderIcon(icon: LucideIcon | ReactNode | undefined): ReactNode {
 }
 
 export function AdminMetricCard({
+  id,
   label,
   value,
   icon,
@@ -68,6 +71,7 @@ export function AdminMetricCard({
 
   return (
     <div
+      id={id}
       className={cn(
         'rounded-2xl border border-slate-200/70 bg-white shadow-sm transition-shadow sm:transition-all',
         'hover:shadow-md sm:hover:-translate-y-0.5 sm:hover:shadow-md',

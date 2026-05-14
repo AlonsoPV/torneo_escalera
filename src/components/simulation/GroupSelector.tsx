@@ -32,12 +32,12 @@ export function GroupSelector(props: Props) {
             if (v) onChange(v)
           }}
         >
-          <SelectTrigger className="h-10 w-[min(100%,14rem)] min-w-0 rounded-xl border-border/80 bg-card shadow-sm">
-            <SelectValue placeholder="Grupo">{active?.name ?? null}</SelectValue>
+          <SelectTrigger className="h-10 min-w-[180px] w-[min(100%,14rem)] rounded-xl border-border/80 bg-card shadow-sm">
+            <SelectValue placeholder="Grupo" />
           </SelectTrigger>
           <SelectContent>
             {groups.map((g) => (
-              <SelectItem key={g.id} value={g.id}>
+              <SelectItem key={g.id} value={g.id} label={g.name}>
                 {g.name}
               </SelectItem>
             ))}

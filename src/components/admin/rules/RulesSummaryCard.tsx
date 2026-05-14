@@ -62,12 +62,12 @@ export function RulesSummaryCard({
               if (value) onTournamentChange(value)
             }}
           >
-            <SelectTrigger id="rules-summary-tournament-select" className="h-11 w-full max-w-xl">
-              <SelectValue placeholder="Selecciona torneo">{tournament.name}</SelectValue>
+            <SelectTrigger id="rules-summary-tournament-select" className="h-11 min-w-[200px] max-w-[280px] w-auto">
+              <SelectValue placeholder="Selecciona un torneo">{tournament.name}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               {tournaments.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
+                <SelectItem key={t.id} value={t.id} label={t.name}>
                   {t.name}
                 </SelectItem>
               ))}

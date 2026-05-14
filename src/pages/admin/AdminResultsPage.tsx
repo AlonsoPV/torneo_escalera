@@ -214,13 +214,15 @@ export function AdminResultsPage() {
                 Grupo
               </Label>
               <Select value={groupId} onValueChange={(value) => setGroupId(value ?? 'all')}>
-                <SelectTrigger className="h-11 w-full">
+                <SelectTrigger className="h-11 min-w-[180px] w-full">
                   <SelectValue placeholder="Grupo" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos los grupos</SelectItem>
+                  <SelectItem value="all" label="Todos los grupos">
+                    Todos los grupos
+                  </SelectItem>
                   {(groupsQ.data ?? []).map((group) => (
-                    <SelectItem key={group.id} value={group.id}>
+                    <SelectItem key={group.id} value={group.id} label={group.name}>
                       {group.name}
                     </SelectItem>
                   ))}
@@ -230,15 +232,25 @@ export function AdminResultsPage() {
             <div className="min-w-0 space-y-2 sm:min-w-[12rem]">
               <Label className="text-xs font-medium text-slate-600">Cola</Label>
               <Select value={queueFilter} onValueChange={(value) => setQueueFilter((value ?? 'all') as ResultsQueueFilter)}>
-                <SelectTrigger className="h-11 w-full">
+                <SelectTrigger className="h-11 min-w-[180px] w-full">
                   <SelectValue placeholder="Cola" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="to_validate">Por validar</SelectItem>
-                  <SelectItem value="disputed">En disputa</SelectItem>
-                  <SelectItem value="waiting_rival">Esperando rival</SelectItem>
-                  <SelectItem value="official">Oficiales</SelectItem>
+                  <SelectItem value="all" label="Todos">
+                    Todos
+                  </SelectItem>
+                  <SelectItem value="to_validate" label="Por validar">
+                    Por validar
+                  </SelectItem>
+                  <SelectItem value="disputed" label="En disputa">
+                    En disputa
+                  </SelectItem>
+                  <SelectItem value="waiting_rival" label="Esperando rival">
+                    Esperando rival
+                  </SelectItem>
+                  <SelectItem value="official" label="Oficiales">
+                    Oficiales
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>

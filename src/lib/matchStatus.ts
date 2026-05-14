@@ -2,8 +2,9 @@ import type { GroupPlayer, MatchRow, MatchStatus, ScoreSet, UserRole } from '@/t
 import { invertScoreSets } from '@/utils/score'
 
 /**
- * Ciclo acordado: Jugador A envía → score_submitted; Jugador B acepta → player_confirmed;
- * staff cierra → closed. Rechazo del rival → score_disputed (A puede reenviar).
+ * Ciclo acordado: cualquier participante envía → score_submitted (`score_submitted_by`);
+ * el otro acepta → player_confirmed; staff cierra → closed.
+ * Rechazo → score_disputed (cualquiera de los dos puede corregir y reenviar).
  */
 export const PLAYER_SCORE_STATUSES = [
   'pending_score',
@@ -59,12 +60,20 @@ export function isMatchPlayerB(match: MatchRow, userId: string | null | undefine
 }
 
 export function canSubmitScore(match: MatchRow, userId: string | null | undefined): boolean {
-  if (!isMatchPlayerA(match, userId)) return false
+  if (!userId) return false
+  const participant = isMatchPlayerA(match, userId) || isMatchPlayerB(match, userId)
+  if (!participant) return false
   return isPendingScoreStatus(match.status) || match.status === 'score_disputed'
 }
 
 export function canAcceptScore(match: MatchRow, userId: string | null | undefined): boolean {
-  return isMatchPlayerB(match, userId) && match.status === 'score_submitted'
+  if (!userId || match.status !== 'score_submitted') return false
+  const participant = isMatchPlayerA(match, userId) || isMatchPlayerB(match, userId)
+  if (!participant) return false
+  if (match.score_submitted_by != null) {
+    return match.score_submitted_by !== userId
+  }
+  return isMatchPlayerB(match, userId)
 }
 
 export function canRejectScore(match: MatchRow, userId: string | null | undefined): boolean {
@@ -91,7 +100,7 @@ export function getPlayerPerspectiveScore(match: MatchRow, userId: string | null
 }
 
 /**
- * Jugador A: captura o corrige en pendiente de marcador o disputa.
+ * Participante: captura o corrige en pendiente de marcador o disputa
  * (no tras enviar a revisión del rival).
  */
 export function canPlayerACaptureScore(params: {
@@ -103,7 +112,7 @@ export function canPlayerACaptureScore(params: {
   return Boolean(allowPlayerScoreEntry && canSubmitScore(match, userId))
 }
 
-/** Jugador B: aceptar o rechazar cuando el marcador está pendiente de revisión. */
+/** El otro participante (no quien envió): aceptar o rechazar cuando hay marcador pendiente de revisión. */
 export function canPlayerBRespondToScore(params: {
   match: MatchRow
   userId: string | null | undefined
@@ -113,7 +122,7 @@ export function canPlayerBRespondToScore(params: {
   return Boolean(allowPlayerScoreEntry && canAcceptScore(match, userId))
 }
 
-/** Compat: “puede editar marcador” = A en ventana de captura, o admin (manejado aparte). */
+/** “puede editar marcador” = participante en ventana de captura, o admin (manejado aparte). */
 export function canPlayerSubmitResult(params: {
   match: MatchRow
   isParticipant: boolean

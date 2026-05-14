@@ -155,13 +155,15 @@ export function AdminMatchesPage() {
                 Grupo
               </Label>
               <Select value={groupId} onValueChange={(value) => setGroupId(value ?? 'all')}>
-                <SelectTrigger className="h-11 w-full">
+                <SelectTrigger className="h-11 min-w-[180px] w-full">
                   <SelectValue placeholder="Grupo" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos los grupos</SelectItem>
+                  <SelectItem value="all" label="Todos los grupos">
+                    Todos los grupos
+                  </SelectItem>
                   {(groupsQ.data ?? []).map((group) => (
-                    <SelectItem key={group.id} value={group.id}>
+                    <SelectItem key={group.id} value={group.id} label={group.name}>
                       {group.name}
                     </SelectItem>
                   ))}
@@ -171,16 +173,31 @@ export function AdminMatchesPage() {
             <div className="min-w-0 space-y-2 sm:min-w-[12rem]">
               <Label className="text-xs font-medium text-slate-600">Estado</Label>
               <Select value={status} onValueChange={(value) => setStatus(value as MatchStatus | 'all')}>
-                <SelectTrigger className="h-11 w-full">
+                <SelectTrigger className="h-11 min-w-[180px] w-full">
                   <SelectValue placeholder="Estado" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos los estados</SelectItem>
-                  <SelectItem value="pending_score">Pendiente de marcador</SelectItem>
-                  <SelectItem value="score_submitted">Marcador enviado</SelectItem>
-                  <SelectItem value="score_disputed">Marcador en disputa</SelectItem>
-                  <SelectItem value="player_confirmed">Aceptado por rival</SelectItem>
-                  <SelectItem value="closed">Cerrado</SelectItem>
+                  <SelectItem value="all" label="Todos los estados">
+                    Todos los estados
+                  </SelectItem>
+                  <SelectItem value="pending_score" label="Pendiente de marcador">
+                    Pendiente de marcador
+                  </SelectItem>
+                  <SelectItem value="score_submitted" label="Marcador enviado">
+                    Marcador enviado
+                  </SelectItem>
+                  <SelectItem value="score_disputed" label="Marcador en disputa">
+                    Marcador en disputa
+                  </SelectItem>
+                  <SelectItem value="player_confirmed" label="Aceptado por rival">
+                    Aceptado por rival
+                  </SelectItem>
+                  <SelectItem value="closed" label="Cerrado">
+                    Cerrado
+                  </SelectItem>
+                  <SelectItem value="cancelled" label="Cancelado">
+                    Cancelado
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>

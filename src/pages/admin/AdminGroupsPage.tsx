@@ -59,10 +59,15 @@ function GroupCategoriesPanel({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
 
+  const sortedCategories = useMemo(
+    () => [...categories].sort((a, b) => a.order_index - b.order_index || a.name.localeCompare(b.name, 'es')),
+    [categories],
+  )
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-xl border border-border/20 bg-background">
       <form
-        className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-end sm:p-5"
+        className="flex flex-col gap-2 border-b border-border/20 p-3 sm:flex-row sm:items-end"
         onSubmit={(event) => {
           event.preventDefault()
           const trimmed = newName.trim()
@@ -71,8 +76,8 @@ function GroupCategoriesPanel({
           setNewName('')
         }}
       >
-        <div className="min-w-0 flex-1 space-y-2">
-          <Label htmlFor="new-category-name" className="text-xs font-medium text-slate-600">
+        <div className="min-w-0 flex-1 space-y-1">
+          <Label htmlFor="new-category-name" className="text-xs text-muted-foreground">
             Nueva categoría
           </Label>
           <Input
@@ -81,83 +86,66 @@ function GroupCategoriesPanel({
             onChange={(event) => setNewName(event.target.value)}
             placeholder="Ej. Sub-17"
             disabled={disabled}
+            className="h-9"
           />
         </div>
-        <Button type="submit" className="w-full shrink-0 sm:w-auto" disabled={disabled || !newName.trim()}>
+        <Button type="submit" size="sm" className="w-full shrink-0 sm:w-auto" disabled={disabled || !newName.trim()}>
           <Plus className="size-4" />
           Añadir
         </Button>
       </form>
       {categories.length === 0 ? (
-        <p className="p-5 text-sm text-slate-500 sm:p-6">No hay categorías. Añade la primera arriba.</p>
+        <p className="p-4 text-sm text-muted-foreground">No hay categorías. Añade la primera arriba.</p>
       ) : (
-        <ul className="divide-y divide-slate-100">
-          {categories.map((category) => (
-            <li
-              key={category.id}
-              className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4 sm:p-5"
-            >
-              <div className="flex min-w-0 flex-1 items-center gap-2">
-                <div className="min-w-0 flex-1">
-                  {editingId === category.id ? (
-                    <Input
-                      value={editName}
-                      onChange={(event) => setEditName(event.target.value)}
-                      disabled={disabled}
-                      className="h-9"
-                    />
-                  ) : (
-                    <p className="truncate font-medium text-[#102A43]">{category.name}</p>
-                  )}
+        <div className="space-y-1.5 p-3">
+          {sortedCategories.map((category) =>
+            editingId === category.id ? (
+              <div
+                key={category.id}
+                className="flex flex-col gap-2 rounded-lg border border-border/20 bg-muted/30 px-3 py-2 sm:flex-row sm:items-end"
+              >
+                <div className="min-w-0 flex-1 space-y-1">
+                  <Label className="text-xs text-muted-foreground">Nombre</Label>
+                  <Input
+                    value={editName}
+                    onChange={(event) => setEditName(event.target.value)}
+                    disabled={disabled}
+                    className="h-9"
+                  />
                 </div>
-                {editingId === category.id ? (
-                  <div className="flex shrink-0 gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={disabled || !editName.trim()}
-                      onClick={() => {
-                        onRename(category.id, editName.trim())
-                        setEditingId(null)
-                      }}
-                    >
-                      Guardar
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={disabled}
-                      onClick={() => setEditingId(null)}
-                    >
-                      Cancelar
-                    </Button>
-                  </div>
-                ) : (
+                <div className="flex gap-2">
                   <Button
                     type="button"
-                    size="icon-sm"
-                    variant="ghost"
-                    className="shrink-0"
-                    disabled={disabled}
+                    size="sm"
+                    disabled={disabled || !editName.trim()}
                     onClick={() => {
-                      setEditingId(category.id)
-                      setEditName(category.name)
+                      onRename(category.id, editName.trim())
+                      setEditingId(null)
                     }}
                   >
-                    <Pencil className="size-4" />
-                    <span className="sr-only">Editar nombre</span>
+                    Guardar
                   </Button>
-                )}
+                  <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => setEditingId(null)}>
+                    Cancelar
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-3 sm:shrink-0">
-                <div className="flex items-center gap-2">
-                  <Label className="whitespace-nowrap text-xs text-slate-500">Orden</Label>
+            ) : (
+              <div
+                key={category.id}
+                className="flex items-center justify-between gap-2 rounded-lg border border-border/20 bg-muted/50 px-3 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-foreground">{category.name}</p>
+                  <p className="text-xs text-muted-foreground">Orden {category.order_index}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
                   <Input
                     type="number"
-                    className="h-9 w-16"
+                    className="h-8 w-14 px-1 text-center text-xs"
                     defaultValue={category.order_index}
-                    disabled={disabled || editingId === category.id}
+                    disabled={disabled}
+                    title="Orden de visualización"
                     key={`${category.id}-${category.order_index}`}
                     onBlur={(event) => {
                       const next = Number(event.target.value)
@@ -166,26 +154,39 @@ function GroupCategoriesPanel({
                       }
                     }}
                   />
+                  <button
+                    type="button"
+                    className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                    disabled={disabled}
+                    onClick={() => {
+                      setEditingId(category.id)
+                      setEditName(category.name)
+                    }}
+                    aria-label="Renombrar categoría"
+                  >
+                    <Pencil className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md p-1.5 text-muted-foreground hover:text-red-600 disabled:opacity-50"
+                    disabled={disabled}
+                    onClick={() => {
+                      if (
+                        typeof window !== 'undefined' &&
+                        window.confirm('¿Eliminar esta categoría? Los grupos quedarán sin categoría.')
+                      ) {
+                        onDelete(category.id)
+                      }
+                    }}
+                    aria-label="Eliminar categoría"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
                 </div>
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  disabled={disabled || editingId === category.id}
-                  onClick={() => {
-                    if (typeof window !== 'undefined' && window.confirm('¿Eliminar esta categoría? Los grupos quedarán sin categoría.')) {
-                      onDelete(category.id)
-                    }
-                  }}
-                >
-                  <Trash2 className="size-4" />
-                  <span className="sr-only">Eliminar categoría</span>
-                </Button>
               </div>
-            </li>
-          ))}
-        </ul>
+            ),
+          )}
+        </div>
       )}
     </div>
   )
@@ -233,13 +234,15 @@ function CreateGroupModal({
         <div className="space-y-2">
           <Label>Categoría (opcional)</Label>
           <Select value={categoryId} onValueChange={(value) => setCategoryId(value ?? 'none')}>
-            <SelectTrigger className="h-11 w-full">
+            <SelectTrigger className="h-11 min-w-[180px] w-full">
               <SelectValue placeholder="Sin categoría" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Sin categoría</SelectItem>
+              <SelectItem value="none" label="Sin categoría">
+                Sin categoría
+              </SelectItem>
               {categories.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
+                <SelectItem key={c.id} value={c.id} label={c.name}>
                   {c.name}
                 </SelectItem>
               ))}
@@ -454,6 +457,32 @@ export function AdminGroupsPage() {
 
   const groupsInTournament = useMemo(() => groupsQ.data ?? [], [groupsQ.data])
 
+  /** Evita UUID en el trigger si Base UI no enlaza el ítem seleccionado. */
+  const headerTournamentLabel = useMemo(() => {
+    if (!tournamentId) return undefined
+    return (tournamentsQ.data ?? []).find((t) => t.id === tournamentId)?.name
+  }, [tournamentId, tournamentsQ.data])
+
+  const groupSections = useMemo(() => {
+    const sortedCats = [...categories].sort(
+      (a, b) => a.order_index - b.order_index || a.name.localeCompare(b.name, 'es'),
+    )
+    const sections: { key: string; label: string; groups: AdminGroupRecord[] }[] = []
+    const assignedGroupIds = new Set<string>()
+    for (const cat of sortedCats) {
+      const g = groupsInTournament.filter((gr) => gr.group_category_id === cat.id)
+      if (g.length > 0) {
+        sections.push({ key: cat.id, label: cat.name, groups: g })
+        for (const gr of g) assignedGroupIds.add(gr.id)
+      }
+    }
+    const rest = groupsInTournament.filter((gr) => !assignedGroupIds.has(gr.id))
+    if (rest.length > 0) {
+      sections.push({ key: '__sin_categoria__', label: 'Sin categoría', groups: rest })
+    }
+    return sections
+  }, [categories, groupsInTournament])
+
   return (
     <div className="space-y-8 sm:space-y-10">
       <AdminPageHeader
@@ -475,8 +504,8 @@ export function AdminGroupsPage() {
                   })
                 }}
               >
-                <SelectTrigger className="h-11 w-full min-w-[12rem] sm:w-[min(100%,16rem)]">
-                  <SelectValue placeholder="Torneo" />
+                <SelectTrigger className="h-11 min-w-[200px] max-w-[280px] w-auto">
+                  <SelectValue placeholder="Selecciona un torneo">{headerTournamentLabel ?? undefined}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {!tournamentId ? (
@@ -484,12 +513,13 @@ export function AdminGroupsPage() {
                       value={ADMIN_GROUPS_TOURNAMENT_PENDING}
                       disabled
                       className="pointer-events-none text-muted-foreground opacity-80"
+                      label="Preparando torneo…"
                     >
                       Preparando torneo…
                     </SelectItem>
                   ) : null}
                   {(tournamentsQ.data ?? []).map((tournament) => (
-                    <SelectItem key={tournament.id} value={tournament.id}>
+                    <SelectItem key={tournament.id} value={tournament.id} label={tournament.name}>
                       {tournament.name}
                     </SelectItem>
                   ))}
@@ -530,7 +560,7 @@ export function AdminGroupsPage() {
             description="Clasifica los bloques del torneo (p. ej. divisiones). Las tres por defecto se crean al abrir este torneo por primera vez."
           />
           {categoriesQ.isLoading ? (
-            <Skeleton className="h-40 rounded-2xl" />
+            <Skeleton className="h-36 rounded-xl border border-border/20" />
           ) : (
             <GroupCategoriesPanel
               categories={categories}
@@ -574,7 +604,15 @@ export function AdminGroupsPage() {
       ) : null}
 
       <section className="space-y-4" aria-labelledby="groups-grid-heading">
-        <AdminSectionTitle id="groups-grid-heading" title="Grupos del torneo" description="Tarjetas con estado y acceso a gestión detallada." />
+        <AdminSectionTitle
+          id="groups-grid-heading"
+          title={
+            groupsInTournament.length > 0
+              ? `Grupos del torneo (${groupsInTournament.length})`
+              : 'Grupos del torneo'
+          }
+          description="Tarjetas compactas por categoría; enlaces de texto para gestionar."
+        />
 
       {groupsQ.isError ? (
         <AdminEmptyState
@@ -583,9 +621,9 @@ export function AdminGroupsPage() {
           icon={Flag}
         />
       ) : groupsQ.isLoading ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, index) => (
-            <Skeleton key={index} className="h-64 rounded-2xl" />
+            <Skeleton key={index} className="h-44 rounded-xl" />
           ))}
         </div>
       ) : tournamentsQ.isSuccess && (tournamentsQ.data ?? []).length === 0 ? (
@@ -595,9 +633,9 @@ export function AdminGroupsPage() {
           icon={Flag}
         />
       ) : !tournamentId ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, index) => (
-            <Skeleton key={index} className="h-64 rounded-2xl" />
+            <Skeleton key={index} className="h-44 rounded-xl" />
           ))}
         </div>
       ) : groupsInTournament.length === 0 ? (
@@ -607,18 +645,27 @@ export function AdminGroupsPage() {
           icon={Flag}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {groupsInTournament.map((group) => (
-            <GroupAdminCard
-              key={group.id}
-              group={group}
-              onManage={(nextGroup) => {
-                setManagedGroup(nextGroup)
-                setManagerOpen(true)
-              }}
-              onDelete={(g) => deleteGroupMut.mutate(g.id)}
-              isDeleting={deleteGroupMut.isPending && deleteGroupMut.variables === group.id}
-            />
+        <div className="space-y-6">
+          {groupSections.map((section) => (
+            <div key={section.key}>
+              <p className="mb-2 pl-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {section.label}
+              </p>
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                {section.groups.map((group) => (
+                  <GroupAdminCard
+                    key={group.id}
+                    group={group}
+                    onManage={(nextGroup) => {
+                      setManagedGroup(nextGroup)
+                      setManagerOpen(true)
+                    }}
+                    onDelete={(g) => deleteGroupMut.mutate(g.id)}
+                    isDeleting={deleteGroupMut.isPending && deleteGroupMut.variables === group.id}
+                  />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}

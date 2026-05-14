@@ -113,8 +113,8 @@ export async function saveMatchScore(input: {
 }
 
 /**
- * Jugador A: envía marcador → RPC `submit_player_match_result` deja el partido en `score_submitted`.
- * Jugador B acepta con `respondOpponentMatchScore` → `player_confirmed`. El staff cierra → `closed`.
+ * Cualquier participante envía marcador → RPC `submit_player_match_result` deja `score_submitted` y `score_submitted_by`.
+ * El otro participante acepta con `respondOpponentMatchScore` → `player_confirmed`. El staff cierra → `closed`.
  */
 export async function submitPlayerScore(input: {
   match: MatchRow

@@ -66,6 +66,13 @@ function namesForMatch(match: MatchRow, players: GroupPlayer[]) {
   }
 }
 
+/** Quien envió el marcador pendiente de revisión (o Jugador A en filas legacy sin firma). */
+function submitterDisplayName(match: MatchRow, players: GroupPlayer[]) {
+  const uid = match.score_submitted_by ?? match.player_a_user_id
+  const gp = players.find((p) => p.user_id === uid)
+  return gp?.display_name ?? 'Tu rival'
+}
+
 /** Etiqueta corta para la cabecera de columnas (evita nombres largos en móvil). */
 function shortLabel(name: string, max = 12) {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -191,7 +198,9 @@ export function MatchScoreSheet(props: {
     setResponding(true)
     try {
       await respondOpponentMatchScore({ matchId: match.id, accept: false, disputeReason: reason })
-      toast.message('Marcador rechazado', { description: 'El Jugador A podrá corregir y reenviar.' })
+      toast.message('Marcador rechazado', {
+        description: 'El jugador que envió el marcador podrá corregirlo y reenviarlo.',
+      })
       setRejectOpen(false)
       setRejectReason('')
       await flowAfter()
@@ -214,14 +223,14 @@ export function MatchScoreSheet(props: {
             <SheetTitle className="text-lg">Marcador</SheetTitle>
             <SheetDescription className="line-clamp-4 text-balance sm:text-sm">
               {showOpponentPanel ? (
-                `${nameA} registró el marcador. Revísalo y acéptalo o recházalo con un comentario. No puedes editar los números directamente.`
+                `${submitterDisplayName(match, players)} registró el marcador. Revísalo y acéptalo o recházalo con un comentario. No puedes editar los números directamente.`
               ) : (
                 <>
                   {isAdmin
                     ? `Como staff puedes ajustar el marcador. Al guardar se cierra oficialmente el partido (ranking).`
                     : hasPointsDecider
-                      ? `Eres el Jugador A: hasta ${maxSets} sets; los primeros van por games y el decisivo por puntos si aplica. Puedes enviar el marcador cuando el partido haya terminado.`
-                      : `Eres el Jugador A: introduce games por set (hasta ${maxSets} sets). Puedes enviar el marcador cuando el partido haya terminado.`}{' '}
+                      ? `Introduce hasta ${maxSets} sets; los primeros van por games y el decisivo por puntos si aplica. Envía el marcador cuando el partido haya terminado.`
+                      : `Introduce games por set (hasta ${maxSets} sets). Envía el marcador cuando el partido haya terminado.`}{' '}
                   Cada set debe tener ganador: no se permiten marcadores empatados (p. ej. 6-6 no es un resultado final válido).
                 </>
               )}
@@ -512,8 +521,14 @@ export function MatchScoreSheet(props: {
               <p className="text-center text-sm text-muted-foreground">
                 {!participant
                   ? 'No participas en este partido.'
-                  : match.status === 'score_submitted' && currentUserId === match.player_a_user_id
+                  : match.status === 'score_submitted' &&
+                      match.score_submitted_by != null &&
+                      currentUserId === match.score_submitted_by
                     ? 'Enviaste el marcador. Espera a que tu rival lo revise.'
+                    : match.status === 'score_submitted' &&
+                        match.score_submitted_by == null &&
+                        currentUserId === match.player_a_user_id
+                      ? 'Enviaste el marcador. Espera a que tu rival lo revise.'
                     : match.status === 'player_confirmed'
                       ? 'El rival aceptó el marcador. Un administrador cerrará el resultado oficialmente.'
                       : 'No puedes editar el marcador en este estado.'}

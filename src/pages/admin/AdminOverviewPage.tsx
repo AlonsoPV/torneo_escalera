@@ -44,7 +44,7 @@ export function AdminOverviewPage() {
       <AdminPageHeader
         eyebrow="Administración"
         title="Vista general"
-        description="Estado operativo del torneo: métricas clave, pendientes y accesos rápidos para actuar sin perder contexto."
+        description="Métricas y pendientes solo de torneo(s) en estado «activo». Si no hay ninguno, revisa Administración → Torneos."
       />
 
       {overviewQ.isLoading ? (
@@ -77,7 +77,7 @@ export function AdminOverviewPage() {
               id="overview-op-heading"
               density="compact"
               title="Resumen operativo"
-              description="Capacidad del club: jugadores, estructura de grupos y volumen de partidos."
+              description="Datos limitados al torneo activo (inscripciones, grupos y partidos de ese torneo)."
             />
             <div id="admin-overview-metrics-summary" className={cn(ADMIN_METRIC_GRID_4, 'max-sm:gap-2.5')}>
               <AdminMetricCard
@@ -85,28 +85,28 @@ export function AdminOverviewPage() {
                 value={overviewQ.data.totalPlayers}
                 icon={Users}
                 tone="neutral"
-                description="Perfiles con rol jugador"
+                description="Usuarios distintos inscritos en grupos del torneo activo"
               />
               <AdminMetricCard
                 label="Total de grupos"
                 value={overviewQ.data.totalGroups}
                 icon={Flag}
                 tone="info"
-                description="Grupos creados en torneos"
+                description="Grupos del torneo activo"
               />
               <AdminMetricCard
                 label="Total de partidos"
                 value={overviewQ.data.totalMatches}
                 icon={CalendarClock}
                 tone="neutral"
-                description="Cruces generados en el sistema"
+                description="Partidos del torneo activo"
               />
               <AdminMetricCard
                 label="Torneos activos"
                 value={overviewQ.data.activeTournaments}
                 icon={Trophy}
                 tone="success"
-                description={`De ${overviewQ.data.totalTournaments} torneo(s) registrados`}
+                description={`${overviewQ.data.activeTournaments} activo(s); métricas de esta página solo los incluyen. Total en BD: ${overviewQ.data.totalTournaments}.`}
               />
             </div>
           </section>
@@ -140,7 +140,7 @@ export function AdminOverviewPage() {
               </summary>
               <div className="mt-3 border-t border-amber-200/60 pt-3 sm:mt-3 sm:pt-3">
                 <p className="mb-3 hidden text-xs leading-relaxed text-slate-500 sm:block">
-                  Revisa marcadores pendientes, grupos incompletos y cierres administrativos.
+                  Revisa marcadores pendientes, grupos incompletos y cierres del torneo activo.
                 </p>
                 <div
                   id="admin-overview-metrics-pending"
@@ -217,7 +217,7 @@ export function AdminOverviewPage() {
             <Card id="card-admin-overview-recent-activity" className="rounded-2xl border border-slate-200/70 bg-white shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle id="admin-overview-recent-title" className="text-base font-semibold text-slate-900">
-                  Actividad reciente
+                  Actividad reciente (torneo activo)
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">

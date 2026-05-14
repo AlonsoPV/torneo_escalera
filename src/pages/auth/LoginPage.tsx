@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Loader2, Lock, Mail, Trophy } from 'lucide-react'
+import { Loader2, Lock, Smartphone, Trophy } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { signInWithEmail } from '@/lib/auth'
+import { signInWithPhone } from '@/lib/auth'
+import { normalizePhone } from '@/lib/phone'
 import { clearLocalAuthAndGoToLogin } from '@/lib/authSessionRecovery'
 import { cn } from '@/lib/utils'
 import { isSupabaseConfigured } from '@/lib/supabase'
@@ -17,7 +18,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { AuthPageShell } from '@/pages/auth/AuthPageShell'
 
 const schema = z.object({
-  email: z.string().min(1, 'Introduce tu email').email('Email no válido'),
+  phone: z.string().min(1, 'Introduce tu número de celular'),
   password: z.string().min(6, 'Mínimo 6 caracteres'),
 })
 
@@ -30,7 +31,7 @@ export function LoginPage() {
   const navigate = useNavigate()
   const from = (location.state as { from?: string } | null)?.from ?? '/'
 
-  const form = useForm<Form>({ resolver: zodResolver(schema), defaultValues: { email: '', password: '' } })
+  const form = useForm<Form>({ resolver: zodResolver(schema), defaultValues: { phone: '', password: '' } })
 
   if (initialized && session) {
     return <Navigate to={from} replace />
@@ -69,8 +70,13 @@ export function LoginPage() {
   }
 
   const submit = form.handleSubmit(async (values) => {
+    const parsed = normalizePhone(values.phone)
+    if (!parsed.ok) {
+      form.setError('phone', { type: 'manual', message: parsed.error })
+      return
+    }
     try {
-      const authData = await signInWithEmail(values.email, values.password)
+      const authData = await signInWithPhone(values.phone, values.password)
       if (authData.session) {
         useAuthStore.getState().setSession(authData.session)
         await useAuthStore.getState().refreshProfile()
@@ -129,34 +135,35 @@ export function LoginPage() {
             <CardHeader className="space-y-1 pb-4">
               <CardTitle className="text-2xl font-semibold tracking-tight">Bienvenido de nuevo</CardTitle>
               <CardDescription className="text-base">
-                Introduce tu email y contraseña para entrar.
+                Introduce tu número de celular y contraseña para entrar.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form className="space-y-5" onSubmit={submit} noValidate>
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="phone">Número de celular</Label>
                   <div className="relative">
-                    <Mail
+                    <Smartphone
                       className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
                       aria-hidden
                     />
                     <Input
-                      id="email"
-                      type="email"
-                      autoComplete="email"
-                      placeholder="tu@email.com"
+                      id="phone"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      placeholder="Ej. 5512345678"
                       className={cn(
                         'h-10 pl-9',
-                        form.formState.errors.email && 'border-destructive aria-invalid:border-destructive',
+                        form.formState.errors.phone && 'border-destructive aria-invalid:border-destructive',
                       )}
-                      aria-invalid={!!form.formState.errors.email}
-                      {...form.register('email')}
+                      aria-invalid={!!form.formState.errors.phone}
+                      {...form.register('phone')}
                     />
                   </div>
-                  {form.formState.errors.email ? (
+                  {form.formState.errors.phone ? (
                     <p className="text-xs text-destructive" role="alert">
-                      {form.formState.errors.email.message}
+                      {form.formState.errors.phone.message}
                     </p>
                   ) : null}
                 </div>

@@ -2,6 +2,7 @@ import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 
 import { recoverFromAuthError } from '@/lib/authSessionRecovery'
+import { normalizePhone } from '@/lib/phone'
 import { supabase } from '@/lib/supabase'
 import type { BulkImportContext, BulkImportGroupMeta, BulkImportParsedRow } from '@/lib/bulkUserImportPreview'
 import { normalizeImportLabel } from '@/lib/userImportTemplate'
@@ -47,6 +48,18 @@ function mapSheetRow(row: Record<string, unknown>, rowNumber: number): BulkImpor
   return {
     rowNumber,
     externalId: getCell(row, ['ID', 'Id', 'id', 'external_id', 'External id']),
+    phone: getPasswordCell(row, [
+      'Celular',
+      'celular',
+      'Teléfono',
+      'Telefono',
+      'telefono',
+      'Móvil',
+      'Movil',
+      'movil',
+      'Tel',
+      'tel',
+    ]),
     fullName: getCell(row, ['Nombre', 'nombre', 'name', 'Full name']),
     role: getCell(row, ['Rol', 'rol', 'role']),
     categoryName: getCell(row, ['Categoría', 'Categoria', 'categoria', 'category', 'Category']),
@@ -100,6 +113,16 @@ export async function fetchBulkImportPoolContext(tournamentId: string | null): P
       .filter(Boolean),
   )
 
+  const { data: phoneProf, error: pErr } = await supabase.from('profiles').select('phone').not('phone', 'is', null)
+  if (pErr) throw pErr
+
+  const phonesInUse = new Set<string>()
+  for (const row of phoneProf ?? []) {
+    const raw = String((row as { phone: string }).phone ?? '').trim()
+    const n = normalizePhone(raw)
+    if (n.ok) phonesInUse.add(n.digits)
+  }
+
   const groupsByNorm = new Map<string, BulkImportGroupMeta>()
   const tid = tournamentId?.trim() || null
   if (tid) {
@@ -130,7 +153,7 @@ export async function fetchBulkImportPoolContext(tournamentId: string | null): P
     }
   }
 
-  return { categoryNamesLower, externalIdsInUse, groupsByNorm }
+  return { categoryNamesLower, externalIdsInUse, phonesInUse, groupsByNorm }
 }
 
 export async function listTournamentsForBulkImport(): Promise<Tournament[]> {
@@ -142,6 +165,7 @@ export async function listTournamentsForBulkImport(): Promise<Tournament[]> {
 export type BulkImportInvokeRow = {
   rowNumber: number
   externalId: string
+  phone: string
   fullName: string
   role: string
   categoryName: string
@@ -154,6 +178,7 @@ export type BulkImportInvokeRow = {
 export type BulkImportResultRow = {
   rowNumber: number
   externalId: string
+  phone: string
   fullName: string
   email: string
   temporaryPassword: string

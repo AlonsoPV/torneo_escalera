@@ -6,6 +6,7 @@ import {
   LogOut,
   ShieldCheck,
   Trophy,
+  UserCircle,
   UserRound,
 } from 'lucide-react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
@@ -137,12 +138,21 @@ export function AppHeader() {
                   <DropdownMenuLabel className="text-xs text-muted-foreground">Tu cuenta</DropdownMenuLabel>
                   <DropdownMenuItem
                     onClick={() => {
+                      navigate('/player/cuenta')
+                    }}
+                    className="cursor-pointer"
+                  >
+                    <UserCircle className="size-4" />
+                    Datos de cuenta
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
                       navigate('/player')
                     }}
                     className="cursor-pointer"
                   >
                     <UserRound className="size-4" />
-                    Cuenta
+                    Panel jugador
                   </DropdownMenuItem>
                   {canAccessAdmin ? (
                     <DropdownMenuItem

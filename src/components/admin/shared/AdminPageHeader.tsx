@@ -27,7 +27,7 @@ export function AdminPageHeader({
         ) : null}
       </div>
       {actions ? (
-        <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap lg:w-auto lg:max-w-md lg:justify-end">
+        <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap lg:w-auto lg:max-w-xl lg:justify-end">
           {actions}
         </div>
       ) : null}

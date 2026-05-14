@@ -142,6 +142,8 @@ export async function updateTournament(
       | 'season'
       | 'previous_tournament_id'
       | 'period_label'
+      | 'finished_at'
+      | 'closed_by'
     >
   >,
 ): Promise<void> {

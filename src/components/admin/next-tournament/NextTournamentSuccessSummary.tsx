@@ -18,6 +18,8 @@ export function NextTournamentSuccessSummary({
 
   return (
     <Card
+      id="admin-next-tournament-success-card"
+      data-name="next-tournament-success-summary"
       className={cn(
         'rounded-2xl border-slate-200/80 shadow-sm',
         partialFailure && 'border-amber-200/90',
@@ -58,7 +60,7 @@ export function NextTournamentSuccessSummary({
           </div>
         ) : null}
 
-        <ul className="list-inside list-disc space-y-1 text-pretty">
+        <ul id="admin-next-tournament-success-stats" data-name="next-tournament-created-stats" className="list-inside list-disc space-y-1 text-pretty">
           <li>{result.groupsCreated} grupo(s) creado(s)</li>
           <li>{result.playersAssigned} jugador(es) asignado(s)</li>
           <li>{result.matchesInserted} partido(s) generado(s)</li>
@@ -86,8 +88,14 @@ export function NextTournamentSuccessSummary({
           </div>
         ) : null}
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+        <div
+          id="admin-next-tournament-success-actions"
+          data-name="next-tournament-success-actions"
+          className="flex flex-col gap-2 sm:flex-row sm:flex-wrap"
+        >
           <Link
+            id="admin-next-tournament-success-link-groups"
+            data-name="success-link-manage-groups"
             className={cn(
               'inline-flex h-10 items-center justify-center rounded-md px-4 text-sm font-medium text-white',
               'bg-[#1F5A4C] hover:bg-[#1F5A4C]/90',
@@ -97,24 +105,37 @@ export function NextTournamentSuccessSummary({
             Gestionar grupos del nuevo torneo
           </Link>
           <Link
+            id="admin-next-tournament-success-link-view-tournament"
+            data-name="success-link-view-tournament"
             className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-4 text-sm font-medium text-[#102A43] hover:bg-slate-50"
             to={tournamentPath(tournament)}
           >
             Ver nuevo torneo
           </Link>
           <Link
+            id="admin-next-tournament-success-link-matches"
+            data-name="success-link-matches"
             className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-4 text-sm font-medium text-[#102A43] hover:bg-slate-50"
             to="/admin/matches"
           >
             Ver partidos generados
           </Link>
           <Link
+            id="admin-next-tournament-success-link-overview"
+            data-name="success-link-admin-overview"
             className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-4 text-sm font-medium text-[#102A43] hover:bg-slate-50"
             to="/admin/overview"
           >
             Ir a dashboard admin
           </Link>
-          <Button type="button" variant="ghost" className="h-10 sm:ml-auto" onClick={onCreateAnother}>
+          <Button
+            id="admin-next-tournament-success-btn-create-another"
+            name="createAnotherNextTournament"
+            type="button"
+            variant="ghost"
+            className="h-10 sm:ml-auto"
+            onClick={onCreateAnother}
+          >
             Crear otro
           </Button>
         </div>

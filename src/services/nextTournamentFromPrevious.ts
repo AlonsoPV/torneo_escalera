@@ -1,6 +1,5 @@
 import { supabase } from '@/lib/supabase'
 import { getAdminGroups, type AdminGroupRecord } from '@/services/admin'
-import { listGroupCategories } from '@/services/groupCategories'
 import { buildRoundRobinMatchRows, type RoundRobinMatchInsertRow } from '@/services/matches'
 import {
   createTournament,
@@ -10,20 +9,18 @@ import {
   type TournamentRulesUpdatePayload,
 } from '@/services/tournaments'
 import type {
-  GroupCategory,
   GroupPlayer,
   Tournament,
+  TournamentMovementReason,
   TournamentMovementType,
   TournamentStatus,
 } from '@/types/database'
 import {
   chunkPlayersIntoGroups,
   comparePromotionPreviewPlayers,
-  generateGroupName,
-  getMovementIntentByPosition,
-  getTargetCategory,
-  sortPlayersForPromotion,
-  type PromotionIntent,
+  generateTierGroupName,
+  getTargetGroupOrder,
+  sortGroupStandingsForMovement,
 } from '@/utils/nextTournamentPromotion'
 import { computeGroupRanking } from '@/utils/ranking'
 
@@ -76,24 +73,23 @@ export type PromotionPreviewRow = {
   displayName: string
   fromGroupId: string
   fromGroupName: string
-  fromCategoryId: string
-  fromCategoryName: string
+  /** `groups.order_index` del grupo origen (menor = nivel más alto). */
+  fromGroupOrderIndex: number
   fromPosition: number
   points: number
   gamesFor: number
   gamesDifference: number
-  intent: PromotionIntent
-  /** Categoría destino en el torneo base (se mapea al id nuevo al crear el torneo). */
-  targetSourceCategoryId: string
-  targetCategoryName: string
-  targetCategoryOrderIndex: number
+  /** `order_index` objetivo en los nuevos grupos del siguiente torneo. */
+  targetOrderIndex: number
+  /** Etiqueta «Grupo N» según la jerarquía destino. */
+  targetGroupLabel: string
   movementType: TournamentMovementType
+  movementReason: TournamentMovementReason
 }
 
 export type NextTournamentGroupPreview = {
-  targetSourceCategoryId: string
-  categoryName: string
-  orderIndex: number
+  targetOrderIndex: number
+  tierDisplayName: string
   groups: {
     name: string
     players: { userId: string; displayName: string }[]
@@ -182,8 +178,8 @@ export type CreateNextTournamentProgressCallbacks = {
 export type PlannedPersistGroup = {
   tempId: string
   name: string
-  categoryName: string
-  newCategoryId: string
+  tierDisplayName: string
+  targetOrderIndex: number
   orderIndex: number
   players: { userId: string; displayName: string }[]
   isComplete: boolean
@@ -236,31 +232,6 @@ async function copyTournamentRulesFromTo(fromTournamentId: string, toTournamentI
   await updateTournamentRules(toTournamentId, rulesRowToUpdatePayload(from))
 }
 
-async function copyGroupCategoryShell(
-  fromTournamentId: string,
-  toTournamentId: string,
-): Promise<Map<string, string>> {
-  const source = await listGroupCategories(fromTournamentId)
-  if (source.length === 0) {
-    throw new Error('El torneo base no tiene categorías de grupo. Configúralas antes de continuar.')
-  }
-  const sorted = [...source].sort((a, b) => a.order_index - b.order_index || a.name.localeCompare(b.name))
-  const insertRows = sorted.map((c) => ({
-    tournament_id: toTournamentId,
-    name: c.name,
-    order_index: c.order_index,
-  }))
-  const { data, error } = await supabase.from('group_categories').insert(insertRows).select('id')
-  if (error) throw error
-  const returned = (data ?? []) as { id: string }[]
-  if (returned.length !== sorted.length) {
-    throw new Error('No se pudieron crear todas las categorías del nuevo torneo.')
-  }
-  const map = new Map<string, string>()
-  sorted.forEach((c, i) => map.set(c.id, returned[i]!.id))
-  return map
-}
-
 function nonClosedMatchCount(groups: AdminGroupRecord[]): number {
   let n = 0
   for (const g of groups) {
@@ -271,142 +242,235 @@ function nonClosedMatchCount(groups: AdminGroupRecord[]): number {
   return n
 }
 
+function distinctSortedGroupOrderIndices(groups: AdminGroupRecord[]): number[] {
+  const set = new Set<number>()
+  for (const g of groups) {
+    if (g.players.length > 0) set.add(g.order_index)
+  }
+  return [...set].sort((a, b) => a - b)
+}
+
+function groupLabelForTierRank(sortedDistinct: number[], targetOrderIndex: number): string {
+  const i = sortedDistinct.indexOf(targetOrderIndex)
+  const tr = i >= 0 ? i + 1 : 1
+  return `Grupo ${tr}`
+}
+
 export async function buildPromotionPreview(baseTournamentId: string): Promise<{
   rows: PromotionPreviewRow[]
-  categories: GroupCategory[]
-  groupsWithoutCategory: number
+  sortedDistinctGroupOrderIndices: number[]
   nonClosedMatchCount: number
   skippedDuplicatePlayers: number
+  baseTournamentStatus: TournamentStatus | null
+  snapshotRowCount: number
+  usedSnapshot: boolean
 }> {
-  const [groups, rules, categories] = await Promise.all([
+  const [groups, rules, baseTournament, snapRes] = await Promise.all([
     getAdminGroups(baseTournamentId),
     getTournamentRules(baseTournamentId),
-    listGroupCategories(baseTournamentId),
+    getTournament(baseTournamentId),
+    supabase.from('tournament_final_standings').select('*').eq('tournament_id', baseTournamentId),
   ])
+
+  if (snapRes.error) throw snapRes.error
 
   if (!rules) {
     throw new Error('No hay reglas configuradas para el torneo base.')
   }
 
-  const sortedCats = [...categories].sort((a, b) => a.order_index - b.order_index || a.name.localeCompare(b.name))
-  if (sortedCats.length === 0) {
-    throw new Error('No hay categorías de grupo en el torneo base.')
+  const sortedDistinct = distinctSortedGroupOrderIndices(groups)
+  if (sortedDistinct.length === 0) {
+    throw new Error('No hay grupos con jugadores en el torneo base.')
   }
+
+  const snapRows = snapRes.data ?? []
+  const usedSnapshot = snapRows.length > 0
+  const minTier = 1
+  const maxTier = sortedDistinct.length
 
   const rows: PromotionPreviewRow[] = []
   const seenUser = new Set<string>()
-  let groupsWithoutCategory = 0
   let skippedDuplicatePlayers = 0
 
-  for (const g of groups) {
-    if (!g.category) {
-      if (g.players.length > 0) groupsWithoutCategory += 1
-      continue
-    }
-    const ranking = sortPlayersForPromotion(
-      computeGroupRanking(
-        g.players.map(({ id, user_id, group_id, display_name, seed_order, created_at }) => ({
-          id,
-          user_id,
-          group_id,
-          display_name,
-          seed_order,
-          created_at,
-        })),
-        g.matches,
-        rules,
-      ),
-    )
-    for (const r of ranking) {
-      const intent = getMovementIntentByPosition(r.position)
-      const { category: targetCat, movementType } = getTargetCategory(g.category, intent, sortedCats)
-      const gp = g.players.find((p) => p.user_id === r.userId)
-      const displayName = gp?.display_name ?? r.displayName
-      if (seenUser.has(r.userId)) {
-        skippedDuplicatePlayers += 1
-        continue
+  if (usedSnapshot) {
+    const playerIds = [...new Set(snapRows.map((r) => r.player_id))]
+    const profileMap = new Map<string, string>()
+    if (playerIds.length > 0) {
+      const { data: profs, error: pErr } = await supabase.from('profiles').select('id, full_name').in('id', playerIds)
+      if (pErr) throw pErr
+      for (const p of profs ?? []) {
+        profileMap.set(p.id, p.full_name ?? 'Sin nombre')
       }
-      seenUser.add(r.userId)
-      rows.push({
-        userId: r.userId,
-        displayName,
-        fromGroupId: g.id,
-        fromGroupName: g.name,
-        fromCategoryId: g.category.id,
-        fromCategoryName: g.category.name,
-        fromPosition: r.position,
-        points: r.points,
-        gamesFor: r.gamesFor,
-        gamesDifference: r.gamesFor - r.gamesAgainst,
-        intent,
-        targetSourceCategoryId: targetCat.id,
-        targetCategoryName: targetCat.name,
-        targetCategoryOrderIndex: targetCat.order_index,
-        movementType,
-      })
+    }
+
+    const byGroup = new Map<string, typeof snapRows>()
+    for (const row of snapRows) {
+      const list = byGroup.get(row.group_id) ?? []
+      list.push(row)
+      byGroup.set(row.group_id, list)
+    }
+
+    for (const [, plist] of byGroup) {
+      const gid = plist[0]?.group_id
+      const g = gid ? groups.find((x) => x.id === gid) : undefined
+      if (!g || g.players.length === 0) continue
+
+      const ordered = [...plist].sort((a, b) => a.position - b.position || a.player_id.localeCompare(b.player_id))
+      const tierRank = sortedDistinct.indexOf(g.order_index) + 1
+      if (tierRank < 1) continue
+
+      for (const row of ordered) {
+        const displayName =
+          profileMap.get(row.player_id) ??
+          g.players.find((p) => p.user_id === row.player_id)?.display_name ??
+          'Sin nombre'
+        const { targetGroupOrder: targetTierRank, movementType, movementReason } = getTargetGroupOrder(
+          tierRank,
+          row.position,
+          minTier,
+          maxTier,
+        )
+        const targetOrderIndex = sortedDistinct[targetTierRank - 1]!
+        if (seenUser.has(row.player_id)) {
+          skippedDuplicatePlayers += 1
+          continue
+        }
+        seenUser.add(row.player_id)
+        rows.push({
+          userId: row.player_id,
+          displayName,
+          fromGroupId: g.id,
+          fromGroupName: g.name,
+          fromGroupOrderIndex: g.order_index,
+          fromPosition: row.position,
+          points: row.points,
+          gamesFor: row.games_for,
+          gamesDifference: row.games_difference,
+          targetOrderIndex,
+          targetGroupLabel: groupLabelForTierRank(sortedDistinct, targetOrderIndex),
+          movementType,
+          movementReason,
+        })
+      }
+    }
+  } else {
+    for (const g of groups) {
+      if (g.players.length === 0) continue
+
+      const ranking = sortGroupStandingsForMovement(
+        computeGroupRanking(
+          g.players.map(({ id, user_id, group_id, display_name, seed_order, created_at }) => ({
+            id,
+            user_id,
+            group_id,
+            display_name,
+            seed_order,
+            created_at,
+          })),
+          g.matches,
+          rules,
+        ),
+      )
+      const tierRank = sortedDistinct.indexOf(g.order_index) + 1
+      if (tierRank < 1) continue
+
+      for (const r of ranking) {
+        const { targetGroupOrder: targetTierRank, movementType, movementReason } = getTargetGroupOrder(
+          tierRank,
+          r.position,
+          minTier,
+          maxTier,
+        )
+        const targetOrderIndex = sortedDistinct[targetTierRank - 1]!
+        const gp = g.players.find((p) => p.user_id === r.userId)
+        const displayName = gp?.display_name ?? r.displayName
+        if (seenUser.has(r.userId)) {
+          skippedDuplicatePlayers += 1
+          continue
+        }
+        seenUser.add(r.userId)
+        rows.push({
+          userId: r.userId,
+          displayName,
+          fromGroupId: g.id,
+          fromGroupName: g.name,
+          fromGroupOrderIndex: g.order_index,
+          fromPosition: r.position,
+          points: r.points,
+          gamesFor: r.gamesFor,
+          gamesDifference: r.gamesFor - r.gamesAgainst,
+          targetOrderIndex,
+          targetGroupLabel: groupLabelForTierRank(sortedDistinct, targetOrderIndex),
+          movementType,
+          movementReason,
+        })
+      }
     }
   }
 
   return {
     rows,
-    categories: sortedCats,
-    groupsWithoutCategory,
+    sortedDistinctGroupOrderIndices: sortedDistinct,
     nonClosedMatchCount: nonClosedMatchCount(groups),
     skippedDuplicatePlayers,
+    baseTournamentStatus: baseTournament?.status ?? null,
+    snapshotRowCount: snapRows.length,
+    usedSnapshot,
   }
 }
 
 export function buildNextTournamentGroupPreview(
   rows: PromotionPreviewRow[],
   groupSize: number,
+  sortedDistinctGroupOrderIndices: number[],
 ): NextTournamentGroupPreview[] {
-  const byCat = new Map<string, PromotionPreviewRow[]>()
+  const tierRank = (orderIdx: number) => {
+    const i = sortedDistinctGroupOrderIndices.indexOf(orderIdx)
+    return i >= 0 ? i + 1 : 1
+  }
+
+  const byTier = new Map<number, PromotionPreviewRow[]>()
   for (const row of rows) {
-    const list = byCat.get(row.targetSourceCategoryId) ?? []
+    const list = byTier.get(row.targetOrderIndex) ?? []
     list.push(row)
-    byCat.set(row.targetSourceCategoryId, list)
+    byTier.set(row.targetOrderIndex, list)
   }
 
   const out: NextTournamentGroupPreview[] = []
-  for (const [targetSourceCategoryId, bucket] of byCat) {
+  const tierKeys = [...byTier.keys()].sort((a, b) => a - b)
+
+  for (const targetOrderIndex of tierKeys) {
+    const bucket = byTier.get(targetOrderIndex)!
     const sorted = [...bucket].sort((a, b) => comparePromotionPreviewPlayers(a, b))
-    const categoryName = sorted[0]?.targetCategoryName ?? 'Categoría'
-    const orderIndex = sorted[0]?.targetCategoryOrderIndex ?? 0
+    const tr = tierRank(targetOrderIndex)
+    const tierDisplayName = `Grupo ${tr}`
     const chunks = chunkPlayersIntoGroups(sorted, groupSize)
     out.push({
-      targetSourceCategoryId,
-      categoryName,
-      orderIndex,
+      targetOrderIndex,
+      tierDisplayName,
       groups: chunks.map((chunk, idx) => ({
-        name: generateGroupName(categoryName, idx),
+        name: generateTierGroupName(tr, idx, chunks.length),
         players: chunk.map((r) => ({ userId: r.userId, displayName: r.displayName })),
         isComplete: chunk.length === groupSize,
       })),
     })
   }
 
-  out.sort((a, b) => a.orderIndex - b.orderIndex || a.categoryName.localeCompare(b.categoryName))
   return out
 }
 
-export function buildPlannedPersistGroups(
-  groupPlan: NextTournamentGroupPreview[],
-  categoryMap: Map<string, string>,
-): PlannedPersistGroup[] {
-  let order = 0
+export function buildPlannedPersistGroups(groupPlan: NextTournamentGroupPreview[]): PlannedPersistGroup[] {
+  const tierKeysSorted = [...new Set(groupPlan.map((c) => c.targetOrderIndex))].sort((a, b) => a - b)
   const planned: PlannedPersistGroup[] = []
-  for (const catPlan of groupPlan) {
-    const newCategoryId = categoryMap.get(catPlan.targetSourceCategoryId)
-    if (!newCategoryId) {
-      throw new Error(`No se pudo mapear la categoría destino «${catPlan.categoryName}».`)
-    }
-    catPlan.groups.forEach((g, idx) => {
+  for (const tierPlan of groupPlan) {
+    const tierRank = tierKeysSorted.indexOf(tierPlan.targetOrderIndex) + 1
+    tierPlan.groups.forEach((g, idx) => {
       planned.push({
-        tempId: `${catPlan.targetSourceCategoryId}:${idx}:${g.name}`,
+        tempId: `${tierPlan.targetOrderIndex}:${idx}:${g.name}`,
         name: g.name,
-        categoryName: catPlan.categoryName,
-        newCategoryId,
-        orderIndex: order++,
+        tierDisplayName: tierPlan.tierDisplayName,
+        targetOrderIndex: tierPlan.targetOrderIndex,
+        orderIndex: tierRank * 100 + idx,
         players: g.players,
         isComplete: g.isComplete,
       })
@@ -430,9 +494,9 @@ export function buildGroupProgressSkeleton(groupPlan: NextTournamentGroupPreview
   for (const c of groupPlan) {
     c.groups.forEach((g, idx) => {
       rows.push({
-        tempId: `${c.targetSourceCategoryId}:${idx}:${g.name}`,
+        tempId: `${c.targetOrderIndex}:${idx}:${g.name}`,
         name: g.name,
-        categoryName: c.categoryName,
+        categoryName: c.tierDisplayName,
         status: 'pending',
         playersTotal: g.players.length,
         isComplete: g.isComplete,
@@ -482,6 +546,27 @@ export function computeNextTournamentCreationSummary(
   }
 }
 
+export function computeNextTournamentGroupSizeWarnings(
+  groupPlan: NextTournamentGroupPreview[],
+  groupSize: number,
+): string[] {
+  const warnings: string[] = []
+  for (const tier of groupPlan) {
+    for (const g of tier.groups) {
+      const n = g.players.length
+      if (n > groupSize) {
+        warnings.push(
+          `«${g.name}» tiene ${n} jugadores (supera el tamaño ideal de ${groupSize}). Revisa el reparto o ajusta manualmente en Grupos.`,
+        )
+      }
+      if (n > 0 && n < groupSize) {
+        warnings.push(`«${g.name}» quedó incompleto (${n}/${groupSize}); no se generará round robin automático.`)
+      }
+    }
+  }
+  return warnings
+}
+
 /**
  * Validación antes de persistir. Si devuelve no vacío, no iniciar guardado.
  */
@@ -516,26 +601,34 @@ export async function validateNextTournamentCreationPlan(
     for (const g of c.groups) {
       groupCount++
       if (!g.name?.trim()) errors.push('Hay un grupo sin nombre en la vista previa.')
-      const dedupeKey = `${c.targetSourceCategoryId}|||${g.name.trim().toLowerCase()}`
+      const dedupeKey = `${c.targetOrderIndex}|||${g.name.trim().toLowerCase()}`
       if (groupKeys.has(dedupeKey)) {
-        errors.push(`Grupo duplicado en la misma categoría: «${g.name}» (${c.categoryName}).`)
+        errors.push(`Grupo duplicado en el mismo nivel: «${g.name}» (${c.tierDisplayName}).`)
       }
       groupKeys.add(dedupeKey)
     }
   }
   if (groupCount === 0) errors.push('No hay grupos generados en la vista previa.')
 
-  if (base && groupPlan.length > 0) {
-    const baseCats = await listGroupCategories(payload.baseTournamentId)
-    const idSet = new Set(baseCats.map((c) => c.id))
-    const missingOrder = baseCats.filter((c) => c.order_index == null || Number.isNaN(c.order_index))
-    if (missingOrder.length) {
-      errors.push('Todas las categorías del torneo base deben tener order_index definido.')
+  if (base) {
+    if (base.status !== 'finished') {
+      errors.push('El torneo base debe estar finalizado (estado «finished») antes de crear el siguiente.')
     }
-    for (const c of groupPlan) {
-      if (!idSet.has(c.targetSourceCategoryId)) {
-        errors.push(`La categoría objetivo «${c.categoryName}» no existe en el torneo base.`)
+    if (base.status === 'finished' && base.finished_at) {
+      const { count, error } = await supabase
+        .from('tournament_final_standings')
+        .select('id', { count: 'exact', head: true })
+        .eq('tournament_id', payload.baseTournamentId)
+      if (error) throw error
+      if ((count ?? 0) === 0) {
+        errors.push(
+          'El torneo base no tiene snapshot de clasificación final. Cierra el torneo de nuevo desde Administración → Torneos.',
+        )
       }
+    }
+    const groups = await getAdminGroups(payload.baseTournamentId)
+    if (nonClosedMatchCount(groups) > 0) {
+      errors.push('Todos los partidos del torneo base deben estar cerrados o cancelados.')
     }
   }
 
@@ -589,16 +682,12 @@ export async function createNextTournamentWithProgress(
     rows = payload.cachedPreview.rows
     groupPlan = payload.cachedPreview.groupPlan
   } else {
-    const { rows: builtRows, groupsWithoutCategory } = await buildPromotionPreview(payload.baseTournamentId)
-    if (builtRows.length === 0) {
-      throw new Error(
-        groupsWithoutCategory > 0
-          ? 'No hay jugadores elegibles: asigna categorías a los grupos del torneo base.'
-          : 'No hay jugadores en los grupos del torneo base.',
-      )
+    const preview = await buildPromotionPreview(payload.baseTournamentId)
+    if (preview.rows.length === 0) {
+      throw new Error('No hay jugadores elegibles en los grupos del torneo base.')
     }
-    rows = builtRows
-    groupPlan = buildNextTournamentGroupPreview(rows, groupSize)
+    rows = preview.rows
+    groupPlan = buildNextTournamentGroupPreview(rows, groupSize, preview.sortedDistinctGroupOrderIndices)
   }
 
   const groupsPreviewCount = groupPlan.reduce((a, c) => a + c.groups.length, 0)
@@ -647,8 +736,7 @@ export async function createNextTournamentWithProgress(
     cb.onStepStart?.(currentStep)
     emitProgress({ fraction: stepFraction(currentStep, 'start'), label: `Guardando ${groupsPreviewCount} grupos…`, groupsTotal: groupsPreviewCount, playersTotal: playersPreviewCount })
 
-    const categoryMap = await copyGroupCategoryShell(payload.baseTournamentId, tournament.id)
-    const planned = buildPlannedPersistGroups(groupPlan, categoryMap)
+    const planned = buildPlannedPersistGroups(groupPlan)
     const groupsTotal = planned.length
     const playersAssignTotal = planned.reduce((s, p) => s + p.players.length, 0)
 
@@ -660,7 +748,7 @@ export async function createNextTournamentWithProgress(
       tournament_id: tournament.id,
       name: p.name,
       order_index: p.orderIndex,
-      group_category_id: p.newCategoryId,
+      group_category_id: null,
       max_players: groupSize,
     }))
 
@@ -846,20 +934,39 @@ export async function createNextTournamentWithProgress(
       playersTotal: playersAssignTotal,
       matchesGenerated: matchesInsertedTotal,
     })
-    const movementRows = rows.map((r) => ({
-      from_tournament_id: payload.baseTournamentId,
-      to_tournament_id: tournament.id,
-      player_id: r.userId,
-      from_category_id: r.fromCategoryId,
-      to_category_id: categoryMap.get(r.targetSourceCategoryId) ?? null,
-      from_group_id: r.fromGroupId,
-      from_position: r.fromPosition,
-      points: r.points,
-      games_for: r.gamesFor,
-      games_difference: r.gamesDifference,
-      movement_type: r.movementType,
-      raw_movement: JSON.stringify({ intent: r.intent }),
-    }))
+    const userToMeta = new Map<string, { toGroupId: string; toOrderIndex: number }>()
+    planned.forEach((p, i) => {
+      const gid = (createdGroups[i] as { id: string }).id
+      for (const pl of p.players) {
+        userToMeta.set(pl.userId, { toGroupId: gid, toOrderIndex: p.targetOrderIndex })
+      }
+    })
+
+    const movementRows = rows.map((r) => {
+      const meta = userToMeta.get(r.userId)
+      return {
+        from_tournament_id: payload.baseTournamentId,
+        to_tournament_id: tournament.id,
+        player_id: r.userId,
+        from_category_id: null,
+        to_category_id: null,
+        from_group_id: r.fromGroupId,
+        to_group_id: meta?.toGroupId ?? null,
+        from_group_order_index: r.fromGroupOrderIndex,
+        to_group_order_index: meta?.toOrderIndex ?? null,
+        from_position: r.fromPosition,
+        points: r.points,
+        games_for: r.gamesFor,
+        games_difference: r.gamesDifference,
+        movement_type: r.movementType,
+        movement_reason: r.movementReason,
+        raw_movement: JSON.stringify({
+          movementReason: r.movementReason,
+          targetOrderIndex: r.targetOrderIndex,
+          fromGroupOrderIndex: r.fromGroupOrderIndex,
+        }),
+      }
+    })
 
     try {
       await insertRowsInChunks('tournament_movements', movementRows)
@@ -915,7 +1022,7 @@ export async function createNextTournamentWithProgress(
   }
 }
 
-/** Crea torneo siguiente, copia categorías (y reglas opcional), asigna jugadores y registra movimientos. */
+/** Crea el torneo siguiente según niveles de grupo del torneo base (reglas opcional), asigna jugadores y registra movimientos. */
 export async function createNextTournamentFromPrevious(
   payload: CreateNextTournamentPayload,
 ): Promise<CreateNextTournamentResult> {

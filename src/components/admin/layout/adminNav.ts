@@ -1,6 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
 import {
-  ArrowRightLeft,
   BarChart3,
   Bell,
   CalendarClock,
@@ -10,7 +9,6 @@ import {
   Settings,
   Settings2,
   ShieldCheck,
-  Tags,
   Trophy,
   Upload,
   Users,
@@ -35,10 +33,8 @@ export const adminNavEntries: readonly AdminNavGroup[] = [
     items: [
       { label: 'Vista general', href: '/admin/overview', icon: LayoutDashboard },
       { label: 'Torneos', href: '/admin/tournaments', icon: Trophy },
-      { label: 'Siguiente torneo', href: '/admin/next-tournament', icon: ArrowRightLeft },
       { label: 'Reglas', href: '/admin/rules', icon: Settings2 },
       { label: 'Grupos', href: '/admin/groups', icon: Flag },
-      { label: 'Categorías', href: '/admin/categories', icon: Tags },
       { label: 'Usuarios', href: '/admin/users', icon: Users },
       { label: 'Notificaciones', href: '/admin/notifications', icon: Bell, upcoming: true },
       { label: 'Exportaciones', href: '/admin/exports', icon: Download, upcoming: true },
@@ -72,6 +68,9 @@ function flattenAdminNavLinks(): { label: string; href: string }[] {
 }
 
 export function getAdminRouteTitle(pathname: string): string {
+  if (pathname === '/admin/next-tournament' || pathname.startsWith('/admin/next-tournament/')) {
+    return 'Siguiente torneo'
+  }
   const sorted = flattenAdminNavLinks().sort((a, b) => b.href.length - a.href.length)
   return sorted.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))?.label ?? 'Admin'
 }

@@ -4,15 +4,21 @@ import type { BulkImportPreviewRow } from '@/lib/bulkUserImportPreview'
 export const BULK_IMPORT_COLUMN_GUIDE = [
   {
     headers: 'ID, Id, external_id',
-    field: 'Identificador (external_id)',
-    required: true,
-    hint: 'Debe coincidir con una fila existente para actualizar; único en el archivo.',
+    field: 'Identificador (opcional)',
+    required: false,
+    hint: 'Opcional. Si coincide con un usuario existente, la fila actualiza ese registro.',
   },
   {
     headers: 'Nombre, name',
     field: 'Nombre completo',
     required: true,
     hint: 'Se muestra en el torneo y admin.',
+  },
+  {
+    headers: 'Celular, Teléfono, Móvil',
+    field: 'Número de celular',
+    required: true,
+    hint: 'Obligatorio. Único en archivo y en la base; se normaliza (solo dígitos, sin +52).',
   },
   {
     headers: 'Rol, role',
@@ -78,7 +84,7 @@ export function buildBulkImportPreviewSummary(preview: BulkImportPreviewRow[]): 
     else if (r.state === 'warning') warning++
     else error++
 
-    const isUpdate = r.messages.some((m) => m.includes('ID ya en el sistema'))
+    const isUpdate = r.messages.some((m) => m.includes('ya existe en el sistema'))
     if (r.state !== 'error') {
       if (isUpdate) likelyUpdates++
       else likelyCreates++
