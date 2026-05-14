@@ -99,10 +99,16 @@ function enProcesoCopy(match: MatchRow, userId: string): { estado: string; marca
   return { estado: matchStatusLabels[match.status], marcador }
 }
 
-function TabCount({ n }: { n: number }) {
+function TabCount({ n, active }: { n: number; active: boolean }) {
   if (n <= 0) return null
   return (
-    <span className="ml-1 rounded-full bg-[#1F5A4C]/12 px-1.5 py-px text-[11px] font-semibold tabular-nums text-[#1F5A4C]">
+    <span
+      className={cn(
+        'inline-flex min-h-[1.125rem] min-w-[1.125rem] shrink-0 items-center justify-center rounded-full px-1.5 text-[11px] font-bold tabular-nums transition-colors',
+        active ? 'bg-[#1F5A4C] text-white shadow-sm' : 'bg-[#102A43]/[0.08] text-[#475569]',
+      )}
+      aria-hidden
+    >
       {n}
     </span>
   )
@@ -197,24 +203,44 @@ export function PlayerMatchesPanel({
 
         <Tabs value={tab} onValueChange={setTab} className="w-full">
           <TabsList
-            variant="line"
+            variant="default"
             className={cn(
-              'mb-1 flex h-auto min-h-10 w-full flex-wrap justify-start gap-0 rounded-none border-b border-[#E2E8F0] bg-transparent p-0',
+              'mb-2 flex h-auto min-h-11 w-full gap-1 rounded-xl border border-[#E2E8F0]/90 bg-[#F6F3EE]/65 p-1 shadow-[inset_0_1px_2px_rgba(15,23,42,0.05)] sm:min-h-12',
+              '[&_[data-slot=tabs-trigger]]:shadow-none [&_[data-slot=tabs-trigger]]:after:hidden',
             )}
+            aria-label="Tipo de partidos"
           >
             <TabsTrigger
               value="pendientes"
-              className="relative rounded-none border-b-2 border-transparent px-3 pb-2 pt-1 text-xs font-semibold data-[active]:border-[#1F5A4C] data-[active]:bg-transparent data-[active]:text-[#1F5A4C] sm:text-sm"
+              className={cn(
+                'relative flex flex-1 flex-col gap-0.5 rounded-lg px-2 py-2 sm:flex-row sm:items-center sm:justify-center sm:gap-2 sm:px-3',
+                'border border-transparent text-xs font-semibold text-[#64748B]',
+                'transition-[color,background-color,box-shadow,transform] duration-200 ease-out',
+                'hover:bg-white/55 hover:text-[#102A43]',
+                'focus-visible:ring-[3px] focus-visible:ring-[#1F5A4C]/25',
+                'data-[active]:border-[#E2E8F0]/90 data-[active]:bg-white data-[active]:text-[#1F5A4C]',
+                'data-[active]:shadow-sm data-[active]:ring-1 data-[active]:ring-[#1F5A4C]/12',
+                'sm:text-sm',
+              )}
             >
-              Pendientes
-              <TabCount n={pendientes.length} />
+              <span className="leading-tight">Pendientes</span>
+              <TabCount n={pendientes.length} active={tab === 'pendientes'} />
             </TabsTrigger>
             <TabsTrigger
               value="registrados"
-              className="relative rounded-none border-b-2 border-transparent px-3 pb-2 pt-1 text-xs font-semibold data-[active]:border-[#1F5A4C] data-[active]:bg-transparent data-[active]:text-[#1F5A4C] sm:text-sm"
+              className={cn(
+                'relative flex flex-1 flex-col gap-0.5 rounded-lg px-2 py-2 sm:flex-row sm:items-center sm:justify-center sm:gap-2 sm:px-3',
+                'border border-transparent text-xs font-semibold text-[#64748B]',
+                'transition-[color,background-color,box-shadow,transform] duration-200 ease-out',
+                'hover:bg-white/55 hover:text-[#102A43]',
+                'focus-visible:ring-[3px] focus-visible:ring-[#1F5A4C]/25',
+                'data-[active]:border-[#E2E8F0]/90 data-[active]:bg-white data-[active]:text-[#1F5A4C]',
+                'data-[active]:shadow-sm data-[active]:ring-1 data-[active]:ring-[#1F5A4C]/12',
+                'sm:text-sm',
+              )}
             >
-              Registrados
-              <TabCount n={registradosCount} />
+              <span className="leading-tight">Registrados</span>
+              <TabCount n={registradosCount} active={tab === 'registrados'} />
             </TabsTrigger>
           </TabsList>
 

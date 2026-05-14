@@ -235,24 +235,24 @@ export function PlayerDashboardPage() {
 
       {userId ? <PlayerTournamentMovementCard playerId={userId} tournamentId={t.id} /> : null}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-        <div className="space-y-6 xl:col-span-4">
-          <PlayerGroupSection groupName={g.name} ranking={data.ranking} currentUserId={userId} />
-        </div>
-        <div className="xl:col-span-8">
-          <PlayerMatchesPanel
-            matches={history}
-            players={players}
-            myGroupPlayerId={membership.id}
-            userId={userId}
-            rules={r}
-            groupName={g.name}
-            groupDetailHref={groupHubHref}
-            groupKey={g.id}
-            onAfterAction={refreshPlayerDashboard}
-          />
-        </div>
-      </div>
+      <PlayerGroupSection
+        groupId={g.id}
+        groupName={g.name}
+        ranking={data.ranking}
+        currentUserId={userId}
+      />
+
+      <PlayerMatchesPanel
+        matches={history}
+        players={players}
+        myGroupPlayerId={membership.id}
+        userId={userId}
+        rules={r}
+        groupName={g.name}
+        groupDetailHref={groupHubHref}
+        groupKey={g.id}
+        onAfterAction={refreshPlayerDashboard}
+      />
     </div>
   )
 }

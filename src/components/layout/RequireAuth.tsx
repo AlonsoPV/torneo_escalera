@@ -1,6 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 
-import { Skeleton } from '@/components/ui/skeleton'
+import { RouteLoadingFallback } from '@/components/layout/RouteLoadingFallback'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 
@@ -24,12 +24,7 @@ export function RequireAuth() {
   }
 
   if (!initialized) {
-    return (
-      <div className="space-y-2 p-4">
-        <Skeleton className="h-8 w-40" />
-        <Skeleton className="h-24 w-full" />
-      </div>
-    )
+    return <RouteLoadingFallback />
   }
 
   if (!session) {

@@ -1,3 +1,4 @@
+import { lazy } from 'react'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 
 import { AppShell } from '@/components/layout/AppShell'
@@ -21,9 +22,12 @@ import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
 import { TournamentDashboardPage } from '@/pages/dashboard/TournamentDashboardPage'
-import { TournamentSimulationPage } from '@/pages/simulation/TournamentSimulationPage'
 import { PlayerAccountPage } from '@/pages/player/PlayerAccountPage'
 import { PlayerDashboardPage } from '@/pages/player/PlayerDashboardPage'
+
+const TournamentSimulationPage = lazy(() =>
+  import('@/pages/simulation/TournamentSimulationPage').then((m) => ({ default: m.TournamentSimulationPage })),
+)
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },

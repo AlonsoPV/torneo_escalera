@@ -56,7 +56,14 @@ function StatCell({ label, value }: { label: string; value: number | string }) {
   )
 }
 
-export function LeaderboardList({ rows }: { rows: TournamentLeaderboardEntry[] }) {
+export function LeaderboardList({
+  rows,
+  highlightUserId,
+}: {
+  rows: TournamentLeaderboardEntry[]
+  /** Resalta la fila del jugador actual (p. ej. vista `/player`). */
+  highlightUserId?: string | null
+}) {
   const [expanded, setExpanded] = useState(false)
   const hasMore = rows.length > INITIAL_LEADERBOARD_VISIBLE
   const visibleRows = hasMore && !expanded ? rows.slice(0, INITIAL_LEADERBOARD_VISIBLE) : rows
@@ -85,6 +92,9 @@ export function LeaderboardList({ rows }: { rows: TournamentLeaderboardEntry[] }
             className={cn(
               'border-b border-border/40 transition-colors duration-150 last:border-b-0',
               podiumSurface(r.position),
+              highlightUserId &&
+                r.userId === highlightUserId &&
+                'relative z-[1] shadow-[inset_0_0_0_2px] shadow-emerald-600/35 dark:shadow-emerald-400/30',
             )}
           >
             {/* Mobile: dos líneas */}

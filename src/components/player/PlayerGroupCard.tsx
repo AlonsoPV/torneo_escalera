@@ -43,8 +43,8 @@ export function PlayerGroupCard({
 
   return (
     <section
-      id="player-section-group"
-      data-name="player-section-group"
+      id="player-group-card"
+      data-name="player-group-card"
       className={cn(
         'overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white shadow-sm',
         className,

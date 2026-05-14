@@ -1,6 +1,6 @@
 import { Navigate } from 'react-router-dom'
 
-import { Skeleton } from '@/components/ui/skeleton'
+import { RouteLoadingFallback } from '@/components/layout/RouteLoadingFallback'
 import { isAdminRole } from '@/lib/permissions'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
@@ -16,12 +16,7 @@ export function IndexRedirect() {
   }
 
   if (!initialized) {
-    return (
-      <div className="space-y-2 p-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-32 w-full max-w-2xl" />
-      </div>
-    )
+    return <RouteLoadingFallback />
   }
 
   if (session) {
