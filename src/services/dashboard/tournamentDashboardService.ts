@@ -146,15 +146,20 @@ export function patchTournamentDashboardCachesForMatch(
   tournamentId: string,
   updatedMatch: MatchRow,
 ): void {
-  qc.setQueriesData<TournamentDashboardData | undefined>(
-    { queryKey: ['tournament-dashboard', tournamentId], exact: false },
-    (old, query) => {
-      if (!old) return old
-      const f = query.queryKey[2]
-      if (!f || typeof f !== 'object') return old
-      return patchCachedTournamentDashboardData(old, updatedMatch, f as TournamentDashboardFiltersInput)
-    },
-  )
+  const queries = qc.getQueryCache().findAll({
+    queryKey: ['tournament-dashboard', tournamentId],
+    exact: false,
+  })
+  for (const query of queries) {
+    const old = query.state.data as TournamentDashboardData | undefined
+    if (!old) continue
+    const f = query.queryKey[2]
+    if (!f || typeof f !== 'object') continue
+    qc.setQueryData(
+      query.queryKey,
+      patchCachedTournamentDashboardData(old, updatedMatch, f as TournamentDashboardFiltersInput),
+    )
+  }
 }
 
 function sortMergedLeaderboard(a: TournamentLeaderboardEntry, b: TournamentLeaderboardEntry): number {

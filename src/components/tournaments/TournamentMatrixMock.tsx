@@ -69,6 +69,8 @@ const mockMatches: MatchRow[] = [
     admin_validated_at: null,
     closed_at: null,
     dispute_reason: null,
+    disputed_by: null,
+    disputed_at: null,
     admin_notes: null,
     created_by: null,
     updated_by: null,
@@ -153,6 +155,7 @@ function MockMatrixInner(props: { players: GroupPlayer[]; matches: MatchRow[] })
                           'flex h-12 flex-col items-center justify-center rounded-md border px-1 text-[10px]',
                           match?.status === 'closed' || match?.status === 'validated'
                             ? 'border-emerald-500/40 bg-emerald-500/10'
+                            : null,
                         )}
                       >
                         {sets && sets.length > 0 ? (
