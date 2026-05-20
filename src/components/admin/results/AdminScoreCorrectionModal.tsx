@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { formValuesToMatchRulesTournament, rulesRowToFormValues } from '@/domain/tournamentRulesForm'
+import { scoreSideNumericInputHandlers } from '@/lib/scoreSideNumericInput'
 import { isSuddenDeathRowIndex, maxSetsFromRules } from '@/lib/tournamentRulesEngine'
 import type { AdminMatchRecord } from '@/services/admin'
 import type { ScoreSet, TournamentRules } from '@/types/database'
@@ -25,12 +26,18 @@ export function AdminScoreCorrectionModal({
   open,
   onOpenChange,
   onSubmit,
+  title: titleProp,
+  description: descriptionProp,
 }: {
   match: AdminMatchRecord | null
   rules: TournamentRules | null
   open: boolean
   onOpenChange: (open: boolean) => void
   onSubmit: (input: { match: AdminMatchRecord; sets: ScoreSet[]; closeAfter: boolean; adminNote: string }) => void
+  /** Título del modal (p. ej. registrar / corregir / resolver refutación). */
+  title?: string
+  /** Subtítulo; por defecto “Jugador A vs Jugador B”. */
+  description?: string
 }) {
   const effectiveRules = useMemo(
     () => rules ?? formValuesToMatchRulesTournament(rulesRowToFormValues(null)),
@@ -38,21 +45,26 @@ export function AdminScoreCorrectionModal({
   )
   const [sets, setSets] = useState<ScoreSet[]>([{ a: 0, b: 0 }])
   const [adminNote, setAdminNote] = useState('')
+  /** Solo disputa: si está activo, «Confirmar resultado» pasa a validado; si no, sigue en revisión. */
+  const [applyValidateFromDispute, setApplyValidateFromDispute] = useState(true)
 
   useEffect(() => {
     if (!open || !match) return
     setSets(match.score_raw?.length ? match.score_raw.map((s) => ({ a: s.a, b: s.b })) : [{ a: 0, b: 0 }])
     setAdminNote(match.admin_notes ?? '')
+    setApplyValidateFromDispute(true)
   }, [match, open])
 
   if (!match) return null
 
   const maxSets = maxSetsFromRules(effectiveRules)
-  const setValue = (index: number, side: keyof ScoreSet, value: string) => {
-    const next = [...sets]
-    next[index] = { ...next[index], [side]: Math.max(0, Number(value) || 0) }
-    setSets(next)
+  const setNumeric = (index: number, side: keyof ScoreSet, next: number) => {
+    const nextSets = [...sets]
+    nextSets[index] = { ...nextSets[index], [side]: next }
+    setSets(nextSets)
   }
+
+  const disputed = match.status === 'score_disputed'
 
   const submit = (closeAfter: boolean) => {
     const validation = validateScoreWithRules(sets, effectiveRules)
@@ -60,15 +72,16 @@ export function AdminScoreCorrectionModal({
       toast.error(validation.errors[0] ?? 'Marcador inválido')
       return
     }
-    onSubmit({ match, sets, closeAfter, adminNote })
+    const effectiveCloseAfter = disputed ? closeAfter && applyValidateFromDispute : closeAfter
+    onSubmit({ match, sets, closeAfter: effectiveCloseAfter, adminNote })
   }
 
   return (
     <AdminFormModal
       open={open}
       onOpenChange={onOpenChange}
-      title="Corregir marcador"
-      description={`${match.playerAName} vs ${match.playerBName}`}
+      title={titleProp ?? 'Corregir marcador'}
+      description={descriptionProp ?? `${match.playerAName} vs ${match.playerBName}`}
     >
       <div className="space-y-4">
         <div className="space-y-3">
@@ -101,8 +114,7 @@ export function AdminScoreCorrectionModal({
                     inputMode="numeric"
                     min={0}
                     className="mt-1.5 h-12 w-full min-w-0 text-center text-xl font-bold tabular-nums"
-                    value={set.a}
-                    onChange={(event) => setValue(index, 'a', event.target.value)}
+                    {...scoreSideNumericInputHandlers(set.a, (n) => setNumeric(index, 'a', n))}
                   />
                 </div>
                 <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-2.5">
@@ -115,8 +127,7 @@ export function AdminScoreCorrectionModal({
                     inputMode="numeric"
                     min={0}
                     className="mt-1.5 h-12 w-full min-w-0 text-center text-xl font-bold tabular-nums"
-                    value={set.b}
-                    onChange={(event) => setValue(index, 'b', event.target.value)}
+                    {...scoreSideNumericInputHandlers(set.b, (n) => setNumeric(index, 'b', n))}
                   />
                 </div>
               </div>
@@ -142,9 +153,38 @@ export function AdminScoreCorrectionModal({
             placeholder="Motivo de la corrección o criterio aplicado"
           />
         </div>
+        {disputed ? (
+          <div className="space-y-2 rounded-xl border border-amber-200/90 bg-amber-50/90 p-3">
+            <label className="flex cursor-pointer items-start gap-2.5 text-sm leading-snug text-amber-950">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 shrink-0 rounded border-amber-400 text-[#1F5A4C] focus-visible:ring-2 focus-visible:ring-[#1F5A4C]/30"
+                checked={applyValidateFromDispute}
+                onChange={(e) => setApplyValidateFromDispute(e.target.checked)}
+              />
+              <span>
+                <span className="font-semibold">Aplicar y validar oficialmente</span>
+                <span className="mt-0.5 block text-xs font-normal text-amber-900/90">
+                  Si está marcado, «Confirmar resultado» cierra la revisión y el marcador queda validado para el ranking.
+                  Desmárcalo para guardar cambios y seguir en «pendiente de revisión».
+                </span>
+              </span>
+            </label>
+          </div>
+        ) : null}
         <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-relaxed text-slate-700">
-          Guarda una corrección para dejarla pendiente de cierre, o confirma el resultado para hacerlo oficial y
-          enviarlo al ranking.
+          {disputed ? (
+            <>
+              «Guardar corrección» actualiza el marcador pero puede dejar el partido en revisión según la casilla de
+              validación. «Confirmar resultado» valida y envía al ranking solo si «Aplicar y validar oficialmente» está
+              activo.
+            </>
+          ) : (
+            <>
+              Guarda una corrección para dejarla pendiente de cierre, o confirma el resultado para hacerlo oficial y
+              enviarlo al ranking.
+            </>
+          )}
         </p>
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

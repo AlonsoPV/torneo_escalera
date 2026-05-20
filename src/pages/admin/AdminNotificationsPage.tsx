@@ -1,68 +1,206 @@
-import { AlertTriangle, Bell } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { BarChart3, Scale } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 
-import { AdminEmptyState } from '@/components/admin/shared/AdminEmptyState'
+import {
+  CompactEmpty,
+  sortRowsForTab,
+  tabFilterRows,
+} from '@/components/admin/results/adminResultsReviewUtils'
+import { AdminResultReviewRow } from '@/components/admin/results/AdminResultReviewRow'
+import { AdminResultsVirtualList } from '@/components/admin/results/AdminResultsVirtualList'
+import { AdminScoreCorrectionModal } from '@/components/admin/results/AdminScoreCorrectionModal'
 import { AdminPageHeader } from '@/components/admin/shared/AdminPageHeader'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
+import { buttonVariants } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getAdminOverviewData } from '@/services/admin'
+import { cn } from '@/lib/utils'
+import {
+  confirmResult,
+  correctResult,
+  getAdminResults,
+  type AdminMatchRecord,
+} from '@/services/admin'
+import { adminInvalidateMatchResult, adminValidateDisputedWithoutChanges } from '@/services/matches'
+import { getTournamentRules } from '@/services/tournaments'
+import { useAuthStore } from '@/stores/authStore'
+import type { ScoreSet } from '@/types/database'
 
+/** Bandeja ligera: todos los partidos `score_disputed`; filtros y métricas amplias están en Resultados. */
 export function AdminNotificationsPage() {
-  const overviewQ = useQuery({
-    queryKey: ['admin-overview'],
-    queryFn: getAdminOverviewData,
+  const qc = useQueryClient()
+  const actorId = useAuthStore((s) => s.user?.id)
+  const [editingMatch, setEditingMatch] = useState<AdminMatchRecord | null>(null)
+
+  const resultsQ = useQuery({ queryKey: ['admin-results'], queryFn: getAdminResults })
+  const rulesForEditor = useQuery({
+    queryKey: ['tournament-rules', editingMatch?.tournament_id ?? ''],
+    queryFn: () => getTournamentRules(editingMatch!.tournament_id),
+    enabled: Boolean(editingMatch?.tournament_id),
   })
 
+  const disputedTabRows = useMemo(() => {
+    const filtered = tabFilterRows(resultsQ.data ?? [], 'disputed')
+    return sortRowsForTab(filtered, 'disputed')
+  }, [resultsQ.data])
+
+  const disputedCount = disputedTabRows.length
+
+  const refreshResults = async (opts?: { touchedMatch?: Pick<AdminMatchRecord, 'id' | 'tournament_id'> }) => {
+    await qc.invalidateQueries({ queryKey: ['admin-results'] })
+    await qc.invalidateQueries({ queryKey: ['admin-matches'] })
+    await qc.invalidateQueries({ queryKey: ['admin-overview'] })
+    await qc.invalidateQueries({
+      predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'playerViewModel',
+    })
+    const tm = opts?.touchedMatch
+    if (tm) {
+      await qc.invalidateQueries({ queryKey: ['matchScoreLogs', tm.id] })
+      await qc.invalidateQueries({ queryKey: ['tournament-dashboard', tm.tournament_id], exact: false })
+    }
+  }
+
+  const confirmMut = useMutation({
+    mutationFn: async (match: AdminMatchRecord) => {
+      if (!actorId) throw new Error('No autenticado')
+      await confirmResult(match, actorId)
+    },
+    onSuccess: async (_, match) => {
+      toast.success('Resultado validado y cerrado')
+      await refreshResults({ touchedMatch: match })
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Error al validar resultado'),
+  })
+
+  const correctMut = useMutation({
+    mutationFn: async (input: { match: AdminMatchRecord; sets: ScoreSet[]; closeAfter: boolean; adminNote: string }) => {
+      if (!actorId) throw new Error('No autenticado')
+      await correctResult(input.match, input.sets, actorId, input.closeAfter, input.adminNote)
+    },
+    onSuccess: async (_, input) => {
+      const draftDisputed =
+        input.match.status === 'score_disputed' && input.closeAfter === false
+      toast.success(draftDisputed ? 'Corrección guardada (sigue en revisión)' : 'Marcador corregido')
+      setEditingMatch(null)
+      await refreshResults({ touchedMatch: input.match })
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Error al corregir marcador'),
+  })
+
+  const validateDisputedMut = useMutation({
+    mutationFn: async (match: AdminMatchRecord) => {
+      await adminValidateDisputedWithoutChanges(match)
+    },
+    onSuccess: async (_, match) => {
+      toast.success('Resultado validado sin cambios de marcador')
+      await refreshResults({ touchedMatch: match })
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'No se pudo validar'),
+  })
+
+  const invalidateDisputedMut = useMutation({
+    mutationFn: async (match: AdminMatchRecord) => {
+      await adminInvalidateMatchResult(match)
+    },
+    onSuccess: async (_, match) => {
+      toast.success('Partido invalidado (cancelado)')
+      await refreshResults({ touchedMatch: match })
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'No se pudo invalidar'),
+  })
+
+  const loadingShell = resultsQ.isLoading
+
   return (
-    <div className="space-y-8 sm:space-y-10">
+    <div className="space-y-4 pb-8">
       <AdminPageHeader
         eyebrow="Administración"
-        title="Notificaciones"
-        description="Pendientes operativos detectados con la información actual de Supabase."
+        title="Disputas · revisión"
+        description="Marcadores refutados por rivales. Aquí solo ves disputas pendientes; usa Resultados para filtrar por torneo, grupo o jugador."
         actions={
-          <Badge className="w-full justify-center rounded-full bg-[#C8A96B]/20 py-1.5 text-[#6E5521] sm:w-auto">
-            Canal no configurado
-          </Badge>
+          <Link
+            to="/admin/matches?tab=disputed"
+            className={cn(buttonVariants({ size: 'sm' }), 'gap-2 bg-[#1F5A4C] text-white hover:bg-[#174a3f]')}
+          >
+            <BarChart3 className="size-4 opacity-90" aria-hidden />
+            Abrir Partidos (filtros)
+          </Link>
         }
       />
 
-      {overviewQ.isLoading ? (
-        <Skeleton className="h-44 rounded-2xl" />
-      ) : overviewQ.data?.pendingActions.length ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {overviewQ.data.pendingActions.map((action) => (
-            <Card key={action} className="border-[#E2E8F0] bg-white shadow-sm">
-              <CardContent className="space-y-4 p-5">
-                <span className="inline-flex rounded-2xl bg-amber-50 p-3 text-amber-700">
-                  <AlertTriangle className="size-5" />
-                </span>
-                <div className="min-w-0">
-                  <h3 className="text-pretty font-semibold text-[#102A43]">{action}</h3>
-                  <p className="mt-1 text-sm text-[#64748B]">
-                    Este pendiente se calculó con los datos actuales del torneo.
-                  </p>
+      <section aria-labelledby="disputes-inbox-heading" className="space-y-3">
+        <div className="rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-50/80 via-white to-white p-4 shadow-sm ring-1 ring-amber-900/[0.04] sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex min-w-0 gap-3">
+              <div
+                className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-900 shadow-inner shadow-amber-900/5"
+                aria-hidden
+              >
+                <Scale className="size-5" strokeWidth={2.25} />
+              </div>
+              <div className="min-w-0 pt-0.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 id="disputes-inbox-heading" className="text-base font-semibold tracking-tight text-[#102A43]">
+                    Bandeja de revisión
+                  </h2>
+                  <Badge
+                    variant="secondary"
+                    className="border-amber-200/90 bg-white/90 px-2 py-0 text-[11px] font-bold tabular-nums text-amber-950"
+                  >
+                    {loadingShell ? '…' : disputedCount}
+                  </Badge>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+                <p className="mt-1 text-xs leading-relaxed text-slate-600 sm:text-sm">
+                  Lista prioritaria de partidos en{' '}
+                  <span className="font-medium text-slate-800">pendiente revisión administrativa</span>. Orden: más
+                  recientes primero (última actualización).
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
-      ) : (
-        <AdminEmptyState
-          title="No hay notificaciones operativas."
-          description="No se detectaron pendientes con la información actual de Supabase."
-          icon={Bell}
-        />
-      )}
 
-      <Card className="border-dashed border-[#E2E8F0] bg-white/80">
-        <CardContent className="flex flex-col gap-3 p-4 text-sm text-[#64748B] sm:flex-row sm:items-center sm:gap-4 sm:p-5">
-          <Bell className="size-5 shrink-0 text-[#1F5A4C]" />
-          <p className="min-w-0 leading-relaxed">
-            Para enviar avisos reales falta configurar un canal de entrega en backend.
-          </p>
-        </CardContent>
-      </Card>
+        {resultsQ.isError ? (
+          <CompactEmpty title={resultsQ.error instanceof Error ? resultsQ.error.message : 'No se pudieron cargar los datos.'} />
+        ) : loadingShell ? (
+          <Skeleton className="h-[min(calc(100dvh-13rem),780px)] w-full rounded-2xl" />
+        ) : disputedCount === 0 ? (
+          <CompactEmpty title="No hay disputas pendientes." />
+        ) : (
+          <AdminResultsVirtualList
+            className="rounded-2xl border-slate-200/95 shadow-sm"
+            maxHeight="min(calc(100dvh - 13rem), 900px)"
+            estimateRowHeight={96}
+            items={disputedTabRows}
+            empty={<CompactEmpty title="No hay disputas pendientes." />}
+            renderRow={(match) => (
+              <AdminResultReviewRow
+                match={match}
+                quickReview={false}
+                onConfirm={(m) => confirmMut.mutate(m)}
+                onCorrect={(m) => setEditingMatch(m)}
+                onValidateAsIs={(m) => validateDisputedMut.mutate(m)}
+                onInvalidate={(m) => {
+                  if (!window.confirm('¿Invalidar este partido? Pasará a cancelado y saldrá del ranking.')) return
+                  invalidateDisputedMut.mutate(m)
+                }}
+              />
+            )}
+          />
+        )}
+      </section>
+
+      <AdminScoreCorrectionModal
+        match={editingMatch}
+        rules={rulesForEditor.data ?? null}
+        open={Boolean(editingMatch)}
+        onOpenChange={(open) => {
+          if (!open) setEditingMatch(null)
+        }}
+        onSubmit={(input) => correctMut.mutate(input)}
+      />
     </div>
   )
 }

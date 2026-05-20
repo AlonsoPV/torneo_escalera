@@ -43,7 +43,7 @@ export function TournamentMetricCard({
   return (
     <div
       className={cn(
-        'rounded-2xl border border-border/60 bg-card p-3 shadow-sm transition-colors hover:border-border sm:p-4',
+        'rounded-2xl border border-border/60 bg-card p-2.5 shadow-sm transition-colors hover:border-border sm:p-4',
         className,
       )}
     >
@@ -52,14 +52,14 @@ export function TournamentMetricCard({
           <p className="truncate text-[11px] font-medium tracking-wide text-muted-foreground uppercase sm:text-xs">
             {label}
           </p>
-          <div className="mt-1 text-2xl font-bold tracking-tight text-foreground tabular-nums">
+          <div className="mt-1 text-xl font-bold tracking-tight text-foreground tabular-nums sm:text-2xl">
             {value}
           </div>
           {hint ? <p className="mt-0.5 truncate text-[11px] text-muted-foreground sm:text-xs">{hint}</p> : null}
         </div>
         {Icon ? (
-          <span className={cn('flex size-10 shrink-0 items-center justify-center rounded-xl', toneStyles[tone])}>
-            <Icon className="size-5" aria-hidden />
+          <span className={cn('flex size-9 shrink-0 items-center justify-center rounded-xl sm:size-10', toneStyles[tone])}>
+            <Icon className="size-[1.125rem] sm:size-5" aria-hidden />
           </span>
         ) : null}
       </div>

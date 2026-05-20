@@ -1,3 +1,4 @@
+import { TOURNAMENT_RULES } from '@/domain/tournamentRankingPoints'
 import { supabase } from '@/lib/supabase'
 import { createMissingGroupsOnePerCategory } from '@/services/groups'
 import { ensureDefaultGroupCategories, listGroupCategories } from '@/services/groupCategories'
@@ -51,6 +52,42 @@ export type CreateTournamentResult = {
   tournament: Tournament
   /** Grupos nuevos insertados en `public.groups` (solo si `initialGroups === 'per_category'`). */
   groupsCreated: number
+}
+
+/**
+ * Torneo creado desde importación histórica de resultados: ya cerrado, sin bloqueo de «un solo torneo abierto».
+ * Inserta fila en `tournament_rules` con valores por defecto.
+ */
+export async function createTournamentForHistoricalImport(input: {
+  name: string
+  createdBy: string
+}): Promise<Tournament> {
+  const now = new Date().toISOString()
+  const { data, error } = await supabase
+    .from('tournaments')
+    .insert({
+      name: input.name.trim(),
+      description: null,
+      category: null,
+      season: null,
+      status: 'finished',
+      created_by: input.createdBy,
+      previous_tournament_id: null,
+      period_label: null,
+      finished_at: now,
+      closed_by: input.createdBy,
+    })
+    .select('*')
+    .single()
+  if (error) throw error
+  const tournament = data as Tournament
+
+  const { error: rulesError } = await supabase.from('tournament_rules').insert({
+    tournament_id: tournament.id,
+  })
+  if (rulesError) throw rulesError
+
+  return tournament
 }
 
 export async function createTournament(input: CreateTournamentInput): Promise<CreateTournamentResult> {
@@ -217,7 +254,7 @@ export async function resetTournamentRulesToDefault(tournamentId: string): Promi
     super_tiebreak_final_set: false,
     points_per_win: 3,
     points_per_loss: 1,
-    points_default_win: 2,
+    points_default_win: TOURNAMENT_RULES.woWinPoints,
     points_default_loss: -1,
     allow_player_score_entry: true,
     allow_7_6: true,

@@ -6,9 +6,10 @@ import {
   RotateCcw,
   Search,
   Trash2,
+  UserPlus,
   Users,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -23,6 +24,7 @@ import { AdminPageHeader } from '@/components/admin/shared/AdminPageHeader'
 import { AdminSectionTitle } from '@/components/admin/shared/AdminSectionTitle'
 import { AdminStatusBadge } from '@/components/admin/shared/AdminStatusBadge'
 import { AdminToolbar } from '@/components/admin/shared/AdminToolbar'
+import { groupFilterOptionsFromRecords } from '@/components/admin/shared/adminMatchFilters'
 import { ChangePasswordModal } from '@/components/admin/users/ChangePasswordModal'
 import { CreateUserModal } from '@/components/admin/users/CreateUserModal'
 import { EditUserModal } from '@/components/admin/users/EditUserModal'
@@ -60,7 +62,14 @@ import { listPlayerCategories } from '@/services/playerCategories'
 import { useAuthStore } from '@/stores/authStore'
 import type { UserRole } from '@/types/database'
 
-const PAGE_SIZE = 10
+const PAGE_SIZE = 25
+
+function userMatchesGroupFilter(user: AdminUserRecord, groupFilter: string): boolean {
+  if (groupFilter === 'all') return true
+  const gid = user.group?.id
+  if (!gid) return false
+  return groupFilter.split('|').filter(Boolean).includes(gid)
+}
 
 function splitFullName(full: string | null | undefined): { nombre: string; apellido: string } {
   const t = full?.trim() ?? ''
@@ -80,6 +89,7 @@ export function AdminUsersPage() {
   const qc = useQueryClient()
   const currentUserId = useAuthStore((s) => s.user?.id ?? null)
   const [search, setSearch] = useState('')
+  const deferredSearch = useDeferredValue(search)
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all')
   const [groupFilter, setGroupFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState<'all' | string>('all')
@@ -92,17 +102,20 @@ export function AdminUsersPage() {
   const usersQ = useQuery({ queryKey: ['admin-users'], queryFn: getAdminUsers })
   const groupsQ = useQuery({ queryKey: ['admin-groups'], queryFn: () => getAdminGroups() })
   const categoriesQ = useQuery({ queryKey: ['player-categories'], queryFn: listPlayerCategories })
-  const groups = useMemo(() => groupsQ.data?.map((group) => ({ ...group })) ?? [], [groupsQ.data])
+  const groups = useMemo(() => groupsQ.data ?? [], [groupsQ.data])
   const categories = useMemo(() => categoriesQ.data ?? [], [categoriesQ.data])
+  const groupOpts = useMemo(() => groupFilterOptionsFromRecords(groups), [groups])
 
   const refreshUsers = async () => {
     await qc.invalidateQueries({ queryKey: ['admin-users'] })
     await qc.invalidateQueries({ queryKey: ['admin-groups'] })
   }
 
+  // Reinicia paginación al cambiar filtros.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset explícito de página al cambiar criterios
     setVisibleCount(PAGE_SIZE)
-  }, [search, roleFilter, groupFilter, categoryFilter, estadoFilter])
+  }, [deferredSearch, roleFilter, groupFilter, categoryFilter, estadoFilter])
 
   const updateUserMut = useMutation({
     mutationFn: async (input: {
@@ -153,7 +166,7 @@ export function AdminUsersPage() {
   }, [usersQ.data])
 
   const filteredUsers = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase()
+    const normalizedSearch = deferredSearch.trim().toLowerCase()
     return (usersQ.data ?? []).filter((user) => {
       const matchesSearch =
         !normalizedSearch ||
@@ -161,7 +174,7 @@ export function AdminUsersPage() {
         user.phone?.toLowerCase().includes(normalizedSearch) ||
         formatRecoveryEmailDisplay(user.email).toLowerCase().includes(normalizedSearch)
       const matchesRole = roleFilter === 'all' || user.role === roleFilter
-      const matchesGroup = groupFilter === 'all' || user.group?.id === groupFilter
+      const matchesGroup = userMatchesGroupFilter(user, groupFilter)
       const matchesCategory = categoryFilter === 'all' || user.category_id === categoryFilter
       const matchesEstado =
         estadoFilter === 'all' ||
@@ -169,9 +182,10 @@ export function AdminUsersPage() {
         (estadoFilter === 'activo' && user.status === 'active')
       return matchesSearch && matchesRole && matchesGroup && matchesCategory && matchesEstado
     })
-  }, [categoryFilter, estadoFilter, groupFilter, roleFilter, search, usersQ.data])
+  }, [categoryFilter, deferredSearch, estadoFilter, groupFilter, roleFilter, usersQ.data])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- recorta selección a filas aún visibles con filtros
     setSelectedIds((prev) => {
       const allowed = new Set(filteredUsers.map((u) => u.id))
       const next = new Set<string>()
@@ -191,24 +205,28 @@ export function AdminUsersPage() {
     [filteredUsers, selectedIds],
   )
 
-  const toggleSelectionRow = (id: string, selected: boolean) => {
+  const toggleSelectionRow = useCallback((id: string, selected: boolean) => {
     setSelectedIds((prev) => {
       const next = new Set(prev)
       if (selected) next.add(id)
       else next.delete(id)
       return next
     })
-  }
+  }, [])
 
-  const toggleSelectionAllVisible = (select: boolean) => {
-    const keys = visibleUsers.map((u) => u.id)
+  const toggleSelectionAllVisible = useCallback((select: boolean) => {
     setSelectedIds((prev) => {
       const next = new Set(prev)
+      const keys = filteredUsers.slice(0, visibleCount).map((u) => u.id)
       if (select) keys.forEach((id) => next.add(id))
       else keys.forEach((id) => next.delete(id))
       return next
     })
-  }
+  }, [filteredUsers, visibleCount])
+
+  const selectAllFiltered = useCallback(() => {
+    setSelectedIds(new Set(filteredUsers.map((u) => u.id)))
+  }, [filteredUsers])
 
   const allVisibleSelected =
     visibleUsers.length > 0 && visibleUsers.every((u) => selectedIds.has(u.id))
@@ -230,8 +248,10 @@ export function AdminUsersPage() {
 
   useEffect(() => {
     if (selectedUsers.length !== 1) {
-      setEditModalOpen(false)
-      setPasswordModalOpen(false)
+      queueMicrotask(() => {
+        setEditModalOpen(false)
+        setPasswordModalOpen(false)
+      })
     }
   }, [selectedUsers.length])
 
@@ -269,73 +289,79 @@ export function AdminUsersPage() {
     toast.success('Excel generado con la selección')
   }
 
-  const columns: AdminDataTableColumn<AdminUserRecord>[] = [
-    {
-      key: 'name',
-      header: 'Nombre',
-      render: (user) => (
-        <span className="text-xs font-medium leading-tight text-[#102A43]">{user.full_name ?? 'Sin nombre'}</span>
-      ),
-    },
-    {
-      key: 'phone',
-      header: 'Celular',
-      render: (user) => (
-        <span className="tabular-nums text-xs leading-tight text-[#334E68]">{user.phone ?? '—'}</span>
-      ),
-    },
-    {
-      key: 'recovery',
-      header: 'Correo recuperación',
-      render: (user) => (
-        <span className="max-w-[14rem] truncate text-xs leading-tight text-[#334E68]" title={formatRecoveryEmailDisplay(user.email)}>
-          {formatRecoveryEmailDisplay(user.email)}
-        </span>
-      ),
-    },
-    {
-      key: 'recovery_status',
-      header: 'Recuperación',
-      headerTitle:
-        'Indica si ya registró un correo para recuperar contraseña. No confundir con la columna «Cuenta» (activo/desactivado por admin).',
-      render: (user) =>
-        recoveryEmailComplete(user) ? (
-          <Badge
-            variant="secondary"
-            className="h-5 border-emerald-200/80 bg-emerald-50 px-1.5 text-[10px] font-medium leading-none text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-100"
-          >
-            Listo
-          </Badge>
-        ) : (
-          <Badge
-            variant="secondary"
-            className="h-5 border-amber-200/90 bg-amber-50 px-1.5 text-[10px] font-medium leading-none text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
-          >
-            Falta correo
-          </Badge>
+  const columns = useMemo<AdminDataTableColumn<AdminUserRecord>[]>(
+    () => [
+      {
+        key: 'name',
+        header: 'Nombre',
+        render: (user) => (
+          <span className="text-xs font-medium leading-tight text-[#102A43]">{user.full_name ?? 'Sin nombre'}</span>
         ),
-    },
-    {
-      key: 'group',
-      header: 'Grupo',
-      render: (user) => (
-        <span className="max-w-[10rem] truncate text-xs leading-tight" title={user.group?.name ?? 'Sin grupo'}>
-          {user.group?.name ?? 'Sin grupo'}
-        </span>
-      ),
-    },
-    {
-      key: 'account',
-      header: 'Cuenta',
-      headerTitle: 'Cuenta activa o desactivada por un administrador (no puede iniciar sesión si está desactivada).',
-      render: (user) => (
-        <AdminStatusBadge
-          status={user.status === 'inactive' ? 'inactive' : 'active'}
-          className="h-5 shrink-0 rounded-md px-1.5 py-0 text-[10px] font-medium leading-none"
-        />
-      ),
-    },
-  ]
+      },
+      {
+        key: 'phone',
+        header: 'Celular',
+        render: (user) => (
+          <span className="tabular-nums text-xs leading-tight text-[#334E68]">{user.phone ?? '—'}</span>
+        ),
+      },
+      {
+        key: 'recovery',
+        header: 'Correo recuperación',
+        render: (user) => (
+          <span className="max-w-[14rem] truncate text-xs leading-tight text-[#334E68]" title={formatRecoveryEmailDisplay(user.email)}>
+            {formatRecoveryEmailDisplay(user.email)}
+          </span>
+        ),
+      },
+      {
+        key: 'recovery_status',
+        header: 'Recuperación',
+        headerTitle:
+          'Indica si ya registró un correo para recuperar contraseña. No confundir con la columna «Cuenta» (activo/desactivado por admin).',
+        render: (user) =>
+          recoveryEmailComplete(user) ? (
+            <Badge
+              variant="secondary"
+              className="h-5 border-emerald-200/80 bg-emerald-50 px-1.5 text-[10px] font-medium leading-none text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-100"
+            >
+              Listo
+            </Badge>
+          ) : (
+            <Badge
+              variant="secondary"
+              className="h-5 border-amber-200/90 bg-amber-50 px-1.5 text-[10px] font-medium leading-none text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+            >
+              Falta correo
+            </Badge>
+          ),
+      },
+      {
+        key: 'group',
+        header: 'Grupo',
+        render: (user) => (
+          <span className="max-w-[10rem] truncate text-xs leading-tight" title={user.group?.name ?? 'Sin grupo'}>
+            {user.group?.name ?? 'Sin grupo'}
+          </span>
+        ),
+      },
+      {
+        key: 'account',
+        header: 'Cuenta',
+        headerTitle: 'Cuenta activa o desactivada por un administrador (no puede iniciar sesión si está desactivada).',
+        render: (user) => (
+          <AdminStatusBadge
+            status={user.status === 'inactive' ? 'inactive' : 'active'}
+            className="h-5 shrink-0 rounded-md px-1.5 py-0 text-[10px] font-medium leading-none"
+          />
+        ),
+      },
+    ],
+    [],
+  )
+
+  const groupTriggerLabel =
+    groupFilter === 'all' ? 'Todos los grupos' : (groupOpts.find((o) => o.value === groupFilter)?.label ?? 'Grupo')
 
   const loadMoreFooter =
     hayMas && filteredUsers.length > 0 ? (
@@ -355,26 +381,51 @@ export function AdminUsersPage() {
     ) : null
 
   return (
-    <div className="space-y-8 sm:space-y-10">
+    <div className="space-y-6 sm:space-y-8">
       <AdminPageHeader
         eyebrow="Administración"
         title="Usuarios"
-        description="Busca, filtra por rol o grupo, edita perfiles y gestiona acciones seguras (altas y contraseñas cuando estén disponibles)."
-        actions={
-          <CreateUserModal
-            groups={groups}
-            categories={categories}
-            onSubmit={(values) =>
-              actionMut.mutate(async () => {
-                await createUser(values)
-                toast.success('Usuario creado')
-              })
-            }
-          />
-        }
+        description="Busca, filtra por rol o grupo, edita perfiles y gestiona contraseñas y exportaciones cuando lo necesites."
       />
 
-      <UserBulkImportSection />
+      <section className="space-y-3 sm:space-y-4" aria-labelledby="user-intake-heading">
+        <AdminSectionTitle
+          id="user-intake-heading"
+          title="Dar de alta usuarios"
+          description="Para una persona usa el alta rápido. Para inscribir a varios de una vez, despliega la carga masiva desde Excel."
+        />
+        <Card className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm ring-1 ring-emerald-900/[0.05]">
+          <CardContent className="p-0">
+            <div className="flex flex-col gap-4 bg-gradient-to-br from-emerald-50/60 via-white to-white p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:p-5">
+              <div className="flex min-w-0 flex-1 gap-4">
+                <span
+                  className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800 shadow-sm ring-1 ring-emerald-900/10 sm:size-[3.25rem]"
+                  aria-hidden
+                >
+                  <UserPlus className="size-[1.35rem] sm:size-6" />
+                </span>
+                <div className="min-w-0 space-y-1">
+                  <h3 className="text-base font-semibold tracking-tight text-slate-900">Usuario único</h3>
+                  <p className="max-w-xl text-sm leading-relaxed text-slate-600">
+                    Nombre completo, celular como cuenta de acceso, contraseña temporal y opcionalmente grupo. La categoría debe existir antes de crear al jugador.
+                  </p>
+                </div>
+              </div>
+              <CreateUserModal
+                groups={groups}
+                categories={categories}
+                onSubmit={(values) =>
+                  actionMut.mutate(async () => {
+                    await createUser(values)
+                    toast.success('Usuario creado')
+                  })
+                }
+              />
+            </div>
+            <UserBulkImportSection />
+          </CardContent>
+        </Card>
+      </section>
 
       <AvailablePlayersPoolSection
         users={usersQ.data ?? []}
@@ -425,11 +476,12 @@ export function AdminUsersPage() {
           <div className="relative min-w-[180px] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
             <Input
-              className="h-11 pl-9"
+              className={cn('h-11 pl-9', search !== deferredSearch && 'opacity-70')}
               placeholder="Buscar por nombre, celular o correo"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               aria-label="Buscar usuarios"
+              aria-busy={search !== deferredSearch}
             />
           </div>
           <Select value={roleFilter} onValueChange={(value) => setRoleFilter(value as UserRole | 'all')}>
@@ -479,38 +531,37 @@ export function AdminUsersPage() {
             </SelectContent>
           </Select>
           <Select value={groupFilter} onValueChange={(value) => setGroupFilter(value ?? 'all')}>
-            <SelectTrigger className="h-11 min-w-[160px] w-[min(100%,13rem)]">
-              <SelectValue placeholder="Grupo" />
+            <SelectTrigger
+              className="h-11 min-w-[160px] w-[min(100%,13rem)]"
+              title={
+                groupFilter !== 'all' && groupFilter.includes('|')
+                  ? 'Varios grupos comparten este nombre; el filtro incluye a todos.'
+                  : undefined
+              }
+            >
+              <SelectValue placeholder="Grupo" className="truncate">
+                {groupTriggerLabel}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all" label="Todos los grupos">
-                Grupo: todos
+                Todos los grupos
               </SelectItem>
-              {groups.map((group) => (
-                <SelectItem key={group.id} value={group.id} label={group.name}>
-                  {group.name}
+              {groupOpts.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value} label={opt.label}>
+                  {opt.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </AdminToolbar>
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={handleDescargarCredenciales}
-            className="inline-flex items-center gap-2 rounded-lg border border-border/30 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/50"
-          >
-            <FileSpreadsheet size={13} aria-hidden />
-            Exportar credenciales (.xlsx)
-          </button>
-        </div>
       </section>
 
       <section className="space-y-4" aria-labelledby="users-list-heading">
         <AdminSectionTitle
           id="users-list-heading"
           title="Listado"
-          description="Marca filas con la casilla y usa la barra de acciones. «Recuperación» = correo para reset. «Cuenta» = alta o baja por administrador."
+          description={`${filteredUsers.length} resultado(s) con filtros actuales · ${stats.total} usuarios en total. Marca filas y usa la barra de acciones. «Recuperación» = correo para reset. «Cuenta» = alta o baja por administrador.`}
         />
 
         {usersQ.isLoading ? (
@@ -543,6 +594,16 @@ export function AdminUsersPage() {
                   disabled={!visibleUsers.length}
                 >
                   {allVisibleSelected ? 'Quitar visibles' : 'Seleccionar visibles'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs"
+                  disabled={filteredUsers.length === 0}
+                  onClick={selectAllFiltered}
+                >
+                  Seleccionar todos ({filteredUsers.length})
                 </Button>
                 {selectedIds.size > 0 ? (
                   <Button

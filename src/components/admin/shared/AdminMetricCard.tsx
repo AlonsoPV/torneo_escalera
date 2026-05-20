@@ -1,9 +1,19 @@
 import type { LucideIcon } from 'lucide-react'
+import { Info } from 'lucide-react'
 import { createElement, isValidElement, type ElementType, type ReactNode } from 'react'
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
 export type AdminMetricTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info'
+
+/** Seis KPI compactos en una fila en pantallas anchas. */
+export const ADMIN_METRIC_GRID_6 =
+  'grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-6 xl:gap-3'
 
 /** Grid recomendado: 1 col compacta en móvil, 2 en tablet, 4 en desktop ancho. */
 export const ADMIN_METRIC_GRID_4 =
@@ -25,6 +35,8 @@ export type AdminMetricCardProps = {
   description?: string
   /** Texto auxiliar (alias de `description`). */
   helper?: string
+  /** `inline`: párrafo bajo el valor (por defecto). `info`: solo icono (tooltip nativo al pasar el ratón, detalle al pulsar). */
+  descriptionMode?: 'inline' | 'info'
   trend?: string
   /** Modo aún más denso (listados secundarios). */
   compact?: boolean
@@ -65,9 +77,11 @@ export function AdminMetricCard({
   trend,
   compact,
   className,
+  descriptionMode = 'inline',
 }: AdminMetricCardProps) {
   const t = normalizeTone(tone)
   const desc = description ?? helper
+  const infoMode = descriptionMode === 'info' && Boolean(desc?.trim())
 
   return (
     <div
@@ -81,7 +95,28 @@ export function AdminMetricCard({
     >
       <div className={cn('flex items-center justify-between', compact ? 'gap-2.5 sm:gap-3' : 'gap-3 sm:gap-4')}>
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium leading-snug text-slate-500 sm:text-sm">{label}</p>
+          <div className="flex min-w-0 items-start gap-1">
+            <p className="min-w-0 flex-1 text-xs font-medium leading-snug text-slate-500 sm:text-sm">{label}</p>
+            {infoMode && desc ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  type="button"
+                  className={cn(
+                    'mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-md text-slate-400 outline-none',
+                    'hover:bg-slate-100 hover:text-slate-700 focus-visible:ring-2 focus-visible:ring-[#1F5A4C]/35',
+                  )}
+                  title={desc}
+                  aria-label={`Información sobre ${label}`}
+                >
+                  <Info className="size-3.5 shrink-0" aria-hidden />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" side="bottom" sideOffset={8} className="w-[min(calc(100vw-2rem),18rem)] p-3 text-xs leading-relaxed text-slate-700">
+                  <p className="font-medium text-slate-900">{label}</p>
+                  <p className="mt-1.5 text-slate-600">{desc}</p>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </div>
           <div className="mt-0.5 flex items-end gap-2 sm:mt-1">
             <p
               className={cn(
@@ -92,7 +127,7 @@ export function AdminMetricCard({
               {value}
             </p>
           </div>
-          {desc ? (
+          {desc && !infoMode ? (
             <p className="mt-0.5 text-[11px] leading-snug text-slate-400 sm:mt-1 sm:text-xs sm:leading-relaxed">
               {desc}
             </p>

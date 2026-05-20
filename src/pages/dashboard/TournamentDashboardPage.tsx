@@ -9,11 +9,7 @@ import { TournamentFiltersBar } from '@/components/dashboard/TournamentFiltersBa
 import { TournamentLeaderboardCard } from '@/components/dashboard/TournamentLeaderboardCard'
 import { TournamentPerformanceOverview } from '@/components/dashboard/TournamentPerformanceOverview'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  getTournamentDashboardData,
-  listTournamentOptionsForDashboard,
-  type TournamentDashboardMatchStatusFilter,
-} from '@/services/dashboard/tournamentDashboardService'
+import { getTournamentDashboardData, listTournamentOptionsForDashboard } from '@/services/dashboard/tournamentDashboardService'
 import { ensureDefaultGroupCategories, listGroupCategories } from '@/services/groupCategories'
 import type { Tournament } from '@/types/database'
 
@@ -30,7 +26,6 @@ export function TournamentDashboardPage() {
   const [tournamentId, setTournamentId] = useState<string | null>(null)
   const [groupCategoryId, setGroupCategoryId] = useState<'all' | 'none' | string>('all')
   const [groupId, setGroupId] = useState<'all' | string>('all')
-  const [matchStatus, setMatchStatus] = useState<TournamentDashboardMatchStatusFilter>('all')
 
   useEffect(() => {
     if (!tq.isSuccess || tournaments.length === 0) return
@@ -67,9 +62,8 @@ export function TournamentDashboardPage() {
     () => ({
       groupCategoryId,
       groupId,
-      matchStatus,
     }),
-    [groupCategoryId, groupId, matchStatus],
+    [groupCategoryId, groupId],
   )
 
   const dq = useQuery({
@@ -98,7 +92,6 @@ export function TournamentDashboardPage() {
   const clearDashboardFilters = () => {
     setGroupCategoryId('all')
     setGroupId('all')
-    setMatchStatus('all')
     setSearchParams(
       (prev) => {
         const n = new URLSearchParams(prev)
@@ -164,7 +157,7 @@ export function TournamentDashboardPage() {
     dq.fetchStatus === 'fetching' && dq.status === 'success' && Boolean(dq.data)
 
   return (
-    <div className="space-y-6 pb-6 sm:space-y-6 sm:pb-8">
+    <div className="space-y-5 pb-6 sm:space-y-6 sm:pb-8">
       <TournamentDashboardHeaderCompact tournament={data.tournament} />
 
       <TournamentFiltersBar
@@ -174,27 +167,26 @@ export function TournamentDashboardPage() {
         groupCategoryId={groupCategoryId}
         groups={data.groups}
         groupId={groupId}
-        matchStatus={matchStatus}
         isFetching={filtersBarShowRefreshing}
         onTournamentChange={(id) => setTournamentId(id)}
         onGroupCategoryChange={(id) => setGroupCategoryId(id)}
         onGroupChange={(id) => setGroupId(id)}
-        onMatchStatusChange={setMatchStatus}
         onClearFilters={clearDashboardFilters}
       />
 
       <TournamentPerformanceOverview metrics={data.metrics} />
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-12 md:gap-4 lg:gap-6">
-        <div className="order-1 md:col-span-7 xl:col-span-8">
+      {/* Una columna hasta lg: evita leaderboard + progreso demasiado estrechos en tablet */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-5 xl:gap-6">
+        <div className="min-w-0 lg:col-span-7 xl:col-span-8">
           <TournamentLeaderboardCard leaderboard={data.leaderboard} groupLabel={leaderboardGroupTitle} />
         </div>
-        <div className="order-2 md:col-span-5 xl:col-span-4">
+        <div className="min-w-0 lg:col-span-5 xl:col-span-4">
           <GroupProgressCard items={data.groupProgress} />
         </div>
       </div>
 
-      <div className="order-3">
+      <div className="min-w-0">
         <RecentMatchesCard
           matches={data.recentMatches}
           noMatchesScheduled={data.metrics.matchesTotal === 0}

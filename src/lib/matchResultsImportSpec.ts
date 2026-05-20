@@ -30,14 +30,23 @@ export type MatchResultsImportHeader = (typeof MATCH_RESULTS_IMPORT_HEADERS)[num
 
 /** Textos de ayuda para el asistente de importación (columnas canónicas). */
 export const MATCH_RESULTS_IMPORT_COLUMN_GUIDE: { field: MatchResultsImportHeader; hint: string }[] = [
-  { field: 'tournament_name', hint: 'Nombre del torneo tal como aparece en el admin.' },
-  { field: 'category_name', hint: 'División del grupo; vacío o «-» si el grupo no tiene categoría.' },
-  { field: 'group_name', hint: 'Nombre exacto del grupo.' },
-  { field: 'player_a_id', hint: 'external_id, UUID de perfil o UUID de group_player.' },
-  { field: 'player_a_name', hint: 'Desempate si el ID no alcanza.' },
+  {
+    field: 'tournament_name',
+    hint: 'Nombre del torneo; si no existe se crea ya cerrado (histórico). Si existe y no es el torneo activo, se marca como cerrado al importar.',
+  },
+  {
+    field: 'category_name',
+    hint: 'División del grupo; si no existe en ese torneo se crea. Vacío o «-» = grupo sin categoría.',
+  },
+  {
+    field: 'group_name',
+    hint: 'Nombre del grupo; si ya existe en el torneo se reutiliza y se puede alinear categoría/nombre con el CSV. Si no existe se crea.',
+  },
+  { field: 'player_a_id', hint: 'external_id (ej. 13), UUID de perfil o de group_player; debe existir el perfil en el sistema.' },
+  { field: 'player_a_name', hint: 'Nombre completo como en perfil; ayuda si coincide exactamente (mayús./minús. ignoradas).' },
   { field: 'player_b_id', hint: 'Igual que jugador A.' },
   { field: 'player_b_name', hint: 'Igual que jugador A.' },
-  { field: 'game_type', hint: 'best_of_3, sudden_death o long_set.' },
+  { field: 'game_type', hint: 'best_of_3, best_of_3_short_tiebreak, sudden_death o long_set.' },
   { field: 'set_1_a', hint: 'Games por set (filas vacías si no aplica).' },
   { field: 'set_1_b', hint: '' },
   { field: 'set_2_a', hint: '' },
@@ -45,7 +54,7 @@ export const MATCH_RESULTS_IMPORT_COLUMN_GUIDE: { field: MatchResultsImportHeade
   { field: 'set_3_a', hint: '' },
   { field: 'set_3_b', hint: '' },
   { field: 'winner_id', hint: 'Mismo criterio que IDs de jugador; debe ser A o B.' },
-  { field: 'result_type', hint: 'normal, wo, def, cancelled…' },
+  { field: 'result_type', hint: 'normal, wo, def, nr, ret, pending_score, double_penalty, not_reported…' },
   { field: 'status', hint: 'pending, closed, cancelled… (ver documentación MVP).' },
 ]
 
@@ -108,7 +117,7 @@ export const CSV_STATUS_TO_MATCH_STATUS: Record<string, string> = {
   cancelado: 'cancelled',
 }
 
-/** Tipos de resultado en CSV → `result_type` en BD (`normal` | `default_win_a` | `default_win_b`). */
+/** Tipos de resultado en CSV → columna `result_type` en BD (ver migraciones recientes). */
 export type CsvResultTypeToken = 'normal' | 'wo' | 'def' | 'cancelled' | 'walkover' | 'default'
 
 export function downloadMatchResultsImportTemplate(): void {

@@ -1,15 +1,12 @@
 import {
   AlertTriangle,
   CalendarClock,
-  CheckCircle2,
-  ChevronDown,
   Flag,
   Sparkles,
   ListChecks,
   Trophy,
   Users,
 } from 'lucide-react'
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 
@@ -21,19 +18,17 @@ import { AdminStatusBadge } from '@/components/admin/shared/AdminStatusBadge'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { cn } from '@/lib/utils'
 import { getAdminOverviewData } from '@/services/admin'
+import { cn } from '@/lib/utils'
 
 const quickActions = [
   { id: 'admin-overview-link-groups', dataName: 'quick-nav-groups', label: 'Crear grupo', href: '/admin/groups' },
   { id: 'admin-overview-link-users', dataName: 'quick-nav-users', label: 'Agregar usuario', href: '/admin/users' },
   { id: 'admin-overview-link-matches', dataName: 'quick-nav-matches', label: 'Partidos', href: '/admin/matches' },
-  { id: 'admin-overview-link-results', dataName: 'quick-nav-results', label: 'Resultados', href: '/admin/results' },
   { id: 'admin-overview-link-dashboard', dataName: 'quick-nav-dashboard', label: 'Ver ranking', href: '/dashboard' },
 ] as const
 
 export function AdminOverviewPage() {
-  const [pendingSectionOpen, setPendingSectionOpen] = useState(false)
   const overviewQ = useQuery({
     queryKey: ['admin-overview'],
     queryFn: getAdminOverviewData,
@@ -51,7 +46,7 @@ export function AdminOverviewPage() {
         <div id="admin-overview-loading" className="space-y-5 sm:space-y-8">
           <Skeleton className="h-8 max-w-md rounded-lg" />
           <div className={ADMIN_METRIC_GRID_4} role="status" aria-live="polite">
-            {Array.from({ length: 9 }).map((_, index) => (
+            {Array.from({ length: 4 }).map((_, index) => (
               <Skeleton key={index} className="h-[5.5rem] rounded-2xl sm:h-24" />
             ))}
           </div>
@@ -85,6 +80,7 @@ export function AdminOverviewPage() {
                 value={overviewQ.data.totalPlayers}
                 icon={Users}
                 tone="neutral"
+                descriptionMode="info"
                 description="Usuarios distintos inscritos en grupos del torneo activo"
               />
               <AdminMetricCard
@@ -92,6 +88,7 @@ export function AdminOverviewPage() {
                 value={overviewQ.data.totalGroups}
                 icon={Flag}
                 tone="info"
+                descriptionMode="info"
                 description="Grupos del torneo activo"
               />
               <AdminMetricCard
@@ -99,81 +96,18 @@ export function AdminOverviewPage() {
                 value={overviewQ.data.totalMatches}
                 icon={CalendarClock}
                 tone="neutral"
+                descriptionMode="info"
                 description="Partidos del torneo activo"
               />
               <AdminMetricCard
-                label="Torneos activos"
-                value={overviewQ.data.activeTournaments}
-                icon={Trophy}
+                label="Partidos jugados"
+                value={overviewQ.data.playedMatches}
+                icon={ListChecks}
                 tone="success"
-                description={`${overviewQ.data.activeTournaments} activo(s); métricas de esta página solo los incluyen. Total en BD: ${overviewQ.data.totalTournaments}.`}
+                descriptionMode="info"
+                description="Con marcador enviado y confirmado por el rival o cerrado como oficial (fuera del estado sin marcador o solo provisional pendiente)."
               />
             </div>
-          </section>
-
-          <section
-            id="section-admin-overview-pending"
-            className="scroll-mt-3 rounded-xl border border-amber-200/70 bg-gradient-to-b from-amber-50/35 to-white p-3 shadow-sm ring-1 ring-amber-900/[0.04] sm:rounded-2xl sm:p-4 sm:ring-amber-900/[0.03]"
-            aria-label="Pendientes y cierre"
-          >
-            <details onToggle={(event) => setPendingSectionOpen(event.currentTarget.open)}>
-              <summary className="flex cursor-pointer list-none items-start justify-between gap-3 rounded-lg py-0.5 text-left outline-none [&::-webkit-details-marker]:hidden focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white">
-                <div className="min-w-0 flex-1 pr-1">
-                  <h3
-                    id="overview-risk-heading"
-                    className="text-sm font-semibold leading-snug tracking-tight text-slate-900 sm:text-[0.9375rem]"
-                  >
-                    Pendientes y cierre
-                  </h3>
-                  <p className="mt-0.5 text-[11px] leading-snug text-slate-500 sm:text-xs">
-                    <span className="max-sm:inline sm:hidden">Toca para ver métricas de marcadores y cierre.</span>
-                    <span className="hidden sm:inline">Métricas de marcadores pendientes y cierre administrativo.</span>
-                  </p>
-                </div>
-                <ChevronDown
-                  className={cn(
-                    'mt-0.5 size-5 shrink-0 text-amber-800/70 transition-transform duration-200',
-                    pendingSectionOpen && 'rotate-180',
-                  )}
-                  aria-hidden
-                />
-              </summary>
-              <div className="mt-3 border-t border-amber-200/60 pt-3 sm:mt-3 sm:pt-3">
-                <p className="mb-3 hidden text-xs leading-relaxed text-slate-500 sm:block">
-                  Revisa marcadores pendientes, grupos incompletos y cierres del torneo activo.
-                </p>
-                <div
-                  id="admin-overview-metrics-pending"
-                  className={cn(
-                    'max-sm:flex max-sm:flex-col max-sm:gap-2',
-                    'sm:grid sm:grid-cols-2 sm:gap-4 xl:grid-cols-3 xl:gap-5',
-                  )}
-                >
-                  <AdminMetricCard
-                    label="Pendientes de marcador"
-                    value={overviewQ.data.matchesWithoutDate}
-                    icon={CalendarClock}
-                    tone="warning"
-                    description="Cruces disponibles para captura"
-                  />
-                  <AdminMetricCard
-                    label="Grupos incompletos"
-                    value={overviewQ.data.incompleteGroups}
-                    icon={ListChecks}
-                    tone="warning"
-                    description="Por debajo del cupo configurado"
-                  />
-                  <AdminMetricCard
-                    className="max-sm:w-full sm:col-span-2 xl:col-span-1"
-                    label="Cerrados"
-                    value={overviewQ.data.confirmedResults}
-                    icon={CheckCircle2}
-                    tone="success"
-                    description="Cerrados por administración"
-                  />
-                </div>
-              </div>
-            </details>
           </section>
 
           <div id="admin-overview-panels-top">

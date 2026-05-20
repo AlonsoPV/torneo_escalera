@@ -1,3 +1,4 @@
+import { TOURNAMENT_RULES } from '@/domain/tournamentRankingPoints'
 import { z } from 'zod'
 
 import type { Json } from '@/types/database'
@@ -140,9 +141,10 @@ export type TournamentRulesRowInput = Partial<TournamentRules> | null
 function withDefaults(row: TournamentRulesRowInput): TournamentRulesFormValues {
   const base: Partial<TournamentRules> = row ?? {}
   const ranking = parseRankingCriteria(base.ranking_criteria ?? null)
-  const win = base.points_per_win ?? 3
-  const loss = base.points_per_loss ?? 1
-  const defWin = base.points_default_win ?? 2
+  const win = base.points_per_win ?? TOURNAMENT_RULES.winPoints
+  const loss =
+    base.points_per_loss === 0 ? TOURNAMENT_RULES.lossPoints : (base.points_per_loss ?? TOURNAMENT_RULES.lossPoints)
+  const defWin = base.points_default_win ?? TOURNAMENT_RULES.woWinPoints
   const rawGames = base.games_per_set ?? base.set_points ?? 6
   const games = [4, 6, 8].includes(rawGames) ? rawGames : 6
   const tiebreakOn = base.tiebreak_enabled ?? true

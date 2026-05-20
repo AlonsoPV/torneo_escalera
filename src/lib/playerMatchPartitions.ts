@@ -1,5 +1,5 @@
 import { getPlayerMatches } from '@/lib/playerDashboard'
-import { canAcceptScore, canSubmitScore } from '@/lib/matchStatus'
+import { canRejectScore, canSubmitScore } from '@/lib/matchStatus'
 import type { MatchRow, TournamentRules } from '@/types/database'
 
 /** Pendientes / En proceso / Historial para el panel del jugador. */
@@ -16,12 +16,18 @@ export function partitionPlayerMatches(
   const mine = getPlayerMatches(membershipId, matches)
   const allow = rules.allow_player_score_entry
 
-  const needsMyAction = (m: MatchRow) =>
-    Boolean(allow && (canSubmitScore(m, userId) || canAcceptScore(m, userId)))
+  /** Pendientes = captura jugador. Partidos cerrados/validados sin acción de refutar van a historial. */
+  const needsCaptureOrResubmit = (m: MatchRow) => Boolean(allow && canSubmitScore(m, userId))
 
-  const pendientes = mine.filter(needsMyAction)
-  const historial = mine.filter((m) => m.status === 'closed' || m.status === 'cancelled')
-  const enProceso = mine.filter((m) => !needsMyAction(m) && m.status !== 'closed' && m.status !== 'cancelled')
+  const pendientes = mine.filter(needsCaptureOrResubmit)
+  const historial = mine.filter(
+    (m) =>
+      m.status === 'cancelled' ||
+      m.status === 'validated' ||
+      (m.status === 'closed' && !(allow && canRejectScore(m, userId))),
+  )
+  const historialIds = new Set(historial.map((h) => h.id))
+  const enProceso = mine.filter((m) => !needsCaptureOrResubmit(m) && !historialIds.has(m.id))
 
   return { pendientes, enProceso, historial }
 }

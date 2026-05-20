@@ -30,7 +30,7 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
   const submitted = await supabase
     .from('matches')
     .select('id', { count: 'exact', head: true })
-    .in('status', ['player_confirmed', 'score_disputed'])
+    .in('status', ['score_submitted', 'player_confirmed', 'score_disputed'])
 
   const e = t.error || act.error || g.error || m.error || pendingScore.error || submitted.error
   if (e) throw e

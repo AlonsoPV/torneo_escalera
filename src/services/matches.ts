@@ -1,9 +1,21 @@
 import { supabase } from '@/lib/supabase'
-import type { GroupPlayer, Json, MatchRow, MatchStatus, ScorePayload, ScoreSet } from '@/types/database'
+import { isPlayerSubmitPerfEnabled } from '@/lib/playerSubmitPerf'
+import type {
+  Database,
+  GroupPlayer,
+  Json,
+  MatchRow,
+  MatchStatus,
+  ScorePayload,
+  ScoreSet,
+  ScoreWinnerSide,
+  TournamentRules,
+} from '@/types/database'
 import { getTournamentRules } from '@/services/tournaments'
 import { orderPlayersCanonically, pairKey } from '@/utils/matches'
 import {
   computeWinnerGroupPlayerId,
+  getSuddenDeathWinnerSide,
   scorePayloadToSets,
   validateBestOf3Score,
   validateLongSetScore,
@@ -29,44 +41,67 @@ function mapPostgresError(e: { message: string; code?: string; details?: string 
   return msg
 }
 
-export async function saveMatchScore(input: {
+export type PreparedPlayerScoreSubmission = {
+  winnerId: string
+  payload: ScorePayload
+  pScoreJson: Json
+}
+
+/**
+ * Validación + payload RPC para marcador (sincrónico). Usado por saveMatchScore y por la UI para parchear cache sin otro round-trip.
+ */
+export function preparePlayerScoreSubmissionSync(input: {
   match: MatchRow
   sets?: ScoreSet[]
   scorePayload?: ScorePayload
-  actorUserId: string
-  isAdmin: boolean
-  adminStatus?: MatchStatus
-}): Promise<void> {
-  const rules = await getTournamentRules(input.match.tournament_id)
-  if (!rules) throw new Error('No se encontraron reglas del torneo.')
+  rules: TournamentRules
+}): PreparedPlayerScoreSubmission {
+  const { match, sets: inputSets, scorePayload: inputPayload, rules } = input
 
   const fallbackWinner = computeWinnerGroupPlayerId(
-    input.sets ?? [],
-    input.match.player_a_id,
-    input.match.player_b_id,
+    inputSets ?? [],
+    match.player_a_id,
+    match.player_b_id,
     rules.best_of_sets,
   )
-  const payload: ScorePayload = input.scorePayload ?? (
-    input.match.game_type === 'sudden_death'
-      ? {
-          game_type: 'sudden_death',
-          score_json: null,
-          winner: input.match.winner_id === input.match.player_b_id ? 'b' : 'a',
+  const payload: ScorePayload =
+    inputPayload ??
+    (() => {
+      if (match.game_type === 'sudden_death') {
+        const three =
+          inputSets?.length === 3
+            ? inputSets
+            : match.score_raw?.length === 3
+              ? match.score_raw
+              : null
+        const winnerFromThree = three ? getSuddenDeathWinnerSide(three) : null
+        const winnerSide: ScoreWinnerSide | null =
+          winnerFromThree ??
+          (match.winner_id === match.player_b_id ? 'b' : match.winner_id === match.player_a_id ? 'a' : null)
+        if (!winnerSide) {
+          throw new Error('No se pudo determinar el ganador para muerte súbita.')
         }
-      : input.match.game_type === 'long_set'
-        ? {
-            game_type: 'long_set',
-            score_json: [input.sets?.[0] ?? { a: 0, b: 0 }],
-            winner: (input.sets?.[0]?.b ?? 0) > (input.sets?.[0]?.a ?? 0) ? 'b' : 'a',
-          }
-        : {
-            game_type: 'best_of_3',
-            score_json: input.sets ?? [],
-            winner: fallbackWinner === input.match.player_b_id ? 'b' : 'a',
-          }
-  )
+        return {
+          game_type: 'sudden_death',
+          score_json: three,
+          winner: winnerSide,
+        }
+      }
+      if (match.game_type === 'long_set') {
+        return {
+          game_type: 'long_set',
+          score_json: [inputSets?.[0] ?? { a: 0, b: 0 }],
+          winner: (inputSets?.[0]?.b ?? 0) > (inputSets?.[0]?.a ?? 0) ? 'b' : 'a',
+        }
+      }
+      return {
+        game_type: 'best_of_3',
+        score_json: inputSets ?? [],
+        winner: fallbackWinner === match.player_b_id ? 'b' : 'a',
+      }
+    })()
 
-  const sets = scorePayloadToSets(payload)
+  const scoreSets = scorePayloadToSets(payload)
   let winnerId: string | null = null
 
   if (payload.game_type === 'best_of_3') {
@@ -74,54 +109,122 @@ export async function saveMatchScore(input: {
     if (!validation.ok || !validation.winner) throw new Error(validation.errors.join(' '))
     const rulesValidation = validateScoreWithRules(payload.score_json, rules)
     if (!rulesValidation.ok) throw new Error(rulesValidation.errors.join(' '))
-    winnerId = winnerSideToGroupPlayerId(validation.winner, input.match)
+    winnerId = winnerSideToGroupPlayerId(validation.winner, match)
+  } else if (payload.game_type === 'best_of_3_short_tiebreak') {
+    const validation = validateBestOf3Score(payload.score_json, {
+      allowShortDecisiveSet: true,
+      shortDecisiveSetNoMinDifference: true,
+    })
+    if (!validation.ok || !validation.winner) throw new Error(validation.errors.join(' '))
+    const rulesValidation = validateScoreWithRules(payload.score_json, rules)
+    if (!rulesValidation.ok) throw new Error(rulesValidation.errors.join(' '))
+    winnerId = winnerSideToGroupPlayerId(validation.winner, match)
   } else if (payload.game_type === 'long_set') {
     const validation = validateLongSetScore(payload.score_json[0])
     if (!validation.ok || !validation.winner) throw new Error(validation.errors.join(' '))
-    winnerId = winnerSideToGroupPlayerId(validation.winner, input.match)
+    winnerId = winnerSideToGroupPlayerId(validation.winner, match)
   } else {
-    const validation = validateSuddenDeathScore({ game_type: payload.game_type, winner: payload.winner })
+    const validation = validateSuddenDeathScore({
+      game_type: payload.game_type,
+      score_json: payload.score_json,
+      winner: payload.winner,
+      rules,
+    })
     if (!validation.ok || !validation.winner) throw new Error(validation.errors.join(' '))
-    winnerId = winnerSideToGroupPlayerId(validation.winner, input.match)
+    winnerId = winnerSideToGroupPlayerId(validation.winner, match)
   }
 
   if (!winnerId) throw new Error('No se pudo determinar un ganador.')
 
-  const pScore = (payload.game_type === 'sudden_death' ? null : sets) as unknown as Json
+  const pScore =
+    payload.game_type === 'sudden_death' ? (scoreSets.length === 3 ? scoreSets : null) : scoreSets
+  const pScoreJson = pScore as unknown as Json
+
+  return { winnerId, payload, pScoreJson }
+}
+
+function parseMatchRowFromRpc(data: unknown): MatchRow | undefined {
+  if (data == null || typeof data !== 'object') return undefined
+  return data as MatchRow
+}
+
+/**
+ * Destino de estado al guardar como admin.
+ * Desde disputa: `explicit === 'score_disputed'` guarda borrador (sigue en revisión); cerrar valida (`validated`).
+ */
+export function inferAdminSaveTargetStatus(match: MatchRow, explicit?: MatchStatus): MatchStatus {
+  if (explicit === 'cancelled') return 'cancelled'
+  if (match.status === 'score_disputed') {
+    if (explicit === 'score_disputed') return 'score_disputed'
+    return 'validated'
+  }
+  if (explicit != null) return explicit
+  if (match.status === 'closed' || match.status === 'validated' || match.status === 'cancelled')
+    return match.status
+  return 'closed'
+}
+
+export async function saveMatchScore(input: {
+  match: MatchRow
+  sets?: ScoreSet[]
+  scorePayload?: ScorePayload
+  actorUserId: string
+  isAdmin: boolean
+  adminStatus?: MatchStatus
+  /** Si viene definido (p. ej. vista jugador), evita getTournamentRules antes del RPC. */
+  rules?: TournamentRules | null
+}): Promise<MatchRow | undefined> {
+  const rules =
+    input.rules ?? (await getTournamentRules(input.match.tournament_id))
+  if (!rules) throw new Error('No se encontraron reglas del torneo.')
+
+  const { winnerId, payload, pScoreJson } = preparePlayerScoreSubmissionSync({
+    match: input.match,
+    sets: input.sets,
+    scorePayload: input.scorePayload,
+    rules,
+  })
 
   if (input.isAdmin) {
+    const targetStatus = inferAdminSaveTargetStatus(input.match, input.adminStatus)
     const { error } = await supabase.rpc('admin_set_match_result', {
       p_match_id: input.match.id,
-      p_score: pScore,
+      p_score: pScoreJson,
       p_winner_id: winnerId,
-      p_status: input.adminStatus ?? 'closed',
+      p_status: targetStatus,
       p_result_type: 'normal',
       p_game_type: payload.game_type,
     })
     if (error) throw new Error(mapPostgresError(error))
-    return
+    return undefined
   }
 
-  const { error } = await supabase.rpc('submit_player_match_result', {
+  const tRpc = isPlayerSubmitPerfEnabled() ? performance.now() : 0
+  const { data, error } = await supabase.rpc('submit_player_match_result', {
     p_match_id: input.match.id,
-    p_score: pScore,
+    p_score: pScoreJson,
     p_result_type: 'normal',
     p_winner_group_player_id: winnerId,
     p_game_type: payload.game_type,
   })
+  if (isPlayerSubmitPerfEnabled()) {
+    // eslint-disable-next-line no-console -- flag explícita perfPlayerSubmit
+    console.debug(`[perf] submit_player_match_result RPC ${Math.round(performance.now() - tRpc)}ms`)
+  }
   if (error) throw new Error(mapPostgresError(error))
+  return parseMatchRowFromRpc(data)
 }
 
 /**
- * Cualquier participante envía marcador → RPC `submit_player_match_result` deja `score_submitted` y `score_submitted_by`.
- * El otro participante acepta con `respondOpponentMatchScore` → `player_confirmed`. El staff cierra → `closed`.
+ * Envío jugador: RPC `submit_player_match_result` → `closed`. Devuelve la fila persistida cuando el servidor la incluye en la respuesta.
  */
 export async function submitPlayerScore(input: {
   match: MatchRow
   sets?: ScoreSet[]
   scorePayload?: ScorePayload
   actorUserId: string
-}): Promise<void> {
+  rules?: TournamentRules | null
+}): Promise<MatchRow | undefined> {
   return saveMatchScore({ ...input, isAdmin: false })
 }
 
@@ -129,7 +232,7 @@ export async function submitMatchScore(
   matchId: string,
   playerId: string,
   scorePayload: ScoreSet[] | ScorePayload,
-): Promise<void> {
+): Promise<MatchRow | undefined> {
   const { data, error } = await supabase.from('matches').select('*').eq('id', matchId).single()
   if (error) throw new Error(mapPostgresError(error))
   return Array.isArray(scorePayload)
@@ -142,29 +245,33 @@ export async function correctAdminScore(input: {
   sets: ScoreSet[]
   actorUserId: string
   closeAfter?: boolean
-}): Promise<void> {
+}): Promise<MatchRow | undefined> {
+  const explicit: MatchStatus =
+    input.match.status === 'score_disputed' && input.closeAfter === false ? 'score_disputed' : 'closed'
   return saveMatchScore({
     ...input,
     isAdmin: true,
-    adminStatus: input.closeAfter === false ? 'player_confirmed' : 'closed',
+    adminStatus: inferAdminSaveTargetStatus(input.match, explicit),
   })
 }
 
 export async function closeAdminScore(input: {
   match: MatchRow
   actorUserId: string
-}): Promise<void> {
+}): Promise<MatchRow | undefined> {
   if (input.match.game_type === 'sudden_death') {
     if (!input.match.winner_id) throw new Error('El partido no tiene ganador para cerrar.')
     return saveMatchScore({
       match: input.match,
       scorePayload: {
         game_type: 'sudden_death',
-        score_json: null,
+        score_json:
+          input.match.score_raw?.length === 3 ? input.match.score_raw : null,
         winner: input.match.winner_id === input.match.player_b_id ? 'b' : 'a',
       },
       actorUserId: input.actorUserId,
       isAdmin: true,
+      adminStatus: inferAdminSaveTargetStatus(input.match, 'closed'),
     })
   }
   if (!input.match.score_raw?.length) throw new Error('El partido no tiene marcador para cerrar.')
@@ -173,13 +280,14 @@ export async function closeAdminScore(input: {
     sets: input.match.score_raw,
     actorUserId: input.actorUserId,
     isAdmin: true,
+    adminStatus: inferAdminSaveTargetStatus(input.match, 'closed'),
   })
 }
 
 export async function adminCloseMatch(matchId: string, adminId: string): Promise<void> {
   const { data, error } = await supabase.from('matches').select('*').eq('id', matchId).single()
   if (error) throw new Error(mapPostgresError(error))
-  return closeAdminScore({ match: data as MatchRow, actorUserId: adminId })
+  await closeAdminScore({ match: data as MatchRow, actorUserId: adminId })
 }
 
 export async function cancelMatch(matchId: string, actorUserId: string): Promise<void> {
@@ -188,6 +296,48 @@ export async function cancelMatch(matchId: string, actorUserId: string): Promise
     .update({ status: 'cancelled', updated_by: actorUserId })
     .eq('id', matchId)
   if (error) throw new Error(mapPostgresError(error))
+}
+
+/** Confirma como válido el marcador registrado tras disputa (sin cambiar sets). */
+export async function adminValidateDisputedWithoutChanges(match: MatchRow): Promise<void> {
+  if (match.status !== 'score_disputed') {
+    throw new Error('Solo aplica a partidos pendientes de revisión administrativa.')
+  }
+  if (!match.winner_id) throw new Error('Falta ganador en el registro actual.')
+  const { error } = await supabase.rpc('admin_set_match_result', {
+    p_match_id: match.id,
+    p_score: (match.score_raw ?? []) as unknown as Json,
+    p_winner_id: match.winner_id,
+    p_status: 'validated',
+    p_result_type: match.result_type ?? 'normal',
+    p_game_type: match.game_type,
+  })
+  if (error) throw new Error(mapPostgresError(error))
+}
+
+/** Invalidación administrativa con auditoría vía RPC (logs). */
+export async function adminInvalidateMatchResult(match: MatchRow): Promise<void> {
+  const { error } = await supabase.rpc('admin_set_match_result', {
+    p_match_id: match.id,
+    p_score: match.score_raw ?? ([] as unknown as Json),
+    p_winner_id: null,
+    p_status: 'cancelled',
+    p_result_type: match.result_type ?? 'normal',
+    p_game_type: match.game_type,
+  })
+  if (error) throw new Error(mapPostgresError(error))
+}
+
+export async function listMatchScoreLogs(matchId: string): Promise<
+  Database['public']['Tables']['match_score_logs']['Row'][]
+> {
+  const { data, error } = await supabase
+    .from('match_score_logs')
+    .select('*')
+    .eq('match_id', matchId)
+    .order('created_at', { ascending: true })
+  if (error) throw new Error(mapPostgresError(error))
+  return (data ?? []) as Database['public']['Tables']['match_score_logs']['Row'][]
 }
 
 export async function respondOpponentMatchScore(input: {

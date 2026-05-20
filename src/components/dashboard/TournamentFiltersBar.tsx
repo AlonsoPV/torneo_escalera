@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { Filter, X } from 'lucide-react'
+import { useMemo, type ReactNode } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -9,44 +10,34 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { TournamentDashboardMatchStatusFilter } from '@/services/dashboard/tournamentDashboardService'
 import type { Group, GroupCategory, Tournament } from '@/types/database'
 import { cn } from '@/lib/utils'
 
-const MATCH_FILTER_OPTIONS: { value: TournamentDashboardMatchStatusFilter; label: string }[] = [
-  { value: 'all', label: 'Todos' },
-  { value: 'pending_score', label: 'Pendiente de marcador' },
-  { value: 'score_submitted', label: 'Marcador enviado' },
-  { value: 'player_confirmed', label: 'Aceptado por rival' },
-  { value: 'score_disputed', label: 'En disputa' },
-  { value: 'closed', label: 'Cerrado / Oficial' },
-  { value: 'cancelled', label: 'Cancelado' },
-]
+function localeEsNumericNameCompare(a: string, b: string): number {
+  return a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' })
+}
 
-const FILTER_CONTROL_BASE =
-  'rounded-xl border border-border/80 bg-card text-sm shadow-sm transition-colors hover:border-emerald-500/35 hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/45 focus-visible:outline-none'
+function tournamentDashboardSort(a: Tournament, b: Tournament): number {
+  const rank = (t: Tournament) => (t.status === 'active' ? 0 : t.status === 'finished' ? 1 : 2)
+  const dr = rank(a) - rank(b)
+  if (dr !== 0) return dr
+  return localeEsNumericNameCompare(a.name, b.name)
+}
 
-function chipTriggerClass(active: boolean) {
+function selectTriggerClass(active: boolean) {
   return cn(
-    'h-auto min-h-10 min-w-0 max-w-[min(100%,18rem)] shrink-0 px-2.5 py-1.5 sm:min-h-8',
-    FILTER_CONTROL_BASE,
-    '*:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate *:data-[slot=select-value]:font-medium *:data-[slot=select-value]:text-foreground',
-    active && 'border-emerald-500/50 bg-emerald-500/[0.06] ring-1 ring-emerald-500/15',
+    'h-10 w-full rounded-xl border border-border/80 bg-background text-sm shadow-sm transition-colors',
+    'hover:border-emerald-500/40 hover:bg-muted/40',
+    'focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
+    '*:data-[slot=select-value]:font-medium *:data-[slot=select-value]:text-foreground',
+    active && 'border-emerald-500/45 bg-emerald-500/[0.07] ring-1 ring-emerald-500/20',
   )
 }
 
-function clearButtonClass() {
-  return cn(
-    'h-auto min-h-10 shrink-0 rounded-xl border-border/80 bg-card px-3 py-1.5 text-sm font-medium shadow-sm sm:min-h-8',
-    'text-muted-foreground hover:border-emerald-500/35 hover:bg-muted/50 hover:text-foreground',
-    'disabled:opacity-50',
+function FieldLabel({ children }: { children: ReactNode }) {
+  return (
+    <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{children}</span>
   )
-}
-
-function labelForTournamentId(id: unknown, tournaments: Tournament[]): string {
-  if (id == null || id === '') return '—'
-  const s = String(id)
-  return tournaments.find((t) => t.id === s)?.name ?? '—'
 }
 
 export function TournamentFiltersBar({
@@ -56,12 +47,10 @@ export function TournamentFiltersBar({
   groupCategoryId,
   groups,
   groupId,
-  matchStatus,
   isFetching,
   onTournamentChange,
   onGroupCategoryChange,
   onGroupChange,
-  onMatchStatusChange,
   onClearFilters,
 }: {
   tournaments: Tournament[]
@@ -70,45 +59,90 @@ export function TournamentFiltersBar({
   groupCategoryId: 'all' | 'none' | string
   groups: Group[]
   groupId: 'all' | string
-  matchStatus: TournamentDashboardMatchStatusFilter
   isFetching?: boolean
   onTournamentChange: (id: string) => void
   onGroupCategoryChange: (id: 'all' | 'none' | string) => void
   onGroupChange: (id: 'all' | string) => void
-  onMatchStatusChange: (s: TournamentDashboardMatchStatusFilter) => void
   onClearFilters: () => void
 }) {
+  const sortedTournaments = useMemo(
+    () => [...tournaments].sort(tournamentDashboardSort),
+    [tournaments],
+  )
+
   const sortedCategories = useMemo(
     () =>
       [...groupCategories].sort(
-        (a, b) => a.order_index - b.order_index || a.name.localeCompare(b.name, 'es'),
+        (a, b) => a.order_index - b.order_index || localeEsNumericNameCompare(a.name, b.name),
       ),
     [groupCategories],
   )
-  const filtersActive =
-    groupCategoryId !== 'all' || groupId !== 'all' || matchStatus !== 'all'
-  const tournamentName = labelForTournamentId(tournamentId, tournaments)
-  /** Texto mostrado en el chip; evita que Base UI muestre el UUID si falla el `label` del ítem. */
-  const tournamentChipLabel = tournaments.find((t) => t.id === tournamentId)?.name
-  const groupCategoryChipLabel =
+
+  const sortedGroups = useMemo(
+    () =>
+      [...groups].sort(
+        (a, b) =>
+          (a.order_index ?? 0) - (b.order_index ?? 0) ||
+          localeEsNumericNameCompare(a.name, b.name),
+      ),
+    [groups],
+  )
+
+  const filtersActive = groupCategoryId !== 'all' || groupId !== 'all'
+
+  const tournamentLabel = sortedTournaments.find((t) => t.id === tournamentId)?.name ?? '—'
+
+  const categoryTriggerLabel =
     groupCategoryId === 'all'
-      ? undefined
+      ? 'Todas'
       : groupCategoryId === 'none'
         ? 'Sin categoría'
-        : sortedCategories.find((c) => c.id === groupCategoryId)?.name
-  const groupChipLabel = groupId === 'all' ? undefined : groups.find((g) => g.id === groupId)?.name
-  const matchStatusChipLabel =
-    matchStatus === 'all' ? undefined : MATCH_FILTER_OPTIONS.find((o) => o.value === matchStatus)?.label
+        : sortedCategories.find((c) => c.id === groupCategoryId)?.name ?? 'Todas'
+
+  const groupTriggerLabel = groupId === 'all' ? 'Todos' : sortedGroups.find((g) => g.id === groupId)?.name ?? 'Todos'
 
   return (
-    <Card className="border-border/80 shadow-sm ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
-      <CardContent className="p-3 sm:p-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
-          <div
-            className="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain px-1 pb-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:thin] [touch-action:pan-x]"
-            aria-label="Filtros del dashboard"
-          >
-            <div className="snap-start shrink-0">
+    <Card className="overflow-hidden border-border/80 shadow-sm ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
+      <CardContent className="space-y-4 p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+              <Filter className="size-4" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground">Filtros</p>
+              <p className="text-xs text-muted-foreground">
+                Por defecto se muestra todo el torneo; acota categoría o grupo.
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+            {isFetching ? (
+              <span className="flex items-center gap-2 text-xs text-muted-foreground" aria-live="polite">
+                <span
+                  className="size-4 animate-spin rounded-full border-2 border-muted-foreground/25 border-t-emerald-600 dark:border-t-emerald-400"
+                  aria-hidden
+                />
+                Actualizando
+              </span>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 rounded-xl border-border/80"
+              disabled={!filtersActive}
+              onClick={onClearFilters}
+            >
+              <X className="size-3.5 opacity-70" aria-hidden />
+              Limpiar filtros
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="min-w-0 space-y-1.5">
+            <FieldLabel>Torneo</FieldLabel>
             <Select
               value={tournamentId}
               onValueChange={(v) => {
@@ -117,44 +151,33 @@ export function TournamentFiltersBar({
             >
               <SelectTrigger
                 size="sm"
-                className={chipTriggerClass(false)}
-                aria-label={`Torneo: ${tournamentName}`}
+                className={selectTriggerClass(false)}
+                aria-label={`Torneo: ${tournamentLabel}`}
               >
-                <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
-                  <span className="shrink-0 text-muted-foreground">Torneo</span>
-                  <span className="shrink-0 text-foreground">:</span>
-                  <SelectValue placeholder="—" className="min-w-0 flex-1 truncate">
-                    {tournamentChipLabel ?? undefined}
-                  </SelectValue>
-                </span>
+                <SelectValue placeholder="Elegir torneo">{tournamentLabel}</SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {tournaments.map((x) => (
+                {sortedTournaments.map((x) => (
                   <SelectItem key={x.id} value={x.id} label={x.name}>
                     {x.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            </div>
+          </div>
 
-            <div className="snap-start shrink-0">
+          <div className="min-w-0 space-y-1.5">
+            <FieldLabel>Categoría</FieldLabel>
             <Select
               value={groupCategoryId}
               onValueChange={(v) => onGroupCategoryChange((v ?? 'all') as 'all' | 'none' | string)}
             >
               <SelectTrigger
                 size="sm"
-                className={chipTriggerClass(groupCategoryId !== 'all')}
-                aria-label="Categoría de grupo"
+                className={selectTriggerClass(groupCategoryId !== 'all')}
+                aria-label={`Categoría: ${categoryTriggerLabel}`}
               >
-                <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
-                  <span className="shrink-0 text-muted-foreground">Categoría</span>
-                  <span className="shrink-0 text-foreground">:</span>
-                  <SelectValue placeholder="Todas" className="min-w-0 flex-1 truncate">
-                    {groupCategoryChipLabel ?? undefined}
-                  </SelectValue>
-                </span>
+                <SelectValue placeholder="Todas">{categoryTriggerLabel}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all" label="Todas">
@@ -170,85 +193,35 @@ export function TournamentFiltersBar({
                 ))}
               </SelectContent>
             </Select>
-            </div>
+          </div>
 
-            <div className="snap-start shrink-0">
+          <div className="min-w-0 space-y-1.5 sm:col-span-2 xl:col-span-1">
+            <FieldLabel>Grupo</FieldLabel>
             <Select value={groupId} onValueChange={(v) => onGroupChange((v ?? 'all') as 'all' | string)}>
-              <SelectTrigger size="sm" className={chipTriggerClass(groupId !== 'all')} aria-label="Grupo">
-                <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
-                  <span className="shrink-0 text-muted-foreground">Grupo</span>
-                  <span className="shrink-0 text-foreground">:</span>
-                  <SelectValue placeholder="Todos" className="min-w-0 flex-1 truncate">
-                    {groupChipLabel ?? undefined}
-                  </SelectValue>
-                </span>
+              <SelectTrigger
+                size="sm"
+                className={selectTriggerClass(groupId !== 'all')}
+                aria-label={`Grupo: ${groupTriggerLabel}`}
+              >
+                <SelectValue placeholder="Todos">{groupTriggerLabel}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all" label="Todos">
                   Todos
                 </SelectItem>
-                {groups.map((g) => (
+                {sortedGroups.map((g) => (
                   <SelectItem key={g.id} value={g.id} label={g.name}>
                     {g.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            </div>
-
-            <div className="snap-start shrink-0">
-            <Select
-              value={matchStatus}
-              onValueChange={(v) => onMatchStatusChange((v ?? 'all') as TournamentDashboardMatchStatusFilter)}
-            >
-              <SelectTrigger
-                size="sm"
-                className={chipTriggerClass(matchStatus !== 'all')}
-                aria-label="Estado del partido"
-              >
-                <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
-                  <span className="shrink-0 text-muted-foreground">Estado</span>
-                  <span className="shrink-0 text-foreground">:</span>
-                  <SelectValue placeholder="Todos" className="min-w-0 flex-1 truncate">
-                    {matchStatusChipLabel ?? undefined}
-                  </SelectValue>
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                {MATCH_FILTER_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value} label={o.label}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            </div>
-          </div>
-
-          <div className="flex w-full shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2 md:w-auto md:justify-end md:border-t-0 md:pt-0">
-            {isFetching ? (
-              <span className="flex items-center gap-1.5 text-xs text-muted-foreground" aria-live="polite">
-                <span
-                  className="size-3.5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-emerald-600 dark:border-t-emerald-400"
-                  aria-hidden
-                />
-                Actualizando
-              </span>
-            ) : null}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className={clearButtonClass()}
-              disabled={!filtersActive}
-              onClick={onClearFilters}
-            >
-              Limpiar
-            </Button>
           </div>
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Categoría: acota métricas, ranking y lista de grupos a una división.
+
+        <p className="border-t border-border/60 pt-3 text-xs leading-relaxed text-muted-foreground">
+          Categoría y grupo siguen el orden definido en administración (Grupo 1, Grupo 2…). «Todos» / «Todas» incluyen
+          todo el alcance actual del torneo.
         </p>
       </CardContent>
     </Card>

@@ -25,7 +25,7 @@ export function ResultReviewCard({
   onConfirm: (match: AdminMatchRecord) => void
   onCorrect: (match: AdminMatchRecord) => void
 }) {
-  const canValidateClose = match.status === 'player_confirmed'
+  const canValidateClose = match.status === 'player_confirmed' || match.status === 'score_submitted'
   const winnerName =
     match.winner_id === match.player_a_id
       ? match.playerAName
@@ -47,7 +47,7 @@ export function ResultReviewCard({
             <AdminStatusBadge status={match.status} className="whitespace-normal text-left leading-snug" />
           </div>
         </div>
-        <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-5">
           <div className="rounded-2xl bg-[#F8FAFC] p-3">
             <p className="text-xs text-[#64748B]">Marcador</p>
             <p className="mt-1 break-words font-mono text-lg font-semibold tracking-tight text-[#102A43]">
@@ -60,13 +60,33 @@ export function ResultReviewCard({
           </div>
           <div className="rounded-2xl bg-[#F8FAFC] p-3">
             <p className="text-xs text-[#64748B]">Capturado por</p>
-            <p className="mt-1 break-all font-semibold text-[#102A43]">{match.score_submitted_by ?? '—'}</p>
+            <p className="mt-1 truncate font-semibold text-[#102A43]" title={match.scoreSubmittedByLabel ?? undefined}>
+              {match.scoreSubmittedByLabel ?? '—'}
+            </p>
             <p className="mt-1 text-xs text-[#64748B]">{shortDate(match.score_submitted_at)}</p>
           </div>
           <div className="rounded-2xl bg-[#F8FAFC] p-3">
             <p className="text-xs text-[#64748B]">Aceptado por</p>
-            <p className="mt-1 break-all font-semibold text-[#102A43]">{match.opponent_confirmed_by ?? '—'}</p>
+            <p
+              className="mt-1 truncate font-semibold text-[#102A43]"
+              title={match.opponentConfirmedByLabel ?? undefined}
+            >
+              {match.opponentConfirmedByLabel ?? '—'}
+            </p>
             <p className="mt-1 text-xs text-[#64748B]">{shortDate(match.opponent_confirmed_at)}</p>
+          </div>
+          <div className="rounded-2xl bg-[#F8FAFC] p-3 sm:col-span-2 lg:col-span-1">
+            <p className="text-xs text-[#64748B]">Cerrado por</p>
+            <p className="mt-1 truncate font-semibold text-[#102A43]" title={match.closedByLabel ?? undefined}>
+              {match.status === 'closed' || match.status === 'validated'
+                ? match.closedByLabel ?? '—'
+                : '—'}
+            </p>
+            <p className="mt-1 text-xs text-[#64748B]">
+              {match.status === 'closed' || match.status === 'validated'
+                ? shortDate(match.admin_validated_at ?? match.closed_at)
+                : '—'}
+            </p>
           </div>
         </div>
         {match.dispute_reason ? (
@@ -88,7 +108,7 @@ export function ResultReviewCard({
             title={
               canValidateClose
                 ? undefined
-                : 'Solo tras aceptación del rival (estado «Aceptado por rival»).'
+                : 'Solo cuando hay marcador confirmado por jugadores y pendiente de cierre oficial.'
             }
             onClick={() => onConfirm(match)}
           >

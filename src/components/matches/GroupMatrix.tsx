@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui/badge'
+import { importResultTypeBothPenalized, importResultTypeUsesDefaultPoints } from '@/lib/matchResultSemantics'
 import { matchStatusLabels } from '@/lib/matchStatus'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
@@ -69,9 +70,8 @@ export function GroupMatrix(props: {
                     !isDiag && match
                       ? perspectiveSetsForCell(row.id, col.id, match)
                       : null
-                  const isDefault = match
-                    ? match.result_type === 'default_win_a' || match.result_type === 'default_win_b'
-                    : false
+                  const isDefault = match ? importResultTypeUsesDefaultPoints(match.result_type) : false
+                  const isPenaltyCell = match ? importResultTypeBothPenalized(match.result_type) : false
                   const label =
                     isDefault && !sets?.length
                       ? 'W/O'
@@ -89,21 +89,28 @@ export function GroupMatrix(props: {
                           onClick={() => onOpenMatch(match)}
                           className={cn(
                             'flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-md border px-1 text-[11px] font-medium transition-colors sm:h-16 sm:text-xs',
-                            match?.status === 'closed' &&
+                            (match?.status === 'closed' ||
+                              match?.status === 'validated' ||
+                              match?.status === 'score_submitted') &&
                               'border-emerald-500/40 bg-emerald-500/10',
                             match?.status === 'player_confirmed' &&
                               'border-violet-500/35 bg-violet-500/10',
                             match?.status === 'pending_score' &&
                               'border-dashed border-primary/40 bg-background hover:bg-muted/60',
-                            match?.status === 'score_submitted' &&
-                              'border-sky-500/30 bg-sky-500/5',
                             match?.status === 'score_disputed' &&
                               'border-rose-500/35 bg-rose-500/10',
                             !match && 'border-dashed border-muted-foreground/30 bg-muted/20',
                           )}
                         >
                           {label ? (
-                            <span className="leading-tight">{label}</span>
+                            <span className="leading-tight">
+                              {label}
+                              {isPenaltyCell ? (
+                                <span className="mt-0.5 block text-[9px] font-normal text-amber-800">
+                                  No reportado
+                                </span>
+                              ) : null}
+                            </span>
                           ) : (
                             <span className="text-muted-foreground">Capturar</span>
                           )}

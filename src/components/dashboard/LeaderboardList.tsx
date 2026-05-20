@@ -1,57 +1,128 @@
-import { ChevronDown, ChevronUp, Crown, Medal } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { ChevronDown, ChevronUp, Crown, Medal, Trophy } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 
 import type { TournamentLeaderboardEntry } from '@/services/dashboard/tournamentDashboardService'
+import { useRankPositionFlashKeys } from '@/lib/useRankPositionFlash'
 import { cn } from '@/lib/utils'
 
 const INITIAL_LEADERBOARD_VISIBLE = 5
 
-function podiumSurface(position: number) {
-  if (position === 1) {
-    return 'bg-gradient-to-r from-amber-100/95 via-amber-50/80 to-amber-50/40 dark:from-amber-950/45 dark:via-amber-950/25 dark:to-amber-950/10 ring-1 ring-amber-200/60 dark:ring-amber-800/40'
-  }
-  if (position === 2) {
-    return 'bg-slate-100/85 dark:bg-slate-800/45 ring-1 ring-slate-200/70 dark:ring-slate-600/40'
-  }
-  if (position === 3) {
-    return 'bg-orange-50/90 dark:bg-orange-950/30 ring-1 ring-orange-200/55 dark:ring-orange-900/35'
-  }
-  return 'hover:bg-muted/35'
+/** Anchos alineados entre cabecera y filas (sm+). */
+const COL_RANK = 'w-11 shrink-0 sm:w-12'
+const COL_STAT = 'w-9 shrink-0 text-center sm:w-10'
+const COL_PTS = 'w-[4.5rem] shrink-0 text-right sm:w-[5rem]'
+
+function rowCardClass(position: number) {
+  return cn(
+    'rounded-xl border transition-colors duration-150',
+    position === 1 &&
+      'border-amber-200/90 bg-gradient-to-br from-amber-50/95 via-amber-50/50 to-card shadow-sm shadow-amber-900/5 ring-1 ring-amber-200/40 dark:border-amber-800/50 dark:from-amber-950/35 dark:via-amber-950/15 dark:to-card dark:ring-amber-900/30',
+    position === 2 &&
+      'border-slate-200/90 bg-gradient-to-br from-slate-50/90 via-slate-50/40 to-card shadow-sm ring-1 ring-slate-200/50 dark:border-slate-700/60 dark:from-slate-900/40 dark:via-slate-900/20 dark:to-card dark:ring-slate-700/40',
+    position === 3 &&
+      'border-orange-200/85 bg-gradient-to-br from-orange-50/90 via-orange-50/35 to-card shadow-sm ring-1 ring-orange-200/45 dark:border-orange-900/45 dark:from-orange-950/30 dark:via-orange-950/12 dark:to-card dark:ring-orange-900/35',
+    position > 3 &&
+      'border-border/60 bg-card/90 hover:border-border hover:bg-muted/25 dark:bg-card/50 dark:hover:bg-muted/20',
+  )
 }
 
 function RankBadge({ position }: { position: number }) {
   const podium = position <= 3
+  const circle = cn(
+    'flex size-9 items-center justify-center rounded-full text-sm font-bold tabular-nums shadow-sm ring-1 ring-inset sm:size-10 sm:text-base',
+    position === 1 &&
+      'bg-gradient-to-b from-amber-100 to-amber-50 text-amber-950 ring-amber-300/70 dark:from-amber-900/70 dark:to-amber-950/50 dark:text-amber-50 dark:ring-amber-700/40',
+    position === 2 &&
+      'bg-gradient-to-b from-slate-100 to-slate-50 text-slate-900 ring-slate-300/70 dark:from-slate-700 dark:to-slate-800 dark:text-slate-100 dark:ring-slate-600/50',
+    position === 3 &&
+      'bg-gradient-to-b from-orange-100 to-orange-50 text-orange-950 ring-orange-300/65 dark:from-orange-900/55 dark:to-orange-950/45 dark:text-orange-50 dark:ring-orange-800/45',
+    !podium && 'bg-muted/70 text-muted-foreground ring-border/50',
+  )
+
   return (
-    <div
-      className={cn(
-        'flex w-8 shrink-0 flex-col items-center justify-center gap-0.5 sm:w-9',
-        podium && 'font-semibold text-foreground',
-      )}
-    >
-      {position === 1 ? (
-        <Crown className="size-3.5 text-amber-600 dark:text-amber-400" aria-hidden />
-      ) : position <= 3 ? (
-        <Medal
-          className={cn(
-            'size-3.5',
-            position === 2 && 'text-slate-500 dark:text-slate-400',
-            position === 3 && 'text-orange-600 dark:text-orange-400',
-          )}
-          aria-hidden
-        />
-      ) : null}
-      <span className={cn('text-sm tabular-nums sm:text-base', !podium && 'font-semibold text-muted-foreground')}>
-        #{position}
+    <div className={cn(COL_RANK, 'flex flex-col items-center justify-center gap-0.5')}>
+      <span className="flex h-3.5 items-center justify-center sm:h-4" aria-hidden>
+        {position === 1 ? (
+          <Crown className="size-3.5 text-amber-600 dark:text-amber-400" />
+        ) : position === 2 ? (
+          <Medal className="size-3.5 text-slate-500 dark:text-slate-400" />
+        ) : position === 3 ? (
+          <Medal className="size-3.5 text-orange-600 dark:text-orange-400" />
+        ) : null}
+      </span>
+      <span className={circle} aria-label={`Posición ${position}`}>
+        {position}
       </span>
     </div>
   )
 }
 
-function StatCell({ label, value }: { label: string; value: number | string }) {
+function StatCell({ label, value, className }: { label: string; value: number | string; className?: string }) {
   return (
-    <div className="min-w-[2.25rem] text-center sm:min-w-[2.5rem]">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="text-sm font-semibold tabular-nums text-foreground">{value}</p>
+    <div className={cn(COL_STAT, className)}>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-sm font-semibold tabular-nums text-foreground sm:text-[0.9375rem]">{value}</p>
+    </div>
+  )
+}
+
+function PointsPill({ points }: { points: number }) {
+  return (
+    <div className={cn(COL_PTS, 'flex flex-col items-end justify-center gap-0.5')}>
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Pts</span>
+      <span
+        className={cn(
+          'inline-flex min-w-[3rem] items-center justify-end rounded-lg px-2 py-1 text-lg font-bold tabular-nums leading-none shadow-sm ring-1 ring-inset sm:min-w-[3.25rem] sm:px-2.5 sm:text-xl',
+          'bg-emerald-500/12 text-emerald-700 ring-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-400 dark:ring-emerald-500/25',
+        )}
+      >
+        {points}
+      </span>
+    </div>
+  )
+}
+
+function MobileStatTile({
+  label,
+  fullLabel,
+  value,
+  emphasize,
+}: {
+  label: string
+  fullLabel: string
+  value: number | string
+  emphasize?: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        'rounded-xl border px-2 py-2 text-center shadow-sm',
+        emphasize
+          ? 'border-emerald-500/20 bg-emerald-500/[0.07] ring-1 ring-emerald-500/10'
+          : 'border-border/50 bg-background/90 ring-1 ring-border/40',
+      )}
+      title={fullLabel}
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-0.5 text-base font-bold tabular-nums leading-none text-foreground">{value}</p>
+    </div>
+  )
+}
+
+function LeaderboardDesktopHeader() {
+  return (
+    <div
+      className="mb-2 hidden items-end gap-2 rounded-xl border border-border/45 bg-muted/45 px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground shadow-sm dark:bg-muted/30 sm:flex md:gap-3 md:px-4"
+      aria-hidden
+    >
+      <div className={COL_RANK} />
+      <div className="min-w-0 flex-1 pb-0.5 pl-0.5">Jugador</div>
+      <div className={cn(COL_STAT, 'pb-0.5')}>PJ</div>
+      <div className={cn(COL_STAT, 'pb-0.5')}>PG</div>
+      <div className={cn(COL_STAT, 'pb-0.5')}>PP</div>
+      <div className={cn(COL_STAT, 'hidden pb-0.5 md:block')}>S±</div>
+      <div className={cn(COL_STAT, 'hidden pb-0.5 lg:block')}>G±</div>
+      <div className={cn(COL_PTS, 'pb-0.5 text-right')}>Pts</div>
     </div>
   )
 }
@@ -68,99 +139,125 @@ export function LeaderboardList({
   const hasMore = rows.length > INITIAL_LEADERBOARD_VISIBLE
   const visibleRows = hasMore && !expanded ? rows.slice(0, INITIAL_LEADERBOARD_VISIBLE) : rows
 
+  const flashKeys = useRankPositionFlashKeys(
+    useMemo(() => rows.map((r) => ({ key: r.userId, position: r.position })), [rows]),
+  )
+
   useEffect(() => {
     setExpanded(false)
   }, [rows.length])
 
   if (rows.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed border-border/70 bg-muted/10 px-4 py-10 text-center text-sm text-muted-foreground">
-        El ranking aparecerá cuando existan resultados cerrados.
-      </p>
+      <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/70 bg-gradient-to-b from-muted/20 to-muted/5 px-6 py-14 text-center">
+        <span className="flex size-14 items-center justify-center rounded-2xl bg-muted/50 text-muted-foreground shadow-inner ring-1 ring-border/40">
+          <Trophy className="size-7 opacity-70" aria-hidden />
+        </span>
+        <div className="max-w-xs space-y-1">
+          <p className="text-sm font-semibold text-foreground">Aún sin clasificación</p>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            El leaderboard aparecerá cuando haya resultados cerrados en los grupos.
+          </p>
+        </div>
+      </div>
     )
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border/50 bg-card/40 dark:bg-card/20">
-      <ul className="overflow-hidden">
-      {visibleRows.map((r) => {
-        const sd = r.setsFor - r.setsAgainst
-        const gd = r.gamesFor - r.gamesAgainst
-        return (
-          <li
-            key={`${r.userId}-${r.position}`}
-            className={cn(
-              'border-b border-border/40 transition-colors duration-150 last:border-b-0',
-              podiumSurface(r.position),
-              highlightUserId &&
-                r.userId === highlightUserId &&
-                'relative z-[1] shadow-[inset_0_0_0_2px] shadow-emerald-600/35 dark:shadow-emerald-400/30',
-            )}
-          >
-            {/* Mobile: dos líneas */}
-            <div className="px-2.5 py-2 sm:hidden">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex min-w-0 flex-1 items-start gap-2">
-                  <RankBadge position={r.position} />
-                  <div className="min-w-0 pt-0.5">
-                    <p className="truncate font-medium text-foreground">{r.displayName}</p>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{r.groupName}</p>
+    <div className="rounded-2xl border border-border/50 bg-muted/15 p-2 shadow-sm ring-1 ring-black/[0.03] dark:bg-muted/10 dark:ring-white/[0.06] sm:p-3">
+      <LeaderboardDesktopHeader />
+
+      <ul className="flex flex-col gap-2 sm:gap-2.5">
+        {visibleRows.map((r) => {
+          const sd = r.setsFor - r.setsAgainst
+          const gd = r.gamesFor - r.gamesAgainst
+          const highlighted = highlightUserId && r.userId === highlightUserId
+          const rankMoved = flashKeys.has(r.userId)
+
+          return (
+            <li
+              key={`${r.userId}-${r.position}`}
+              className={cn(
+                rowCardClass(r.position),
+                'px-3 py-2.5 sm:flex sm:items-center sm:gap-2 sm:px-4 sm:py-3',
+                highlighted &&
+                  'relative z-[1] shadow-[inset_0_0_0_2px] shadow-emerald-500/45 ring-emerald-500/30 dark:shadow-emerald-400/35',
+                rankMoved &&
+                  'motion-safe:ring-2 motion-safe:ring-emerald-500/30 motion-safe:transition-[box-shadow] motion-safe:duration-300',
+              )}
+            >
+              {/* Mobile */}
+              <div className="sm:hidden">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                    <RankBadge position={r.position} />
+                    <div className="min-w-0 pt-0.5">
+                      <p className="truncate text-[15px] font-semibold leading-tight text-foreground">{r.displayName}</p>
+                      <p className="mt-1 truncate text-xs text-muted-foreground">{r.groupName}</p>
+                    </div>
+                  </div>
+                  <PointsPill points={r.points} />
+                </div>
+                <div className="mt-3 border-t border-border/35 pt-3">
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Estadísticas del grupo
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <MobileStatTile label="PJ" fullLabel="Partidos jugados" value={r.played} />
+                    <MobileStatTile label="PG" fullLabel="Partidos ganados" value={r.won} />
+                    <MobileStatTile label="PP" fullLabel="Partidos perdidos" value={r.lost} />
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <MobileStatTile
+                      label="S±"
+                      fullLabel="Diferencia de sets a favor"
+                      value={sd >= 0 ? `+${sd}` : sd}
+                      emphasize
+                    />
+                    <MobileStatTile
+                      label="G±"
+                      fullLabel="Diferencia de games a favor"
+                      value={gd >= 0 ? `+${gd}` : gd}
+                      emphasize
+                    />
                   </div>
                 </div>
-                <div className="shrink-0 text-right">
-                  <p className="text-lg font-bold tabular-nums leading-none text-emerald-600 dark:text-emerald-400">
-                    {r.points}
-                  </p>
-                  <p className="mt-0.5 text-[10px] font-medium text-muted-foreground">pts</p>
-                </div>
               </div>
-              <div className="mt-1.5 flex items-center justify-between border-t border-border/30 pt-1.5 pl-10 pr-0.5">
-                <div className="flex gap-4">
-                  <StatCell label="PJ" value={r.played} />
-                  <StatCell label="PG" value={r.won} />
-                  <StatCell label="PP" value={r.lost} />
-                </div>
-              </div>
-            </div>
 
-            {/* Desktop / tablet: una fila escaneable */}
-            <div className="hidden items-center justify-between gap-3 px-3 py-2.5 sm:flex md:px-4 md:py-3">
-              <div className="flex min-w-0 flex-1 items-center gap-3">
+              {/* Tablet / desktop */}
+              <div className="hidden min-w-0 flex-1 items-center gap-2 sm:flex md:gap-3">
                 <RankBadge position={r.position} />
-                <div className="min-w-0">
-                  <p className="truncate font-medium text-foreground">{r.displayName}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-foreground">{r.displayName}</p>
                   <p className="truncate text-xs text-muted-foreground">{r.groupName}</p>
                 </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-4 md:gap-5 lg:gap-6">
                 <StatCell label="PJ" value={r.played} />
                 <StatCell label="PG" value={r.won} />
                 <StatCell label="PP" value={r.lost} />
-                <div className="hidden text-center md:block lg:min-w-[2.75rem]">
-                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">S±</p>
-                  <p className="text-sm font-semibold tabular-nums text-foreground">{sd >= 0 ? `+${sd}` : sd}</p>
-                </div>
-                <div className="hidden text-center lg:block lg:min-w-[2.75rem]">
-                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">G±</p>
-                  <p className="text-sm font-semibold tabular-nums text-foreground">{gd >= 0 ? `+${gd}` : gd}</p>
-                </div>
-                <div className="border-l border-border/50 pl-4 text-right md:pl-5">
-                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Pts</p>
-                  <p className="text-lg font-bold tabular-nums leading-tight text-emerald-600 dark:text-emerald-400">
-                    {r.points}
+                <div className={cn(COL_STAT, 'hidden md:block')}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">S±</p>
+                  <p className="text-sm font-semibold tabular-nums text-foreground sm:text-[0.9375rem]">
+                    {sd >= 0 ? `+${sd}` : sd}
                   </p>
                 </div>
+                <div className={cn(COL_STAT, 'hidden lg:block')}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">G±</p>
+                  <p className="text-sm font-semibold tabular-nums text-foreground sm:text-[0.9375rem]">
+                    {gd >= 0 ? `+${gd}` : gd}
+                  </p>
+                </div>
+                <PointsPill points={r.points} />
               </div>
-            </div>
-          </li>
-        )
-      })}
+            </li>
+          )
+        })}
       </ul>
+
       {hasMore ? (
-        <div className="border-t border-border/40 bg-muted/5 px-2 py-2 sm:px-3">
+        <div className="mt-2 border-t border-border/40 pt-2">
           <button
             type="button"
-            className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+            className="flex min-h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-xl border border-border/50 bg-card/80 py-2.5 text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:border-emerald-500/25 hover:bg-emerald-500/[0.06] hover:text-foreground active:bg-muted/40 dark:bg-card/40"
             onClick={() => setExpanded((e) => !e)}
             aria-expanded={expanded}
           >
@@ -172,7 +269,7 @@ export function LeaderboardList({
             ) : (
               <>
                 <ChevronDown className="size-4 shrink-0" aria-hidden />
-                Ver {rows.length - INITIAL_LEADERBOARD_VISIBLE} más · mostrar todas ({rows.length})
+                Ver {rows.length - INITIAL_LEADERBOARD_VISIBLE} más · todas ({rows.length})
               </>
             )}
           </button>

@@ -1,11 +1,10 @@
 import type { GroupPlayer, MatchRow, MatchStatus } from '@/types/database'
 
-/** Estados que cuentan como “pendientes de validación / cierre oficial”. */
-export const RESULT_PENDING_ADMIN_STATUSES: MatchStatus[] = [
-  'score_submitted',
-  'player_confirmed',
-  'score_disputed',
-]
+import type { RulesPoints } from '@/utils/ranking'
+import { matchIncludedInRanking } from '@/utils/ranking'
+
+/** Estados que suelen requerir atención admin (disputas explícitas). */
+export const RESULT_PENDING_ADMIN_STATUSES: MatchStatus[] = ['score_disputed']
 
 /** `YYYY-MM-DD` en calendario local → inicio y fin del día en ms. */
 function localDayBounds(ymd: string): { start: number; end: number } | null {
@@ -70,6 +69,7 @@ export function computeScopeMetrics(
   matches: MatchRow[],
   groupPlayers: GroupPlayer[],
   groupIdsInScope: string[],
+  rules: RulesPoints,
 ): TournamentScopeMetrics {
   const gSet = new Set(groupIdsInScope)
   const totalPlayers = countDistinctPlayers(groupPlayers, gSet)
@@ -77,8 +77,8 @@ export function computeScopeMetrics(
 
   const nonCancelled = matches.filter((m) => m.status !== 'cancelled')
   const matchesTotal = nonCancelled.length
-  const matchesPlayed = nonCancelled.filter((m) => m.status === 'closed').length
-  const matchesPending = nonCancelled.filter((m) => m.status !== 'closed').length
+  const matchesPlayed = nonCancelled.filter((m) => matchIncludedInRanking(m, rules)).length
+  const matchesPending = matchesTotal - matchesPlayed
   const resultsPendingValidation = nonCancelled.filter((m) =>
     RESULT_PENDING_ADMIN_STATUSES.includes(m.status),
   ).length

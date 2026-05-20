@@ -10,10 +10,10 @@ import { cn } from '@/lib/utils'
 function statusLine(m: MatchRow): string {
   if (m.status === 'cancelled') return 'Cancelado'
   if (m.status === 'pending_score') return 'Pendiente de marcador'
-  if (m.status === 'score_submitted') return 'Marcador enviado (revisión del rival)'
+  if (m.status === 'score_submitted') return 'Confirmado para tabla · puede refutarse'
   if (m.status === 'score_disputed') return 'Marcador en disputa'
-  if (m.status === 'player_confirmed') return 'Aceptado por rival · pendiente admin'
-  if (m.status === 'closed') return 'Cerrado'
+  if (m.status === 'player_confirmed') return 'Sin refutación · pendiente organizador'
+  if (m.status === 'closed' || m.status === 'validated') return 'Cerrado'
   return 'En seguimiento'
 }
 

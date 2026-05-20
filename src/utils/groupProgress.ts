@@ -1,5 +1,6 @@
 import type { Group, GroupPlayer, MatchRow } from '@/types/database'
-import type { RankingRow } from '@/utils/ranking'
+import type { RankingRow, RulesPoints } from '@/utils/ranking'
+import { matchIncludedInRanking } from '@/utils/ranking'
 import { RESULT_PENDING_ADMIN_STATUSES } from '@/utils/tournamentMetrics'
 
 export type GroupProgressState = 'not_started' | 'in_progress' | 'complete' | 'pending_validation'
@@ -33,6 +34,7 @@ export function buildGroupProgressItems(
   groupPlayers: GroupPlayer[],
   matches: MatchRow[],
   rankingByGroupId: Map<string, RankingRow[]>,
+  rules: RulesPoints,
 ): GroupProgressItem[] {
   const playersByGroup = new Map<string, GroupPlayer[]>()
   for (const p of groupPlayers) {
@@ -44,7 +46,7 @@ export function buildGroupProgressItems(
   return groups.map((g) => {
     const gMatches = matches.filter((m) => m.group_id === g.id && m.status !== 'cancelled')
     const matchesTotal = gMatches.length
-    const matchesPlayed = gMatches.filter((m) => m.status === 'closed').length
+    const matchesPlayed = gMatches.filter((m) => matchIncludedInRanking(m, rules)).length
     const pendingValidationCount = gMatches.filter((m) =>
       RESULT_PENDING_ADMIN_STATUSES.includes(m.status),
     ).length

@@ -1,5 +1,5 @@
 import type { TournamentMovementReason, TournamentMovementType } from '@/types/database'
-import type { RankingRow } from '@/utils/ranking'
+import { compareRankingRowsForLeaderboard, type RankingRow } from '@/utils/ranking'
 
 /** Intento legado antes de límites; mantener solo si otros módulos lo referencian. */
 export type PromotionIntent = 'promote' | 'stay' | 'demote'
@@ -8,15 +8,7 @@ export type PromotionIntent = 'promote' | 'stay' | 'demote'
  * Orden para ascenso/descenso: puntos → games a favor → diferencia de games → nombre (estable).
  */
 export function sortGroupStandingsForMovement(standings: RankingRow[]): RankingRow[] {
-  const sorted = [...standings].sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points
-    if (b.gamesFor !== a.gamesFor) return b.gamesFor - a.gamesFor
-    const ad = a.gamesFor - a.gamesAgainst
-    const bd = b.gamesFor - b.gamesAgainst
-    if (bd !== ad) return bd - ad
-    if (a.seed_order !== b.seed_order) return a.seed_order - b.seed_order
-    return a.displayName.localeCompare(b.displayName)
-  })
+  const sorted = [...standings].sort(compareRankingRowsForLeaderboard)
   return sorted.map((r, i) => ({ ...r, position: i + 1 }))
 }
 

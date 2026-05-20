@@ -1,16 +1,22 @@
+import { resolveRankingPointsRules } from '@/domain/tournamentRankingPoints'
+import { importResultTypeBothPenalized, importResultTypeUsesDefaultPoints } from '@/lib/matchResultSemantics'
+import { matchStatusCountsTowardStandings } from '@/lib/matchReviewPhase'
 import type { GroupPlayer, MatchRow, ScoreSet, TournamentRules } from '@/types/database'
 import type { RankingRow } from '@/utils/ranking'
-import { perspectiveSetsForCell } from '@/utils/ranking'
+import { matchIncludedInRanking, perspectiveSetsForCell, type RulesPoints } from '@/utils/ranking'
+import { getOfficialWinnerGroupPlayerId } from '@/utils/matchOfficialWinner'
 import { formatScoreCompact } from '@/utils/score'
 
 export function isMatchCompleted(m: MatchRow): boolean {
-  if (m.status === 'cancelled' || !m.winner_id) return false
-  return m.status === 'closed'
+  if (m.status === 'cancelled') return false
+  if (m.status !== 'closed' && m.status !== 'validated') return false
+  if (importResultTypeBothPenalized(m.result_type)) return true
+  return m.winner_id != null
 }
 
 export function isMatchPending(m: MatchRow): boolean {
   if (m.status === 'cancelled') return false
-  return m.status !== 'closed'
+  return m.status !== 'closed' && m.status !== 'validated'
 }
 
 export function getPlayerMatches(membershipId: string, matches: MatchRow[]): MatchRow[] {
@@ -21,9 +27,9 @@ export function getUpcomingMatches(membershipId: string, matches: MatchRow[]): M
   return getPlayerMatches(membershipId, matches).filter(isMatchPending)
 }
 
-/** Partidos donde el jugador puede tener acción (captura A, revisión B) o seguimiento. */
+/** Partidos “abiertos” para captura jugador (sin disputa en revisión admin). */
 export function isMatchOpenForPlayerScoreEntry(m: MatchRow): boolean {
-  return ['pending_score', 'score_submitted', 'score_disputed'].includes(m.status)
+  return ['pending_score', 'score_submitted'].includes(m.status)
 }
 
 export function getPlayerMatchesOpenForScoreEntry(
@@ -60,8 +66,7 @@ export function calculateMatchGamesDifference(
   playerId: string,
   match: MatchRow,
 ): number {
-  // Sudden death does not affect games difference because no games are captured.
-  if (match.game_type === 'sudden_death') return 0
+  if (importResultTypeBothPenalized(match.result_type)) return 0
   const sets = getPlayerPerspectiveScoreSets(match, playerId)
   if (!sets?.length) return 0
   return sets.reduce((total, set) => total + set.a - set.b, 0)
@@ -70,13 +75,13 @@ export function calculateMatchGamesDifference(
 export function calculateGamesForAndAgainst(
   playerId: string,
   matches: MatchRow[],
+  rules: RulesPoints,
 ): { gamesFor: number; gamesAgainst: number; gamesDifference: number } {
-  const officialMatches = matches.filter((match) => match.status === 'closed')
+  const counted = matches.filter((match) => matchIncludedInRanking(match, rules))
 
-  return officialMatches.reduce(
+  return counted.reduce(
     (totals, match) => {
-      // Sudden death does not affect games difference because no games are captured.
-      if (match.game_type === 'sudden_death') return totals
+      if (importResultTypeBothPenalized(match.result_type)) return totals
       const sets = getPlayerPerspectiveScoreSets(match, playerId)
       if (!sets?.length) return totals
 
@@ -93,9 +98,10 @@ export function calculateGamesForAndAgainst(
 
 export function calculateGamesDifferenceForPlayer(
   playerId: string,
-  closedMatches: MatchRow[],
+  matches: MatchRow[],
+  rules: RulesPoints,
 ): number {
-  return calculateGamesForAndAgainst(playerId, closedMatches).gamesDifference
+  return calculateGamesForAndAgainst(playerId, matches, rules).gamesDifference
 }
 
 export function getOpponentGroupPlayerId(match: MatchRow, myGroupPlayerId: string): string | null {
@@ -120,15 +126,30 @@ export function getPointsForPlayerInMatch(
   rules: Pick<
     TournamentRules,
     'points_per_win' | 'points_per_loss' | 'points_default_win' | 'points_default_loss'
-  >,
+  > &
+    Partial<Pick<TournamentRules, 'best_of_sets'>>,
 ): number {
-  if (match.status !== 'closed' || !match.winner_id) return 0
-  if (match.result_type && match.result_type !== 'normal') {
-    if (match.winner_id === myGroupPlayerId) return rules.points_default_win
-    return rules.points_default_loss
+  const pts = resolveRankingPointsRules(rules)
+  const countsForTable = matchStatusCountsTowardStandings(match.status)
+  if (!countsForTable) return 0
+  if (importResultTypeBothPenalized(match.result_type)) return pts.penaltyBoth
+
+  const rulesForWinner: RulesPoints = {
+    points_per_win: rules.points_per_win,
+    points_per_loss: rules.points_per_loss,
+    points_default_win: rules.points_default_win,
+    points_default_loss: rules.points_default_loss,
+    best_of_sets: rules.best_of_sets ?? 3,
   }
-  if (match.winner_id === myGroupPlayerId) return rules.points_per_win
-  return rules.points_per_loss
+  const winnerId = getOfficialWinnerGroupPlayerId(match, rulesForWinner)
+  if (!winnerId) return 0
+
+  if (match.result_type && importResultTypeUsesDefaultPoints(match.result_type)) {
+    if (winnerId === myGroupPlayerId) return pts.defaultWin
+    return pts.defaultLoss
+  }
+  if (winnerId === myGroupPlayerId) return pts.normalWin
+  return pts.normalLoss
 }
 
 export type Outcome = 'win' | 'loss'
@@ -137,7 +158,10 @@ export function getMatchOutcome(
   match: MatchRow,
   myGroupPlayerId: string,
 ): Outcome | null {
-  if (match.status !== 'closed' || !match.winner_id) return null
+  const countsForTable = matchStatusCountsTowardStandings(match.status)
+  if (!countsForTable) return null
+  if (importResultTypeBothPenalized(match.result_type)) return null
+  if (!match.winner_id) return null
   if (match.winner_id === myGroupPlayerId) return 'win'
   return 'loss'
 }

@@ -151,7 +151,8 @@ function MockMatrixInner(props: { players: GroupPlayer[]; matches: MatchRow[] })
                       <div
                         className={cn(
                           'flex h-12 flex-col items-center justify-center rounded-md border px-1 text-[10px]',
-                          match?.status === 'closed' && 'border-emerald-500/40 bg-emerald-500/10',
+                          match?.status === 'closed' || match?.status === 'validated'
+                            ? 'border-emerald-500/40 bg-emerald-500/10'
                         )}
                       >
                         {sets && sets.length > 0 ? (

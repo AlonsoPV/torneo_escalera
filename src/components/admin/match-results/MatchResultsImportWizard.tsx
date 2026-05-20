@@ -42,17 +42,79 @@ import {
   type ApplyMatchResultsImportResult,
   type MatchResultsImportPreviewRow,
 } from '@/services/bulkMatchResultsImport'
+import { prepareMatchResultsImport } from '@/services/matchResultsImportPrepare'
+
+/** Resultado de la mutación de importación (aplica + metadatos de preparación). */
+type MatchResultsImportOutcome = ApplyMatchResultsImportResult & {
+  roundRobinInserted: number
+}
 import { useAuthStore } from '@/stores/authStore'
+import { formatScoreCompact } from '@/utils/score'
 
 const WIZARD_STEPS = [
-  { id: 1, label: 'Archivo', short: '1' },
-  { id: 2, label: 'Validación', short: '2' },
-  { id: 3, label: 'Confirmación', short: '3' },
-  { id: 4, label: 'Importación', short: '4' },
-  { id: 5, label: 'Resultado', short: '5' },
+  { id: 1, label: 'Subir archivo', short: '1' },
+  { id: 2, label: 'Validar estructura', short: '2' },
+  { id: 3, label: 'Revisar resultados', short: '3' },
+  { id: 4, label: 'Importar', short: '4' },
+  { id: 5, label: 'Resumen final', short: '5' },
 ] as const
 
-type PreviewFilter = 'all' | 'ready' | 'error'
+type PreviewFilter = 'all' | 'ready' | 'error' | 'warning' | 'normalized'
+
+function previewScoreLabel(r: MatchResultsImportPreviewRow): string {
+  if (r.state !== 'ready' || !r.resolved?.scoreRaw?.length) return '—'
+  return formatScoreCompact(r.resolved.scoreRaw)
+}
+
+function previewWinnerLabel(r: MatchResultsImportPreviewRow): string {
+  if (r.state !== 'ready' || !r.resolved?.winnerGroupPlayerId) {
+    if (r.infoMessages?.some((m) => m.includes('inferido'))) return 'Inferido'
+    return '—'
+  }
+  const raw = String(r.cells.winner_id ?? '').trim()
+  if (raw && raw.length < 48) return raw
+  return `${r.resolved.winnerGroupPlayerId.slice(0, 8)}…`
+}
+
+function previewRowPresentation(row: MatchResultsImportPreviewRow): {
+  label: string
+  rowClass: string
+  badgeClass: string
+} {
+  if (row.state === 'error') {
+    return {
+      label: 'Error',
+      rowClass: 'bg-red-50/40',
+      badgeClass: 'bg-red-100 text-red-800',
+    }
+  }
+  switch (row.previewKind) {
+    case 'penalty':
+      return {
+        label: 'Penalización',
+        rowClass: 'bg-amber-50/55',
+        badgeClass: 'bg-amber-100 text-amber-950',
+      }
+    case 'warning':
+      return {
+        label: 'Advertencia',
+        rowClass: 'bg-amber-50/25',
+        badgeClass: 'bg-amber-100 text-amber-900',
+      }
+    case 'normalized':
+      return {
+        label: 'Normalizado',
+        rowClass: 'bg-sky-50/35',
+        badgeClass: 'bg-sky-100 text-sky-900',
+      }
+    default:
+      return {
+        label: 'Lista',
+        rowClass: 'bg-emerald-50/20',
+        badgeClass: 'bg-emerald-100 text-emerald-800',
+      }
+  }
+}
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -60,7 +122,7 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function downloadMatchResultsReportCsv(res: ApplyMatchResultsImportResult, fileLabel: string) {
+function downloadMatchResultsReportCsv(res: Pick<ApplyMatchResultsImportResult, 'rowDetails'>, fileLabel: string) {
   const lines = [
     ['Fila', 'OK', 'Mensaje'].join(','),
     ...res.rowDetails.map((r) => {
@@ -162,7 +224,17 @@ export function MatchResultsImportWizard() {
   const [preview, setPreview] = useState<MatchResultsImportPreviewRow[]>([])
   const [isDraggingFile, setIsDraggingFile] = useState(false)
   const [previewFilter, setPreviewFilter] = useState<PreviewFilter>('all')
-  const [result, setResult] = useState<ApplyMatchResultsImportResult | null>(null)
+  const [historicalImportMode, setHistoricalImportMode] = useState(true)
+  const [result, setResult] = useState<MatchResultsImportOutcome | null>(null)
+  const [structureSyncing, setStructureSyncing] = useState(false)
+
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null)
+  /** Captura del preview en el momento de iniciar importación (resumen final). */
+  const importSnapshotRef = useRef<{
+    pendingConverted: number
+    readyWithNotes: number
+    totalFileRows: number
+  } | null>(null)
 
   const groupsQ = useQuery({ queryKey: ['admin-groups'], queryFn: () => getAdminGroups() })
   const matchesQ = useQuery({ queryKey: ['admin-matches'], queryFn: () => getAdminMatches() })
@@ -178,30 +250,65 @@ export function MatchResultsImportWizard() {
       return
     }
     let cancelled = false
-    buildMatchResultsImportPreview(parsedRows, groupsQ.data, matchesQ.data).then((rows) => {
+    buildMatchResultsImportPreview(parsedRows, groupsQ.data, matchesQ.data, { historicalImportMode }).then((rows) => {
       if (!cancelled) setPreview(rows)
     })
     return () => {
       cancelled = true
     }
-  }, [parsedRows, groupsQ.data, matchesQ.data])
+  }, [parsedRows, groupsQ.data, matchesQ.data, historicalImportMode])
 
   const summary = useMemo(() => {
     const ready = preview.filter((r) => r.state === 'ready').length
     const err = preview.filter((r) => r.state === 'error').length
-    return { ready, error: err, total: preview.length }
+    const withNotes = preview.filter((r) => r.state === 'ready' && (r.infoMessages?.length ?? 0) > 0).length
+    const normalized = preview.filter((r) => r.state === 'ready' && r.previewKind === 'normalized').length
+    const warnings = preview.filter((r) => r.state === 'ready' && r.previewKind === 'warning').length
+    const penalties = preview.filter((r) => r.state === 'ready' && r.previewKind === 'penalty').length
+    const readyRows = preview.filter((r) => r.state === 'ready' && r.resolved)
+    const countRt = (rt: string) => readyRows.filter((r) => r.resolved!.resultType === rt).length
+    return {
+      ready,
+      error: err,
+      total: preview.length,
+      withNotes,
+      normalized,
+      warnings,
+      penalties,
+      normal: countRt('normal'),
+      wo: countRt('wo'),
+      def: countRt('def'),
+      notReported: countRt('not_reported'),
+      retired: countRt('retired'),
+      doublePenalty: countRt('double_penalty'),
+      pendingConverted: preview.filter(
+        (r) =>
+          r.infoMessages?.some(
+            (m) =>
+              m.includes('pending_score') ||
+              m.includes('N.R') ||
+              m.includes('penalización administrativa') ||
+              m.includes('No reportado'),
+          ),
+      ).length,
+    }
   }, [preview])
 
   const filteredPreview = useMemo(() => {
     if (previewFilter === 'ready') return preview.filter((r) => r.state === 'ready')
     if (previewFilter === 'error') return preview.filter((r) => r.state === 'error')
+    if (previewFilter === 'warning')
+      return preview.filter((r) => r.state === 'ready' && r.previewKind === 'warning')
+    if (previewFilter === 'normalized')
+      return preview.filter((r) => r.state === 'ready' && r.previewKind === 'normalized')
     return preview
   }, [preview, previewFilter])
 
   const hasHeaderErrors = Boolean(parseInfo?.headerErrors.length)
   const canGoValidation =
     Boolean(fileMeta && parsedRows.length > 0 && !hasHeaderErrors)
-  const canProceedToConfirm = summary.ready > 0 && !loadingContext && preview.length > 0
+  const canProceedToConfirm =
+    summary.ready > 0 && summary.error === 0 && !loadingContext && preview.length > 0
 
   const resetAll = useCallback(() => {
     setStep(1)
@@ -212,7 +319,9 @@ export function MatchResultsImportWizard() {
     setPreview([])
     setPreviewFilter('all')
     setResult(null)
+    setImportProgress(null)
     setIsDraggingFile(false)
+    importSnapshotRef.current = null
     if (fileInputRef.current) fileInputRef.current.value = ''
   }, [])
 
@@ -261,25 +370,50 @@ export function MatchResultsImportWizard() {
   }
 
   const importMut = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<MatchResultsImportOutcome> => {
       if (!userId) throw new Error('No autenticado')
-      return applyMatchResultsImport({
+      setImportProgress(null)
+      const prep = await prepareMatchResultsImport(parsedRows, userId)
+      const groups = await getAdminGroups()
+      const matches = await getAdminMatches()
+      const freshPreview = await buildMatchResultsImportPreview(parsedRows, groups, matches, {
+        historicalImportMode,
+      })
+      const ready = freshPreview.filter((r) => r.state === 'ready').length
+      const critical = freshPreview.filter((r) => r.state === 'error').length
+      if (critical > 0) {
+        throw new Error(
+          `Hay ${critical} fila(s) con error: corrige el archivo y vuelve a validar antes de importar.`,
+        )
+      }
+      if (ready === 0) {
+        throw new Error(
+          'Tras sincronizar torneo/grupos no quedó ninguna fila lista. Revisa jugadores en el grupo y cruces round robin.',
+        )
+      }
+      const applyRes = await applyMatchResultsImport({
         fileName: fileMeta?.name ?? null,
         uploadedBy: userId,
-        rows: preview,
+        rows: freshPreview,
+        onChunkProgress: (done, total) => setImportProgress({ done, total }),
       })
+      return {
+        ...applyRes,
+        roundRobinInserted: prep.roundRobin.matchesInserted,
+      }
     },
     onSuccess: async (res) => {
       setResult(res)
       setStep(5)
       bumpReachable(5)
-      toast.success(`Importación terminada: ${res.success} ok, ${res.errors} con error.`)
+      toast.success(`Importación terminada: ${res.success} guardados, ${res.errors} omitidos con error.`)
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['admin-matches'] }),
         qc.invalidateQueries({ queryKey: ['admin-results'] }),
         qc.invalidateQueries({ queryKey: ['admin-groups'] }),
         qc.invalidateQueries({ queryKey: ['admin-overview'] }),
         qc.invalidateQueries({ queryKey: ['tournament-dashboard'] }),
+        qc.invalidateQueries({ queryKey: ['tournament-dashboard-options'] }),
         qc.invalidateQueries({ queryKey: ['matches'] }),
       ])
     },
@@ -289,10 +423,63 @@ export function MatchResultsImportWizard() {
     },
   })
 
-  const goValidation = () => {
-    if (!canGoValidation) return
-    setStep(2)
-    bumpReachable(2)
+  const goValidation = async () => {
+    if (!canGoValidation || !userId) return
+    setStructureSyncing(true)
+    try {
+      const prep = await prepareMatchResultsImport(parsedRows, userId)
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['admin-groups'] }),
+        qc.invalidateQueries({ queryKey: ['admin-matches'] }),
+        qc.invalidateQueries({ queryKey: ['tournament-dashboard-options'] }),
+        qc.invalidateQueries({ queryKey: ['tournament-dashboard'] }),
+        qc.refetchQueries({ queryKey: ['admin-groups'] }),
+        qc.refetchQueries({ queryKey: ['admin-matches'] }),
+      ])
+      const summaryBits = [`${prep.elapsedMs} ms`]
+      if (prep.structure.categoriesCreated > 0) {
+        summaryBits.push(`${prep.structure.categoriesCreated} categoría(s)`)
+      }
+      if (prep.structure.groupsCreated > 0) {
+        summaryBits.push(`${prep.structure.groupsCreated} grupo(s) nuevo(s)`)
+      }
+      if (prep.structure.groupsUpdated > 0) {
+        summaryBits.push(`${prep.structure.groupsUpdated} grupo(s) actualizado(s)`)
+      }
+      if (prep.roundRobin.matchesInserted > 0) {
+        summaryBits.push(`${prep.roundRobin.matchesInserted} partido(s) RR generados`)
+      }
+      if (prep.enrollment.enrolled > 0) {
+        summaryBits.push(`${prep.enrollment.enrolled} alta(s)`)
+      }
+      if (prep.enrollment.profilesAutoCreated > 0) {
+        summaryBits.push(`${prep.enrollment.profilesAutoCreated} cuenta(s) nueva(s)`)
+      }
+      if (prep.enrollment.skippedAlreadyInGroup > 0) {
+        summaryBits.push(`${prep.enrollment.skippedAlreadyInGroup} ya en grupo`)
+      }
+      if (prep.enrollment.rosterLabelsUpdated > 0) {
+        summaryBits.push(`${prep.enrollment.rosterLabelsUpdated} nombre(s) en roster actualizados`)
+      }
+      const warnings = [
+        ...prep.structure.messages,
+        ...prep.enrollment.messages,
+        ...prep.roundRobin.messages,
+      ]
+      toast.success(`Preparación lista · ${summaryBits.join(' · ')}`)
+      if (warnings.length > 0) {
+        toast.message('Revisa estos avisos', {
+          description: warnings.slice(0, 14).join('\n'),
+          duration: 14_000,
+        })
+      }
+      setStep(2)
+      bumpReachable(2)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo crear o actualizar torneo/grupos')
+    } finally {
+      setStructureSyncing(false)
+    }
   }
 
   const goConfirm = () => {
@@ -302,6 +489,11 @@ export function MatchResultsImportWizard() {
   }
 
   const startImport = () => {
+    importSnapshotRef.current = {
+      pendingConverted: summary.pendingConverted,
+      readyWithNotes: preview.filter((r) => r.state === 'ready' && (r.infoMessages?.length ?? 0) > 0).length,
+      totalFileRows: summary.total,
+    }
     setStep(4)
     bumpReachable(4)
     importMut.mutate()
@@ -330,10 +522,10 @@ export function MatchResultsImportWizard() {
         <div className="space-y-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0 space-y-1">
-              <CardTitle className="text-base font-semibold text-slate-900">Importación de resultados (CSV)</CardTitle>
+              <CardTitle className="text-base font-semibold text-slate-900">Importación de resultados</CardTitle>
               <CardDescription className="max-w-2xl text-slate-600">
-                Una fila por partido ya existente (round robin). Archivo → validación contra torneos/grupos → confirmación
-                → aplicación en base de datos → informe descargable.
+                Flujo guiado como la carga masiva de usuarios: archivo CSV con la plantilla oficial → validación contra
+                torneo/grupos/jugadores → revisión fila a fila → importación por lotes en servidor → informe descargable.
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -368,9 +560,21 @@ export function MatchResultsImportWizard() {
               </span>
             </summary>
             <ul className="mt-2 list-inside list-disc space-y-1.5 text-xs leading-relaxed text-slate-600">
-              <li>No se crean partidos nuevos: el cruce debe existir en el grupo.</li>
-              <li>Los marcadores cerrados en la app prevalecen según las políticas del torneo; esta herramienta actualiza filas ya generadas.</li>
-              <li>UTF-8; encabezados exactos como en la plantilla (ver columnas en el paso 2).</li>
+              <li>
+                Torneo / categoría / grupo del CSV se crean si no existen; los grupos ya existentes en el mismo torneo se
+                reutilizan por nombre y se pueden actualizar (categoría o etiqueta) para coincidir con el archivo. El
+                torneo activo no se cierra; otros torneos referenciados pasan a estado cerrado al sincronizar.
+              </li>
+              <li>
+                Los jugadores del CSV deben tener perfil (mismo <span className="font-medium">external_id</span>, UUID o
+                nombre completo). Se inscriben automáticamente en el grupo del archivo antes de validar; si ya estaban en
+                el grupo, el nombre mostrado en el roster puede actualizarse desde el CSV.
+              </li>
+              <li>
+                Si tras inscribir hay ≥2 jugadores y el grupo no tenía partidos, se generan cruces round robin en modo
+                «rellenar».
+              </li>
+              <li>UTF-8; encabezados como en la plantilla (paso 2).</li>
             </ul>
           </details>
         </div>
@@ -441,9 +645,14 @@ export function MatchResultsImportWizard() {
             ) : null}
 
             <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 pt-4">
-              <Button type="button" className="gap-2 bg-[#1F5A4C] hover:bg-[#1F5A4C]/90" disabled={!canGoValidation} onClick={goValidation}>
-                Continuar a validación
-                <ArrowRight className="size-4" />
+              <Button
+                type="button"
+                className="gap-2 bg-[#1F5A4C] hover:bg-[#1F5A4C]/90"
+                disabled={!canGoValidation || structureSyncing || !userId}
+                onClick={() => void goValidation()}
+              >
+                {structureSyncing ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}
+                {structureSyncing ? 'Sincronizando torneo, grupos e inscripciones…' : 'Continuar a validación'}
               </Button>
             </div>
           </div>
@@ -484,6 +693,18 @@ export function MatchResultsImportWizard() {
               </div>
             </div>
 
+            {parsedRows.length > 0 && parsedRows.length !== 180 ? (
+              <p className="rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2 text-xs text-sky-950">
+                Tip: un torneo con <strong>18 grupos de 5 jugadores</strong> tiene típicamente{' '}
+                <strong>18 × 10 = 180</strong> cruces round-robin. Tu archivo tiene <strong>{parsedRows.length}</strong>{' '}
+                filas — comprueba que coincida con lo esperado.
+              </p>
+            ) : parsedRows.length === 180 ? (
+              <p className="rounded-lg border border-emerald-200 bg-emerald-50/50 px-3 py-2 text-xs text-emerald-950">
+                Detectadas <strong>180 filas</strong>, coherentes con 18 grupos de 5 en todos contra todos.
+              </p>
+            ) : null}
+
             {loadingContext ? (
               <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-4 text-sm text-slate-700">
                 <Loader2 className="size-5 animate-spin text-[#1F5A4C]" />
@@ -498,12 +719,35 @@ export function MatchResultsImportWizard() {
               </div>
             ) : null}
 
+            {!loadingContext ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm">
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1 size-4 rounded border-slate-300 text-[#1F5A4C] focus:ring-[#1F5A4C]"
+                    checked={historicalImportMode}
+                    onChange={(e) => setHistoricalImportMode(e.target.checked)}
+                  />
+                  <span>
+                    <span className="font-semibold text-slate-900">Modo importación histórica activo</span>
+                    <span className="mt-1 block text-xs leading-relaxed text-slate-600">
+                      Se aceptan formatos operativos del torneo anterior (N.R, pending_score como penalización cerrada,
+                      tercer set corto, W.O/DEF/RET y marcadores flexibles). Las filas válidas quedan como «cerrado»
+                      salvo canceladas. Los sets irregulares muestran advertencia en lugar de bloquear cuando hay ganador
+                      coherente.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            ) : null}
+
             {!loadingContext && preview.length > 0 ? (
               <>
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {[
-                    { label: 'Listas para aplicar', value: summary.ready, tone: 'emerald' as const },
-                    { label: 'Con error (no se envían)', value: summary.error, tone: 'red' as const },
+                    { label: 'Listas para importar', value: summary.ready, tone: 'emerald' as const },
+                    { label: 'Errores críticos', value: summary.error, tone: 'red' as const },
+                    { label: 'Advertencias / normalizadas', value: summary.withNotes, tone: 'amber' as const },
                     { label: 'Total filas', value: summary.total, tone: 'slate' as const },
                   ].map((m) => (
                     <div
@@ -512,6 +756,7 @@ export function MatchResultsImportWizard() {
                         'rounded-xl border px-4 py-3 text-center shadow-sm',
                         m.tone === 'emerald' && 'border-emerald-200/80 bg-emerald-50/50',
                         m.tone === 'red' && 'border-red-200/80 bg-red-50/40',
+                        m.tone === 'amber' && 'border-amber-200/80 bg-amber-50/45',
                         m.tone === 'slate' && 'border-slate-200 bg-white',
                       )}
                     >
@@ -521,11 +766,25 @@ export function MatchResultsImportWizard() {
                   ))}
                 </div>
 
+                {summary.withNotes > 0 ? (
+                  <p className="text-xs font-medium text-amber-950">
+                    {summary.withNotes} fila(s) con normalización o aviso — revisa la columna «Mensajes».
+                  </p>
+                ) : null}
+
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-slate-900">Detalle por fila</p>
                     <div className="flex flex-wrap gap-2">
-                      {(['all', 'ready', 'error'] as PreviewFilter[]).map((f) => (
+                      {(
+                        [
+                          ['all', 'Todos'],
+                          ['ready', 'Listas'],
+                          ['normalized', 'Normalizadas'],
+                          ['warning', 'Advertencias'],
+                          ['error', 'Errores'],
+                        ] as const
+                      ).map(([f, label]) => (
                         <Button
                           key={f}
                           type="button"
@@ -534,7 +793,7 @@ export function MatchResultsImportWizard() {
                           className={cn('h-8 text-xs', previewFilter === f && 'bg-slate-900')}
                           onClick={() => setPreviewFilter(f)}
                         >
-                          {f === 'all' ? 'Todas' : f === 'ready' ? 'Listas' : 'Errores'}
+                          {label}
                         </Button>
                       ))}
                     </div>
@@ -544,34 +803,58 @@ export function MatchResultsImportWizard() {
                       <TableHeader>
                         <TableRow className="bg-slate-50/95 hover:bg-slate-50/95">
                           <TableHead className="w-10">#</TableHead>
+                          <TableHead>Validación</TableHead>
+                          <TableHead>Grupo</TableHead>
+                          <TableHead>Jugador A</TableHead>
+                          <TableHead>Jugador B</TableHead>
+                          <TableHead>Marcador</TableHead>
+                          <TableHead>Ganador</TableHead>
+                          <TableHead>Tipo</TableHead>
                           <TableHead>Estado</TableHead>
-                          <TableHead>Torneo / Grupo</TableHead>
-                          <TableHead className="min-w-[12rem]">Mensajes</TableHead>
+                          <TableHead className="min-w-[10rem]">Mensajes</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredPreview.map((r) => (
-                          <TableRow
-                            key={r.rowNumber}
-                            className={cn(r.state === 'error' && 'bg-red-50/40', r.state === 'ready' && 'bg-emerald-50/20')}
-                          >
+                        {filteredPreview.map((r) => {
+                          const pres = previewRowPresentation(r)
+                          const rt = r.resolved?.resultType ?? String(r.cells.result_type ?? '—')
+                          const st = r.resolved?.status ?? String(r.cells.status ?? '—')
+                          return (
+                          <TableRow key={r.rowNumber} className={pres.rowClass}>
                             <TableCell className="tabular-nums text-slate-500">{r.rowNumber}</TableCell>
                             <TableCell>
                               <span
                                 className={cn(
                                   'inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold',
-                                  r.state === 'ready' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800',
+                                  pres.badgeClass,
                                 )}
                               >
-                                {r.state === 'ready' ? 'Lista' : 'Error'}
+                                {pres.label}
                               </span>
                             </TableCell>
-                            <TableCell className="max-w-[16rem] truncate text-xs">
-                              {r.cells.tournament_name} · {r.cells.group_name}
+                            <TableCell className="max-w-[9rem] truncate text-xs">{r.cells.group_name}</TableCell>
+                            <TableCell className="max-w-[8rem] truncate text-xs">{r.cells.player_a_name || '—'}</TableCell>
+                            <TableCell className="max-w-[8rem] truncate text-xs">{r.cells.player_b_name || '—'}</TableCell>
+                            <TableCell className="whitespace-nowrap font-mono text-[11px]">{previewScoreLabel(r)}</TableCell>
+                            <TableCell className="max-w-[7rem] truncate text-xs">{previewWinnerLabel(r)}</TableCell>
+                            <TableCell className="text-xs">{rt}</TableCell>
+                            <TableCell className="text-xs">{st}</TableCell>
+                            <TableCell className="text-xs">
+                              <div className="space-y-1">
+                                {r.infoMessages?.length ? (
+                                  <p className="text-amber-950">{r.infoMessages.join(' · ')}</p>
+                                ) : null}
+                                {r.messages.length ? (
+                                  <p className="text-red-800">{r.messages.join(' · ')}</p>
+                                ) : null}
+                                {!r.infoMessages?.length && !r.messages.length ? (
+                                  <span className="text-slate-500">—</span>
+                                ) : null}
+                              </div>
                             </TableCell>
-                            <TableCell className="text-xs text-slate-600">{r.messages.length ? r.messages.join(' · ') : '—'}</TableCell>
                           </TableRow>
-                        ))}
+                          )
+                        })}
                       </TableBody>
                     </Table>
                   </ScrollArea>
@@ -601,21 +884,26 @@ export function MatchResultsImportWizard() {
               </Button>
             </div>
             {summary.error > 0 ? (
-              <p className="flex items-center gap-2 text-sm text-amber-800">
+              <p className="flex items-center gap-2 text-sm text-red-800">
                 <AlertTriangle className="size-4 shrink-0" />
-                Hay filas con error: solo las «listas» se aplicarán en el servidor.
+                Corrige las filas en error antes de continuar: no se permite importar con errores críticos.
               </p>
-            ) : null}
+            ) : (
+              <p className="text-xs text-slate-600">
+                Todas las filas pasaron la validación. El siguiente paso es confirmar y ejecutar la importación por lotes.
+              </p>
+            )}
           </div>
         ) : null}
 
         {step === 3 ? (
           <div className="space-y-6">
             <div className="rounded-xl border border-amber-200/80 bg-amber-50/40 p-4 text-sm text-amber-950">
-              <p className="font-semibold">Revisa antes de ejecutar</p>
+              <p className="font-semibold">Confirmar importación</p>
               <p className="mt-1 text-xs leading-relaxed opacity-90">
-                Se actualizarán hasta <strong>{summary.ready}</strong> partido(s) en base de datos según el archivo. Las
-                filas en estado error se registrarán como fallidas en el informe del lote.
+                Se guardarán <strong>{summary.ready}</strong> resultado(s) en base de datos (los partidos ya deben existir
+                como cruces RR). La operación usa lotes en el servidor cuando la función Edge está desplegada; si no,
+                se aplican secuencialmente con la misma seguridad.
               </p>
             </div>
 
@@ -629,11 +917,31 @@ export function MatchResultsImportWizard() {
                 <span className="font-medium text-slate-900">{summary.ready}</span>
               </li>
               <li className="flex justify-between gap-4 border-b border-slate-100 pb-3">
-                <span className="text-slate-500">Filas con error</span>
-                <span className="font-medium text-slate-900">{summary.error}</span>
+                <span className="text-slate-500">Resultados normales</span>
+                <span className="font-medium text-slate-900">{summary.normal}</span>
+              </li>
+              <li className="flex justify-between gap-4 border-b border-slate-100 pb-3">
+                <span className="text-slate-500">W.O / DEF</span>
+                <span className="font-medium text-slate-900">{summary.wo + summary.def}</span>
+              </li>
+              <li className="flex justify-between gap-4 border-b border-slate-100 pb-3">
+                <span className="text-slate-500">N.R / penalización</span>
+                <span className="font-medium text-slate-900">{summary.notReported + summary.doublePenalty}</span>
+              </li>
+              <li className="flex justify-between gap-4 border-b border-slate-100 pb-3">
+                <span className="text-slate-500">Retirados</span>
+                <span className="font-medium text-slate-900">{summary.retired}</span>
+              </li>
+              <li className="flex justify-between gap-4 border-b border-slate-100 pb-3">
+                <span className="text-slate-500">Pendientes / histórico convertidos</span>
+                <span className="font-medium text-slate-900">{summary.pendingConverted}</span>
+              </li>
+              <li className="flex justify-between gap-4 border-b border-slate-100 pb-3">
+                <span className="text-slate-500">Filas con advertencia</span>
+                <span className="font-medium text-slate-900">{summary.warnings + summary.normalized}</span>
               </li>
               <li className="flex justify-between gap-4">
-                <span className="text-slate-500">Total filas en archivo</span>
+                <span className="text-slate-500">Total filas archivo</span>
                 <span className="font-medium text-slate-900">{summary.total}</span>
               </li>
             </ul>
@@ -641,12 +949,12 @@ export function MatchResultsImportWizard() {
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
               <Button type="button" variant="outline" className="gap-2" onClick={() => setStep(2)}>
                 <ArrowLeft className="size-4" />
-                Volver a validación
+                Volver a revisión
               </Button>
               <Button
                 type="button"
                 className="gap-2 bg-[#1F5A4C] hover:bg-[#1F5A4C]/90"
-                disabled={!userId || summary.ready === 0}
+                disabled={!userId || summary.ready === 0 || summary.error > 0}
                 onClick={startImport}
               >
                 <Upload className="size-4" />
@@ -661,8 +969,15 @@ export function MatchResultsImportWizard() {
             {importMut.isPending ? (
               <div className="mx-auto max-w-md text-center">
                 <Loader2 className="mx-auto size-10 animate-spin text-[#1F5A4C]" />
-                <p className="mt-4 text-base font-semibold text-slate-900">Aplicando resultados…</p>
-                <p className="mt-1 text-sm text-slate-600">Esto puede tardar unos segundos según el número de filas.</p>
+                <p className="mt-4 text-base font-semibold text-slate-900">Importando resultados…</p>
+                {importProgress ? (
+                  <p className="mt-2 text-sm font-medium tabular-nums text-[#1F5A4C]">
+                    Importando {importProgress.done} / {importProgress.total} resultados listos…
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-600">Sincronizando torneo y preparando lotes…</p>
+                )}
+                <p className="mt-2 text-xs text-slate-500">No cierres esta ventana hasta que termine el proceso.</p>
               </div>
             ) : importMut.isError ? (
               <div className="text-center text-sm text-red-700">
@@ -681,23 +996,54 @@ export function MatchResultsImportWizard() {
             <div className="rounded-xl border border-emerald-200/80 bg-gradient-to-b from-emerald-50/80 to-white p-5 shadow-sm">
               <div className="flex flex-wrap items-center gap-2">
                 <CheckCircle2 className="size-6 text-emerald-600" />
-                <span className="text-lg font-semibold text-slate-900">Importación finalizada</span>
+                <span className="text-lg font-semibold text-slate-900">Importación completada</span>
               </div>
               <p className="mt-2 text-xs text-slate-600">ID de lote: {result.batchId.slice(0, 8)}…</p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {result.appliedViaEdge === false ? (
+                <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-950">
+                  La importación por lotes no estuvo disponible; los resultados se aplicaron de forma segura fila a fila
+                  (puede tardar más). Despliega la función Edge <span className="font-mono">admin-import-results</span>{' '}
+                  para acelerar cargas grandes.
+                </p>
+              ) : result.appliedViaEdge === true ? (
+                <p className="mt-2 text-xs text-emerald-800">
+                  Importación por lotes completada en servidor (Edge).
+                </p>
+              ) : null}
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-lg border border-slate-200/80 bg-white px-4 py-3 text-center shadow-sm">
+                  <p className="text-2xl font-bold tabular-nums text-slate-800">{importSnapshotRef.current?.totalFileRows ?? result.rowDetails.length}</p>
+                  <p className="text-xs font-medium text-slate-500">Filas del archivo</p>
+                </div>
                 <div className="rounded-lg border border-slate-200/80 bg-white px-4 py-3 text-center shadow-sm">
                   <p className="text-2xl font-bold tabular-nums text-emerald-700">{result.success}</p>
-                  <p className="text-xs font-medium text-slate-500">Correctos</p>
+                  <p className="text-xs font-medium text-slate-500">Guardados correctamente</p>
+                </div>
+                <div className="rounded-lg border border-slate-200/80 bg-white px-4 py-3 text-center shadow-sm">
+                  <p className="text-2xl font-bold tabular-nums text-sky-800">{result.roundRobinInserted}</p>
+                  <p className="text-xs font-medium text-slate-500">Cruces RR nuevos (esta pasada)</p>
                 </div>
                 <div className="rounded-lg border border-slate-200/80 bg-white px-4 py-3 text-center shadow-sm">
                   <p className="text-2xl font-bold tabular-nums text-red-600">{result.errors}</p>
-                  <p className="text-xs font-medium text-slate-500">Fallidos</p>
-                </div>
-                <div className="rounded-lg border border-slate-200/80 bg-white px-4 py-3 text-center shadow-sm">
-                  <p className="text-2xl font-bold tabular-nums text-slate-800">{result.rowDetails.length}</p>
-                  <p className="text-xs font-medium text-slate-500">Filas informadas</p>
+                  <p className="text-xs font-medium text-slate-500">Errores / omitidos</p>
                 </div>
               </div>
+              {(importSnapshotRef.current?.readyWithNotes ?? 0) > 0 || (importSnapshotRef.current?.pendingConverted ?? 0) > 0 ? (
+                <ul className="mt-4 list-inside list-disc space-y-1 text-xs text-slate-600">
+                  {(importSnapshotRef.current?.readyWithNotes ?? 0) > 0 ? (
+                    <li>
+                      {importSnapshotRef.current!.readyWithNotes} fila(s) importadas con advertencias o normalizaciones
+                      revisadas en el paso anterior.
+                    </li>
+                  ) : null}
+                  {(importSnapshotRef.current?.pendingConverted ?? 0) > 0 ? (
+                    <li>
+                      {importSnapshotRef.current!.pendingConverted} fila(s) con indicadores de histórico / pendiente
+                      (p. ej. N.R o pending_score tratados según reglas).
+                    </li>
+                  ) : null}
+                </ul>
+              ) : null}
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -709,18 +1055,24 @@ export function MatchResultsImportWizard() {
                 onClick={() => downloadMatchResultsReportCsv(result, fileMeta?.name ?? 'resultados')}
               >
                 <Download className="size-4" />
-                Descargar informe CSV
+                Descargar reporte de importación
               </Button>
               <Link
-                to="/admin/results"
+                to="/admin/matches"
                 className={buttonVariants({ variant: 'outline', size: 'sm', className: 'inline-flex h-8 items-center gap-2 px-3' })}
               >
-                Revisar resultados
+                Ver resultados
+              </Link>
+              <Link
+                to="/dashboard"
+                className={buttonVariants({ variant: 'outline', size: 'sm', className: 'inline-flex h-8 items-center gap-2 px-3' })}
+              >
+                Ver leaderboard
               </Link>
             </div>
 
             <Button type="button" variant="ghost" className="text-slate-600" onClick={resetAll}>
-              Importar otro archivo
+              Cargar otro archivo
             </Button>
           </div>
         ) : null}
@@ -728,3 +1080,5 @@ export function MatchResultsImportWizard() {
     </Card>
   )
 }
+
+export { MatchResultsImportWizard as ResultImportWizard }

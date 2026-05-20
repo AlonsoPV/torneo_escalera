@@ -9,6 +9,7 @@ import {
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
+import { TOURNAMENT_RULES } from '@/domain/tournamentRankingPoints'
 import { TournamentAdminPanel } from '@/components/tournaments/TournamentAdminPanel'
 import { GroupVerticalPicker } from '@/components/groups/GroupVerticalPicker'
 import { GroupMatrix } from '@/components/matches/GroupMatrix'
@@ -385,12 +386,12 @@ export function TournamentDetailPage() {
                   />
                   <RuleTile
                     label="Puntos · W/O ganador"
-                    value={`+${rq.data.points_default_win ?? 2}`}
+                    value={`+${rq.data.points_default_win ?? TOURNAMENT_RULES.woWinPoints}`}
                     hint="Victoria por no presentación o default"
                   />
                   <RuleTile
                     label="Puntos · W/O perdedor"
-                    value={String(rq.data.points_default_loss ?? -1)}
+                    value={String(rq.data.points_default_loss ?? TOURNAMENT_RULES.woLossPoints)}
                     hint="Derrota por default"
                   />
                   <RuleTile

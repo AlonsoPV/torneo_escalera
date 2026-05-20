@@ -99,10 +99,10 @@ export function RecentMatchesCard({
                       </div>
 
                       <div className="min-w-0 flex-1">
-                        <div className="flex min-w-0 w-full items-center gap-2 sm:gap-3">
+                        <div className="flex min-w-0 w-full flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-3">
                             <span
                               className={cn(
-                                'min-w-0 flex-1 truncate text-right text-sm font-medium sm:text-base',
+                                'min-w-0 w-full truncate text-center text-sm font-medium sm:flex-1 sm:text-right sm:text-base',
                                 winA && 'font-semibold text-emerald-700 dark:text-emerald-400',
                                 winB && 'text-muted-foreground',
                                 !decided && 'text-foreground',
@@ -111,14 +111,14 @@ export function RecentMatchesCard({
                               {m.playerAName}
                             </span>
                             <span
-                              className="shrink-0 rounded-xl border border-border/70 bg-gradient-to-b from-background to-muted/30 px-3 py-1.5 text-center font-mono text-sm font-bold tabular-nums tracking-tight text-foreground shadow-sm sm:min-w-[5.5rem] sm:px-3.5 sm:text-base"
+                              className="mx-auto shrink-0 rounded-xl border border-border/70 bg-gradient-to-b from-background to-muted/30 px-3 py-1.5 text-center font-mono text-sm font-bold tabular-nums tracking-tight text-foreground shadow-sm sm:min-w-[5.5rem] sm:px-3.5 sm:text-base"
                               aria-label={`Marcador ${scoreText}`}
                             >
                               {scoreText}
                             </span>
                             <span
                               className={cn(
-                                'min-w-0 flex-1 truncate text-left text-sm font-medium sm:text-base',
+                                'min-w-0 w-full truncate text-center text-sm font-medium sm:flex-1 sm:text-left sm:text-base',
                                 winB && 'font-semibold text-emerald-700 dark:text-emerald-400',
                                 winA && 'text-muted-foreground',
                                 !decided && 'text-foreground',

@@ -1,11 +1,10 @@
 import {
-  getCompletedMatches,
   getPlayerMatches,
   getPlayerStanding,
-  isMatchCompleted,
   calculateGamesForAndAgainst,
   sortMatchesByDateDesc,
 } from '@/lib/playerDashboard'
+import { canSubmitScore } from '@/lib/matchStatus'
 import { getPlayerDashboardData, getPlayerDashboardDataForGroup, type PlayerDashboardData } from '@/services/dashboardPlayer'
 import type { MatchRow, Tournament } from '@/types/database'
 import type { RankingRow } from '@/utils/ranking'
@@ -24,7 +23,7 @@ export type PlayerViewModel = {
   leader: RankingRow | null
   pointsBehindLeader: number | null
   summary: PlayerSummary
-  /** Partidos del jugador que aún requieren acción suya o están a la espera del rival (no incluye player_confirmed). */
+  /** Partidos del jugador que aún requieren captura o están en disputa (no incluye marcador ya confirmado para tabla ni player_confirmed). */
   upcoming: MatchRow[]
   /** Todos los partidos del jugador en el grupo (por estado), más recientes primero. */
   history: MatchRow[]
@@ -38,11 +37,21 @@ function sortUpcomingChronological(matches: MatchRow[]): MatchRow[] {
   })
 }
 
-function filterUpcomingForPlayer(matches: MatchRow[], membershipId: string): MatchRow[] {
+function filterUpcomingForPlayer(
+  matches: MatchRow[],
+  membershipId: string,
+  userId: string,
+  allowPlayerScoreEntry: boolean,
+): MatchRow[] {
   const mine = getPlayerMatches(membershipId, matches)
   return mine.filter((m) => {
-    if (m.status === 'cancelled' || m.status === 'closed') return false
+    if (m.status === 'cancelled') return false
+    if (allowPlayerScoreEntry && canSubmitScore(m, userId)) return true
+    if (m.status === 'score_disputed') return false
+    if (m.status === 'validated') return false
+    if (m.status === 'closed') return false
     if (m.status === 'player_confirmed') return false
+    if (m.status === 'score_submitted') return false
     return true
   })
 }
@@ -50,15 +59,16 @@ function filterUpcomingForPlayer(matches: MatchRow[], membershipId: string): Mat
 export function buildPlayerViewModel(data: PlayerDashboardData, userId: string): PlayerViewModel {
   const { membership, matches, players, ranking } = data
   const mine = getPlayerMatches(membership.id, matches)
-  const closedForStats = getCompletedMatches(membership.id, matches)
   const my = getPlayerStanding(userId, ranking) ?? null
   const leader = ranking[0] ?? null
   const pointsBehindLeader = my && leader != null ? Math.max(0, leader.points - my.points) : null
 
   const roundRobin = players.length >= 2 ? players.length - 1 : 0
   const played = my?.played ?? 0
-  const pendingCount = getPlayerMatches(membership.id, matches).filter((m) => !isMatchCompleted(m)).length
-  const games = calculateGamesForAndAgainst(membership.id, closedForStats)
+  const pendingCount = mine.filter((m) =>
+    Boolean(data.rules.allow_player_score_entry && canSubmitScore(m, userId)),
+  ).length
+  const games = calculateGamesForAndAgainst(membership.id, mine, data.rules)
 
   return {
     data,
@@ -72,7 +82,9 @@ export function buildPlayerViewModel(data: PlayerDashboardData, userId: string):
       pendingCount: pendingCount,
       gamesDifference: games.gamesDifference,
     },
-    upcoming: sortUpcomingChronological(filterUpcomingForPlayer(matches, membership.id)),
+    upcoming: sortUpcomingChronological(
+      filterUpcomingForPlayer(matches, membership.id, userId, data.rules.allow_player_score_entry),
+    ),
     history: sortMatchesByDateDesc(mine),
   }
 }

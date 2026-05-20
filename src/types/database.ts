@@ -22,10 +22,21 @@ export type MatchStatus =
   | 'score_disputed'
   | 'player_confirmed'
   | 'closed'
+  | 'validated'
   | 'cancelled'
 
-export type MatchResultType = 'normal' | 'default_win_a' | 'default_win_b'
-export type MatchGameType = 'best_of_3' | 'sudden_death' | 'long_set'
+export type MatchResultType =
+  | 'normal'
+  | 'default_win_a'
+  | 'default_win_b'
+  | 'wo'
+  | 'def'
+  | 'not_reported'
+  | 'retired'
+  | 'pending_score'
+  | 'double_penalty'
+
+export type MatchGameType = 'best_of_3' | 'best_of_3_short_tiebreak' | 'sudden_death' | 'long_set'
 
 export type Json =
   | string
@@ -44,13 +55,19 @@ export type ScorePayload =
       winner: ScoreWinnerSide
     }
   | {
+      /** Tres sets obligatorios para resultado normal; `null` solo legado / W.O. sin marcador. */
       game_type: 'sudden_death'
-      score_json: null
+      score_json: ScoreSet[] | null
       winner: ScoreWinnerSide
     }
   | {
       game_type: 'long_set'
       score_json: [ScoreSet]
+      winner: ScoreWinnerSide
+    }
+  | {
+      game_type: 'best_of_3_short_tiebreak'
+      score_json: ScoreSet[]
       winner: ScoreWinnerSide
     }
 
@@ -443,6 +460,8 @@ export interface Database {
           admin_validated_at: string | null
           closed_at: string | null
           dispute_reason: string | null
+          disputed_by: string | null
+          disputed_at: string | null
           admin_notes: string | null
           created_by: string | null
           updated_by: string | null
@@ -477,6 +496,8 @@ export interface Database {
           admin_validated_at?: string | null
           closed_at?: string | null
           dispute_reason?: string | null
+          disputed_by?: string | null
+          disputed_at?: string | null
           admin_notes?: string | null
           created_by?: string | null
           updated_by?: string | null
@@ -504,6 +525,8 @@ export interface Database {
           admin_validated_at?: string | null
           closed_at?: string | null
           dispute_reason?: string | null
+          disputed_by?: string | null
+          disputed_at?: string | null
           admin_notes?: string | null
           updated_by?: string | null
           updated_at?: string
@@ -540,6 +563,35 @@ export interface Database {
           previous_status?: string | null
           new_status?: string | null
           changed_by?: string | null
+        }
+      }
+      staff_match_notifications: {
+        Row: {
+          id: string
+          created_at: string
+          match_id: string
+          tournament_id: string
+          group_id: string
+          event_type: 'player_score_submitted' | 'player_match_closed' | 'player_match_disputed'
+          title: string
+          body: string
+          metadata: Json
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          match_id: string
+          tournament_id: string
+          group_id: string
+          event_type: 'player_score_submitted' | 'player_match_closed' | 'player_match_disputed'
+          title: string
+          body: string
+          metadata?: Json
+        }
+        Update: {
+          title?: string
+          body?: string
+          metadata?: Json
         }
       }
       player_categories: {
@@ -699,13 +751,13 @@ export interface Database {
           p_winner_group_player_id: string | null
           p_game_type?: MatchGameType
         }
-        Returns: undefined
+        Returns: Json
       }
       admin_set_match_result: {
         Args: {
           p_match_id: string
           p_score: Json
-          p_winner_id: string
+          p_winner_id: string | null
           p_status: string
           p_result_type: string
           p_game_type?: MatchGameType
@@ -741,4 +793,5 @@ export type GroupPlayer = Database['public']['Tables']['group_players']['Row']
 export type TournamentMovement = Database['public']['Tables']['tournament_movements']['Row']
 export type MatchRow = Database['public']['Tables']['matches']['Row']
 export type MatchScoreLog = Database['public']['Tables']['match_score_logs']['Row']
+export type StaffMatchNotification = Database['public']['Tables']['staff_match_notifications']['Row']
 export type PlayerCategory = Database['public']['Tables']['player_categories']['Row']

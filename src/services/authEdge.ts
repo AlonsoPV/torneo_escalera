@@ -1,7 +1,7 @@
 import { FunctionsHttpError } from '@supabase/supabase-js'
 
 import { supabase } from '@/lib/supabase'
-import type { UserRole } from '@/types/database'
+import type { Profile, UserRole } from '@/types/database'
 
 function requireAnonKey(): string {
   const k = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -138,6 +138,83 @@ export async function invokeAdminCreateUser(input: {
   if (data && typeof data === 'object' && 'error' in data && data.error) {
     throw new Error(String(data.error))
   }
+}
+
+export type AdminImportResultsRowPayload = {
+  rowNumber: number
+  matchId: string
+  cancelled: boolean
+  scoreRaw: { a: number; b: number }[] | null
+  winnerGroupPlayerId: string | null
+  status: string
+  resultType: string
+  gameType: string
+}
+
+/** Lote de filas ya validadas hacia `admin-import-results`. */
+export async function invokeAdminImportResults(
+  rows: AdminImportResultsRowPayload[],
+): Promise<{ rowNumber: number; ok: boolean; message?: string }[]> {
+  const anonKey = requireAnonKey()
+  const { data: sessionData } = await supabase.auth.getSession()
+  const token = sessionData.session?.access_token
+  if (!token) throw new Error('Inicia sesión como administrador.')
+
+  const { data, error } = await supabase.functions.invoke<{
+    error?: string
+    results?: { rowNumber: number; ok: boolean; message?: string }[]
+  }>('admin-import-results', {
+    body: { rows },
+    headers: { Authorization: `Bearer ${token}`, apikey: anonKey },
+  })
+
+  if (error) throw new Error(error.message)
+  if (data && typeof data === 'object' && 'error' in data && data.error) {
+    throw new Error(String(data.error))
+  }
+  const results = data?.results
+  if (!Array.isArray(results)) {
+    throw new Error('Respuesta inválida del servidor de importación')
+  }
+  return results
+}
+
+/**
+ * Crea auth.users + perfil para un jugador citado en CSV de resultados que aún no existe.
+ * Teléfono y correo técnico son provisionales (prefijo 90…); el admin puede actualizarlos después.
+ */
+export async function invokeAdminProvisionMatchResultsPlayer(input: {
+  fullName: string
+  externalId?: string | null
+  groupId: string
+  tournamentId: string
+}): Promise<{ profile: Profile; created: boolean }> {
+  const anonKey = requireAnonKey()
+  const { data: sessionData } = await supabase.auth.getSession()
+  const token = sessionData.session?.access_token
+  if (!token) throw new Error('Inicia sesión como administrador.')
+
+  const { data, error } = await supabase.functions.invoke<{
+    error?: string
+    profile?: Profile
+    created?: boolean
+  }>('admin-provision-match-results-player', {
+    body: {
+      fullName: input.fullName,
+      externalId: input.externalId ?? null,
+      groupId: input.groupId,
+      tournamentId: input.tournamentId,
+    },
+    headers: { Authorization: `Bearer ${token}`, apikey: anonKey },
+  })
+
+  if (error) throw new Error(error.message)
+  if (data && typeof data === 'object' && 'error' in data && data.error) {
+    throw new Error(String(data.error))
+  }
+  const profile = data?.profile
+  if (!profile) throw new Error('Respuesta inválida al provisionar jugador')
+  return { profile, created: Boolean(data?.created) }
 }
 
 export async function invokeAdminChangeUserPassword(input: { userId: string; newPassword: string }): Promise<void> {

@@ -40,40 +40,42 @@ export function gamesPerSet(rules: TournamentRules): number {
   return rules.games_per_set ?? rules.set_points
 }
 
-function validateGamesSet(
+/** Un set a games según reglas del torneo (no formato corto decisivo). */
+export function validateTournamentGamesSet(set: ScoreSet, rules: TournamentRules): string | null {
+  const games = gamesPerSet(rules)
+  const minDiff = rules.min_game_difference ?? 2
+  const tbAt = rules.tiebreak_at ?? null
+  return validateGamesSet(set.a, set.b, games, minDiff, rules.tiebreak_enabled, tbAt)
+}
+
+/** Games por set: solo enteros no negativos y sin empate (sin formato ATP fijo). */
+export function validateGamesSet(
   a: number,
   b: number,
-  games: number,
-  minDiff: number,
-  tbEnabled: boolean,
-  tbAt: number | null,
+  _games: number,
+  _minDiff: number,
+  _tbEnabled: boolean,
+  _tbAt: number | null,
 ): string | null {
+  void _games
+  void _minDiff
+  void _tbEnabled
+  void _tbAt
+  if (!Number.isInteger(a) || !Number.isInteger(b)) {
+    return 'Cada set debe tener games enteros.'
+  }
+  if (a < 0 || b < 0) return 'Los valores no pueden ser negativos'
   if (a === b) return 'Un set no puede terminar empatado'
-  const mx = Math.max(a, b)
-  const mi = Math.min(a, b)
-  const isStd = mx === games && mx - mi >= minDiff
-  const isLongSevenFive = games === 6 && mx === 7 && mi === 5
-  let isTb = false
-  if (tbEnabled) {
-    if (tbAt === 5) {
-      isTb = mx === games + 1 && mi === games - 1
-    } else if (tbAt === 6 || tbAt == null) {
-      isTb = mx === games + 1 && mi === games
-    }
-  }
-  if (!isStd && !isLongSevenFive && !isTb) {
-    return `Set inválido: usa ${games}-0 a ${games}-${games - minDiff}, 7-5 o 7-6 solo si el tie-break está activo.`
-  }
   return null
 }
 
-function validateSuddenSet(a: number, b: number, sdp: number): string | null {
-  if (a === b) return 'Un set no puede terminar empatado'
-  const mx = Math.max(a, b)
-  const mi = Math.min(a, b)
-  if (mx < sdp || mx - mi < 2) {
-    return `Set decisivo inválido: muerte súbita a ${sdp} puntos con diferencia mínima de 2.`
+function validateSuddenSet(a: number, b: number, _sdp: number): string | null {
+  void _sdp
+  if (!Number.isInteger(a) || !Number.isInteger(b)) {
+    return 'El set decisivo debe tener valores enteros.'
   }
+  if (a < 0 || b < 0) return 'Los valores no pueden ser negativos'
+  if (a === b) return 'Un set no puede terminar empatado'
   return null
 }
 

@@ -36,7 +36,7 @@ export function AdminTopbar() {
   const location = useLocation()
   const [open, setOpen] = useState(false)
   const profile = useAuthStore((s) => s.profile)
-  const title = getAdminRouteTitle(location.pathname)
+  const title = getAdminRouteTitle(location.pathname, location.search)
   const initials = profileInitials(profile?.full_name, profile?.email)
 
   return (

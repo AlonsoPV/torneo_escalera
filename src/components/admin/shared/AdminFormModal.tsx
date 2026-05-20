@@ -17,6 +17,7 @@ export function AdminFormModal({
   trigger,
   title,
   description,
+  descriptionClassName,
   children,
   open,
   onOpenChange,
@@ -25,6 +26,7 @@ export function AdminFormModal({
   trigger?: TriggerElement
   title: string
   description?: string
+  descriptionClassName?: string
   children: ReactNode
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -49,9 +51,13 @@ export function AdminFormModal({
           })
         : null}
       <DialogContent className={cn('sm:max-w-lg gap-6 p-6 sm:p-7', contentClassName)}>
-        <DialogHeader>
+        <DialogHeader className="shrink-0 gap-1.5 space-y-0">
           <DialogTitle>{title}</DialogTitle>
-          {description ? <DialogDescription className="mt-1.5">{description}</DialogDescription> : null}
+          {description ? (
+            <DialogDescription className={cn('mt-0 text-muted-foreground', descriptionClassName)}>
+              {description}
+            </DialogDescription>
+          ) : null}
         </DialogHeader>
         {children}
       </DialogContent>

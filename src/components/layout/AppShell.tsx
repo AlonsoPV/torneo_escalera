@@ -18,7 +18,8 @@ export function AppShell() {
         className={cn(
           'mx-auto w-full max-w-7xl flex-1',
           player && 'px-3 py-4 sm:px-4 sm:py-6 md:px-6',
-          dashboard && 'px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-5 sm:py-5 md:px-6',
+          dashboard &&
+            'px-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-5 sm:py-5 md:px-6 md:py-6',
           !player && !dashboard && 'px-3 py-3 sm:px-4 sm:py-4 md:px-6',
         )}
       >

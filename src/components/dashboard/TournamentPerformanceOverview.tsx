@@ -10,7 +10,7 @@ export function TournamentPerformanceOverview({ metrics }: { metrics: Tournament
       <h2 id="tdash-perf-heading" className="text-sm font-semibold text-foreground">
         Desempeño general
       </h2>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 min-[380px]:grid-cols-2 lg:grid-cols-4 lg:gap-4">
         <TournamentMetricCard
           label="Jugadores"
           value={metrics.totalPlayers}

@@ -23,3 +23,9 @@ verify_jwt = false
 
 [functions.admin-change-user-password]
 verify_jwt = false
+
+[functions.admin-provision-match-results-player]
+verify_jwt = false
+
+[functions.admin-import-results]
+verify_jwt = false

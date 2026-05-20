@@ -1,11 +1,10 @@
 import type { LucideIcon } from 'lucide-react'
 import {
-  BarChart3,
   Bell,
-  CalendarClock,
   Download,
   Flag,
   LayoutDashboard,
+  List,
   Settings,
   Settings2,
   ShieldCheck,
@@ -26,6 +25,32 @@ export type AdminNavGroup = {
   items: readonly AdminNavLinkItem[]
 }
 
+function splitHref(href: string): { path: string; search: string } {
+  const q = href.indexOf('?')
+  if (q === -1) return { path: href, search: '' }
+  return { path: href.slice(0, q), search: href.slice(q) }
+}
+
+/** Activa el estilo del enlace lateral según `pathname` + `search`. */
+export function adminNavLinkActive(
+  location: { pathname: string; search: string },
+  href: string,
+): boolean {
+  const { path, search: hrefSearch } = splitHref(href)
+  if (path === '/admin/matches/import') {
+    return location.pathname.startsWith('/admin/matches/import')
+  }
+  const full = `${location.pathname}${location.search}`
+  if (hrefSearch) {
+    return full === `${path}${hrefSearch}`
+  }
+  if (path === '/admin/matches') {
+    const tab = new URLSearchParams(location.search).get('tab')
+    return location.pathname === '/admin/matches' && (!tab || tab === 'all')
+  }
+  return location.pathname === path || location.pathname.startsWith(`${path}/`)
+}
+
 /** Solo dos padres en el menú lateral; el resto va anidado bajo Torneo o Partidos. */
 export const adminNavEntries: readonly AdminNavGroup[] = [
   {
@@ -36,7 +61,7 @@ export const adminNavEntries: readonly AdminNavGroup[] = [
       { label: 'Reglas', href: '/admin/rules', icon: Settings2 },
       { label: 'Grupos', href: '/admin/groups', icon: Flag },
       { label: 'Usuarios', href: '/admin/users', icon: Users },
-      { label: 'Notificaciones', href: '/admin/notifications', icon: Bell, upcoming: true },
+      { label: 'Notificaciones', href: '/admin/notifications', icon: Bell },
       { label: 'Exportaciones', href: '/admin/exports', icon: Download, upcoming: true },
       { label: 'Configuración', href: '/admin/settings', icon: Settings },
     ],
@@ -44,17 +69,20 @@ export const adminNavEntries: readonly AdminNavGroup[] = [
   {
     label: 'Partidos',
     items: [
-      { label: 'Partidos', href: '/admin/matches', icon: CalendarClock },
-      { label: 'Resultados', href: '/admin/results', icon: BarChart3 },
-      { label: 'Importar resultados', href: '/admin/results/import', icon: Upload },
+      { label: 'Todos', href: '/admin/matches', icon: List },
+      { label: 'Importar resultados', href: '/admin/matches/import', icon: Upload },
     ],
   },
 ]
 
-/** Indica si la ruta cae bajo algún enlace del grupo (comparación por prefijo, rutas más largas primero). */
-export function adminPathMatchesGroup(pathname: string, items: readonly { href: string }[]): boolean {
-  const sorted = [...items].sort((a, b) => b.href.length - a.href.length)
-  return sorted.some((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
+/** Indica si la ruta cae bajo algún enlace del grupo (incluye query en enlaces de Partidos). */
+export function adminPathMatchesGroup(
+  pathname: string,
+  search: string,
+  items: readonly { href: string }[],
+): boolean {
+  const loc = { pathname, search }
+  return items.some((item) => adminNavLinkActive(loc, item.href))
 }
 
 function flattenAdminNavLinks(): { label: string; href: string }[] {
@@ -67,12 +95,17 @@ function flattenAdminNavLinks(): { label: string; href: string }[] {
   return out
 }
 
-export function getAdminRouteTitle(pathname: string): string {
+export function getAdminRouteTitle(pathname: string, search: string): string {
   if (pathname === '/admin/next-tournament' || pathname.startsWith('/admin/next-tournament/')) {
     return 'Siguiente torneo'
   }
+  if (pathname.startsWith('/admin/matches/import')) {
+    return 'Importar resultados'
+  }
+  const loc = { pathname, search }
   const sorted = flattenAdminNavLinks().sort((a, b) => b.href.length - a.href.length)
-  return sorted.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))?.label ?? 'Admin'
+  const hit = sorted.find((item) => adminNavLinkActive(loc, item.href))
+  return hit?.label ?? 'Admin'
 }
 
 export const AdminBrandIcon = ShieldCheck

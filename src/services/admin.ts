@@ -31,6 +31,15 @@ export type AdminMatchRecord = MatchRow & {
   groupName: string
   playerAName: string
   playerBName: string
+  playerAUserId: string | null
+  playerBUserId: string | null
+  /** Nombre legible del perfil que envió el marcador (evita mostrar UUID). */
+  scoreSubmittedByLabel: string | null
+  opponentConfirmedByLabel: string | null
+  /** Quién cerró oficialmente (administración); usa `updated_by` como respaldo si falta validación explícita. */
+  closedByLabel: string | null
+  /** Perfil legible de quien inició la disputa (refutación). */
+  disputedByLabel: string | null
 }
 
 export type AdminUserRecord = Profile & {
@@ -45,6 +54,7 @@ export type AdminOverviewData = {
   totalMatches: number
   /** Partidos generados que aún esperan marcador. */
   matchesWithoutDate: number
+  /** Partidos del alcance activo con marcador enviado y confirmado (rival aceptó o cierre oficial admin). */
   playedMatches: number
   pendingResults: number
   confirmedResults: number
@@ -77,7 +87,7 @@ async function listAllAdminData() {
     supabase.from('group_categories').select('*').order('order_index', { ascending: true }),
     supabase.from('group_players').select('*').order('seed_order', { ascending: true }),
     supabase.from('matches').select('*').order('created_at', { ascending: false }),
-    supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(500),
+    supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(4000),
   ])
 
   const error = tournaments.error || groups.error || groupPlayers.error || matches.error
@@ -98,6 +108,19 @@ async function listAllAdminData() {
     matches: (matches.data ?? []) as MatchRow[],
     profiles: profiles.error ? [] : ((profiles.data ?? []) as Profile[]),
   }
+}
+
+function profileDisplayLabel(profileById: Map<string, Profile>, userId: string | null | undefined): string | null {
+  if (!userId) return null
+  const p = profileById.get(userId)
+  if (!p) return `Usuario (${userId.slice(0, 8)}…)`
+  const name = p.full_name?.trim()
+  if (name) return name
+  const email = p.email?.trim()
+  if (email) return email
+  const phone = p.phone?.trim()
+  if (phone) return phone
+  return `Usuario (${userId.slice(0, 8)}…)`
 }
 
 function buildMatchRecords(input: {
@@ -124,6 +147,15 @@ function buildMatchRecords(input: {
       groupName: groupById.get(match.group_id)?.name ?? 'No disponible',
       playerAName: playerA?.display_name ?? profileA?.full_name ?? profileA?.email ?? 'Jugador sin perfil',
       playerBName: playerB?.display_name ?? profileB?.full_name ?? profileB?.email ?? 'Jugador sin perfil',
+      playerAUserId: playerA?.user_id ?? null,
+      playerBUserId: playerB?.user_id ?? null,
+      scoreSubmittedByLabel: profileDisplayLabel(profileById, match.score_submitted_by),
+      opponentConfirmedByLabel: profileDisplayLabel(profileById, match.opponent_confirmed_by),
+      closedByLabel:
+        match.status === 'closed' || match.status === 'validated'
+          ? profileDisplayLabel(profileById, match.admin_validated_by ?? match.updated_by)
+          : null,
+      disputedByLabel: profileDisplayLabel(profileById, match.disputed_by),
     }
   })
 }
@@ -196,9 +228,11 @@ export async function getAdminOverviewData(): Promise<AdminOverviewData> {
     totalGroups: scopedGroups.length,
     totalMatches,
     matchesWithoutDate,
-    playedMatches: scopedMatches.filter((m) => m.status === 'closed').length,
+    playedMatches: scopedMatches.filter((m) =>
+      ['player_confirmed', 'closed', 'validated'].includes(m.status),
+    ).length,
     pendingResults,
-    confirmedResults: scopedMatches.filter((m) => m.status === 'closed').length,
+    confirmedResults: scopedMatches.filter((m) => m.status === 'closed' || m.status === 'validated').length,
     incompleteGroups,
     activeTournaments: activeTournamentsList.length,
     totalTournaments: data.tournaments.length,
@@ -236,15 +270,10 @@ export function computeAdminMatchBreakdown(matches: MatchRow[]): AdminMatchBreak
     scoreSubmitted: matches.filter((m) => m.status === 'score_submitted').length,
     scoreDisputed: matches.filter((m) => m.status === 'score_disputed').length,
     playerConfirmed: matches.filter((m) => m.status === 'player_confirmed').length,
-    closed: matches.filter((m) => m.status === 'closed').length,
+    closed: matches.filter((m) => m.status === 'closed' || m.status === 'validated').length,
     cancelled: matches.filter((m) => m.status === 'cancelled').length,
     withOutcome: matches.filter((m) =>
-      [
-        'score_submitted',
-        'score_disputed',
-        'player_confirmed',
-        'closed',
-      ].includes(m.status),
+      ['score_submitted', 'score_disputed', 'player_confirmed', 'closed', 'validated'].includes(m.status),
     ).length,
     defaultResults: matches.filter((m) => m.result_type !== 'normal').length,
     needsAdminAttention,
@@ -378,7 +407,8 @@ export async function getAdminMatches(filters?: {
   let records = buildMatchRecords(data)
 
   if (filters?.groupId && filters.groupId !== 'all') {
-    records = records.filter((match) => match.group_id === filters.groupId)
+    const allowed = filters.groupId.split('|').filter(Boolean)
+    records = records.filter((match) => allowed.includes(match.group_id))
   }
   if (filters?.status && filters.status !== 'all') {
     records = records.filter((match) => match.status === filters.status)
@@ -403,25 +433,32 @@ export async function getAdminResults(): Promise<AdminMatchRecord[]> {
 }
 
 export async function confirmResult(match: MatchRow, actorUserId: string): Promise<void> {
+  if (match.status === 'closed' || match.status === 'validated') return
+  if (match.status === 'cancelled') throw new Error('No se puede confirmar un partido cancelado.')
   if (match.game_type !== 'sudden_death' && !match.score_raw) throw new Error('El partido no tiene marcador para confirmar.')
-  if (match.status !== 'player_confirmed') {
-    throw new Error('Solo puedes cerrar oficialmente partidos aceptados por el rival.')
-  }
   if (match.game_type === 'sudden_death') {
     if (!match.winner_id) throw new Error('El partido no tiene ganador para confirmar.')
+    const three = match.score_raw?.length === 3 ? match.score_raw : null
     await saveMatchScore({
       match,
       scorePayload: {
         game_type: 'sudden_death',
-        score_json: null,
+        score_json: three,
         winner: match.winner_id === match.player_b_id ? 'b' : 'a',
       },
       actorUserId,
       isAdmin: true,
+      adminStatus: 'closed',
     })
     return
   }
-  await saveMatchScore({ match, sets: match.score_raw ?? [], actorUserId, isAdmin: true })
+  await saveMatchScore({
+    match,
+    sets: match.score_raw ?? [],
+    actorUserId,
+    isAdmin: true,
+    adminStatus: 'closed',
+  })
 }
 
 export async function correctResult(

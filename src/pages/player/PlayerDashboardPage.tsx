@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { PlayerGroupSection } from '@/components/player/PlayerGroupSection'
@@ -13,10 +13,14 @@ import { buttonVariants } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { recoveryEmailComplete } from '@/lib/profileEmail'
 import { dashboardPathWithGroupScope } from '@/lib/dashboardUrl'
-import { tournamentPathWithGroup } from '@/lib/tournamentUrl'
+import {
+  invalidatePlayerTournamentMovementQuery,
+} from '@/lib/playerDashboardMatchCache'
+import { patchTournamentDashboardCachesForMatch } from '@/services/dashboard/tournamentDashboardService'
 import { isAdminRole } from '@/lib/permissions'
 import { defaultGroupIdFromContexts, listPlayerDashboardContexts } from '@/services/dashboardPlayer'
 import { getPlayerViewModelSession } from '@/services/playerViewModel'
+import type { MatchRow } from '@/types/database'
 import { useAuthStore } from '@/stores/authStore'
 import { Shield } from 'lucide-react'
 
@@ -61,6 +65,19 @@ export function PlayerDashboardPage() {
       userId && effectiveGroupId ? getPlayerViewModelSession(userId, effectiveGroupId) : null,
     enabled: Boolean(userId && effectiveGroupId && contexts.length > 0),
   })
+
+  const onMatchMutated = useCallback(
+    (payload: { match: MatchRow }) => {
+      patchTournamentDashboardCachesForMatch(qc, payload.match.tournament_id, payload.match)
+      if (userId) {
+        invalidatePlayerTournamentMovementQuery(qc, {
+          userId,
+          tournamentId: payload.match.tournament_id,
+        })
+      }
+    },
+    [qc, userId],
+  )
 
   const name0 = useMemo(() => firstName(profile?.full_name), [profile?.full_name])
 
@@ -198,17 +215,7 @@ export function PlayerDashboardPage() {
   const r = data.rules
   const membership = data.membership
   const players = data.players
-  const groupHubHref = tournamentPathWithGroup(t, g.id)
   const heroVerGrupoDashboardHref = dashboardPathWithGroupScope(t.id, g.id)
-
-  const refreshPlayerDashboard = async () => {
-    await qc.invalidateQueries({ queryKey: ['playerContexts', userId] })
-    await qc.invalidateQueries({ queryKey: ['playerViewModel', userId] })
-    await qc.invalidateQueries({ queryKey: ['tournament-dashboard'] })
-    if (t.id && userId) {
-      await qc.invalidateQueries({ queryKey: ['playerTournamentMovement', userId, t.id] })
-    }
-  }
 
   return (
     <div id="page-player" data-name="page-player" className="space-y-6">
@@ -249,9 +256,8 @@ export function PlayerDashboardPage() {
         userId={userId}
         rules={r}
         groupName={g.name}
-        groupDetailHref={groupHubHref}
         groupKey={g.id}
-        onAfterAction={refreshPlayerDashboard}
+        onAfterMatchMutation={onMatchMutated}
       />
     </div>
   )

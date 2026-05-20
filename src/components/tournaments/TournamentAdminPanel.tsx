@@ -5,6 +5,7 @@ import { useForm, type Resolver } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
+import { TOURNAMENT_RULES } from '@/domain/tournamentRankingPoints'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -95,8 +96,8 @@ export function TournamentAdminPanel(props: {
           best_of_sets: 3,
           set_points: 6,
           points_per_win: 3,
-          points_per_loss: 0,
-          points_default_win: 2,
+          points_per_loss: 1,
+          points_default_win: TOURNAMENT_RULES.woWinPoints,
           points_default_loss: -1,
           allow_player_score_entry: true,
         },

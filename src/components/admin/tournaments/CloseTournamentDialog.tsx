@@ -111,7 +111,7 @@ export function CloseTournamentDialog({
                   )}
                   <div className="mt-3">
                     <Link
-                      to="/admin/results"
+                      to="/admin/matches"
                       className={buttonVariants({ variant: 'outline', size: 'sm', className: 'inline-flex w-full justify-center sm:w-auto' })}
                     >
                       Ir a resultados pendientes
@@ -126,7 +126,7 @@ export function CloseTournamentDialog({
               <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600">
                 <dt>Marcador pendiente</dt>
                 <dd className="text-right font-medium text-slate-900">{blockers.counts.pendingScore}</dd>
-                <dt>Esperando rival</dt>
+                <dt>Resultado provisional</dt>
                 <dd className="text-right font-medium text-slate-900">{blockers.counts.scoreSubmitted}</dd>
                 <dt>Disputas</dt>
                 <dd className="text-right font-medium text-slate-900">{blockers.counts.scoreDisputed}</dd>

@@ -35,6 +35,25 @@ export async function createGroup(input: {
   return data as Group
 }
 
+export async function updateGroup(
+  groupId: string,
+  patch: {
+    name?: string
+    groupCategoryId?: string | null
+    maxPlayers?: number
+    orderIndex?: number
+  },
+): Promise<void> {
+  const row: Record<string, unknown> = {}
+  if (patch.name !== undefined) row.name = patch.name
+  if (patch.groupCategoryId !== undefined) row.group_category_id = patch.groupCategoryId
+  if (patch.maxPlayers !== undefined) row.max_players = patch.maxPlayers
+  if (patch.orderIndex !== undefined) row.order_index = patch.orderIndex
+  if (Object.keys(row).length === 0) return
+  const { error } = await supabase.from('groups').update(row).eq('id', groupId)
+  if (error) throw error
+}
+
 /**
  * Crea un grupo por cada categoría del torneo que aún no tenga ningún grupo asignado.
  * Nombres: `{categoría} — Grupo 1` (alineado con el wizard de siguiente torneo).
@@ -232,6 +251,14 @@ export async function updateGroupPlayerSeed(
     .from('group_players')
     .update({ seed_order: seedOrder })
     .eq('id', id)
+  if (error) throw error
+}
+
+export async function updateGroupPlayerDisplayName(groupPlayerId: string, displayName: string): Promise<void> {
+  const { error } = await supabase
+    .from('group_players')
+    .update({ display_name: displayName.trim() })
+    .eq('id', groupPlayerId)
   if (error) throw error
 }
 

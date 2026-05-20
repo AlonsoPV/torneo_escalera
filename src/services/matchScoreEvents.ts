@@ -20,17 +20,20 @@ function eventNameForAction(action: string, nextStatus: string | null): MatchSco
   if (action === 'opponent_reject') return 'score_rejected'
   if (action === 'player_resubmit_after_dispute') return 'score_resubmitted'
   if (action === 'admin_reopen') return 'match_reopened'
+  if (action === 'match_validated') return 'match_closed'
+  if (action === 'admin_score_corrected') return 'score_corrected_by_admin'
+  if (action === 'player_disputed') return 'score_rejected'
   if (action === 'admin_update') {
-    return nextStatus === 'closed' ? 'match_closed' : 'score_corrected_by_admin'
+    return nextStatus === 'closed' || nextStatus === 'validated' ? 'match_closed' : 'score_corrected_by_admin'
   }
   return 'score_submitted'
 }
 
 const labels: Record<MatchScoreEventName, string> = {
-  score_submitted: 'Marcador enviado',
-  score_accepted: 'Marcador aceptado',
-  score_rejected: 'Marcador rechazado',
-  score_resubmitted: 'Marcador reenviado',
+  score_submitted: 'Marcador confirmado para la tabla',
+  score_accepted: 'Resultado confirmado por rival',
+  score_rejected: 'Resultado refutado',
+  score_resubmitted: 'Resultado corregido y reenviado',
   score_corrected_by_admin: 'Marcador corregido por admin',
   match_closed: 'Resultado cerrado',
   match_reopened: 'Resultado reabierto',

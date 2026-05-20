@@ -1,5 +1,12 @@
+import {
+  importResultTypeBothPenalized,
+  importResultTypeUsesDefaultPoints,
+  syntheticAdministrativeSetsForDefaultMatch,
+} from '@/lib/matchResultSemantics'
 import type { GroupPlayer, MatchResultType, MatchRow, ScoreSet, TournamentRules } from '@/types/database'
 
+import { resolveRankingPointsRules } from '@/domain/tournamentRankingPoints'
+import { getOfficialWinnerGroupPlayerId } from '@/utils/matchOfficialWinner'
 import { invertScoreSets, setsWonForA, setsWonForB } from '@/utils/score'
 import { idsEqual } from '@/utils/tournamentInvert'
 
@@ -42,18 +49,54 @@ function sumGames(sets: ScoreSet[], forA: boolean): number {
   return sets.reduce((acc, s) => acc + (forA ? s.a : s.b), 0)
 }
 
-type RulesPoints = Pick<
+export type RulesPoints = Pick<
   TournamentRules,
-  'points_per_win' | 'points_per_loss' | 'points_default_win' | 'points_default_loss'
+  'points_per_win' | 'points_per_loss' | 'points_default_win' | 'points_default_loss' | 'best_of_sets'
 >
 
 function isDefaultType(rt: MatchResultType | null | undefined): boolean {
-  return rt === 'default_win_a' || rt === 'default_win_b'
+  return importResultTypeUsesDefaultPoints(rt)
 }
 
-function matchCountsForGroupRanking(m: MatchRow): boolean {
-  if (!m.winner_id || m.status === 'cancelled') return false
-  return m.status === 'closed'
+function matchCountsForGroupRanking(m: MatchRow, rules: RulesPoints): boolean {
+  if (m.status === 'cancelled') return false
+  if (importResultTypeBothPenalized(m.result_type)) {
+    return m.status === 'closed' || m.status === 'validated'
+  }
+  if (m.status !== 'closed' && m.status !== 'validated') return false
+  return getOfficialWinnerGroupPlayerId(m, rules) != null
+}
+
+/** Partido cerrado que entra al cómputo (ganador en BD o inferible por marcador). */
+export function matchIncludedInRanking(m: MatchRow, rules: RulesPoints): boolean {
+  return matchCountsForGroupRanking(m, rules)
+}
+
+/**
+ * Hay ganador aplicable para puntos (penalización mutua, `winner_id` oficial o inferido solo si falta en BD).
+ */
+export function isHistoricalResultValidForRanking(m: MatchRow, rules: RulesPoints): boolean {
+  return matchIncludedInRanking(m, rules)
+}
+
+type RankingSortFields = Pick<
+  RankingRow,
+  'points' | 'gamesFor' | 'gamesAgainst' | 'won' | 'setsFor' | 'setsAgainst' | 'seed_order' | 'displayName'
+>
+
+/** Comparador único: PTS, juegos a favor, diferencia de juegos, partidos ganados, diferencia de sets, semilla, nombre. */
+export function compareRankingRowsForLeaderboard(x: RankingSortFields, y: RankingSortFields): number {
+  if (y.points !== x.points) return y.points - x.points
+  if (y.gamesFor !== x.gamesFor) return y.gamesFor - x.gamesFor
+  const xgd = x.gamesFor - x.gamesAgainst
+  const ygd = y.gamesFor - y.gamesAgainst
+  if (ygd !== xgd) return ygd - xgd
+  if (y.won !== x.won) return y.won - x.won
+  const xsd = x.setsFor - x.setsAgainst
+  const ysd = y.setsFor - y.setsAgainst
+  if (ysd !== xsd) return ysd - xsd
+  if (x.seed_order !== y.seed_order) return x.seed_order - y.seed_order
+  return x.displayName.localeCompare(y.displayName)
 }
 
 export function computeGroupRanking(players: GroupPlayer[], matches: MatchRow[], rules: RulesPoints): RankingRow[] {
@@ -62,9 +105,14 @@ export function computeGroupRanking(players: GroupPlayer[], matches: MatchRow[],
     byId.set(p.id, emptyStats(p))
   }
 
+  const ptsRules = resolveRankingPointsRules(rules)
+
+  const seenMatchIds = new Set<string>()
   for (const m of matches) {
-    if (!m.winner_id) continue
-    if (!matchCountsForGroupRanking(m)) continue
+    if (seenMatchIds.has(m.id)) continue
+    seenMatchIds.add(m.id)
+
+    if (!matchCountsForGroupRanking(m, rules)) continue
 
     const aId = m.player_a_id
     const bId = m.player_b_id
@@ -72,12 +120,29 @@ export function computeGroupRanking(players: GroupPlayer[], matches: MatchRow[],
     const statsB = byId.get(bId)
     if (!statsA || !statsB) continue
 
-    const isDefault = isDefaultType(m.result_type)
-    if (!isDefault) {
-      if (m.game_type !== 'sudden_death' && (!m.score_raw || m.score_raw.length === 0)) continue
+    if (importResultTypeBothPenalized(m.result_type)) {
+      statsA.played += 1
+      statsB.played += 1
+      statsA.lost += 1
+      statsB.lost += 1
+      statsA.points += ptsRules.penaltyBoth
+      statsB.points += ptsRules.penaltyBoth
+      continue
     }
 
-    const sets: ScoreSet[] = isDefault || m.game_type === 'sudden_death' ? [] : m.score_raw!
+    const effectiveWinnerId = getOfficialWinnerGroupPlayerId(m, rules)
+    if (!effectiveWinnerId) continue
+
+    const isDefault = isDefaultType(m.result_type)
+    const adminSets = syntheticAdministrativeSetsForDefaultMatch(m)
+    const sets: ScoreSet[] =
+      isDefault
+        ? adminSets ?? (m.score_raw?.length ? m.score_raw : [])
+        : m.game_type === 'sudden_death' && (!m.score_raw || m.score_raw.length !== 3)
+          ? adminSets ?? (m.score_raw?.length ? m.score_raw : [])
+          : m.score_raw?.length
+            ? m.score_raw
+            : []
 
     statsA.played += 1
     statsB.played += 1
@@ -98,31 +163,23 @@ export function computeGroupRanking(players: GroupPlayer[], matches: MatchRow[],
       statsB.gamesAgainst += aGames
     }
 
-    const pWin = isDefault ? rules.points_default_win : rules.points_per_win
-    const pLoss = isDefault ? rules.points_default_loss : rules.points_per_loss
+    const winPts = isDefault ? ptsRules.defaultWin : ptsRules.normalWin
+    const lossPts = isDefault ? ptsRules.defaultLoss : ptsRules.normalLoss
 
-    if (m.winner_id === aId) {
+    if (idsEqual(effectiveWinnerId, aId)) {
       statsA.won += 1
       statsB.lost += 1
-      statsA.points += pWin
-      statsB.points += pLoss
-    } else if (m.winner_id === bId) {
+      statsA.points += winPts
+      statsB.points += lossPts
+    } else if (idsEqual(effectiveWinnerId, bId)) {
       statsB.won += 1
       statsA.lost += 1
-      statsB.points += pWin
-      statsA.points += pLoss
+      statsB.points += winPts
+      statsA.points += lossPts
     }
   }
 
-  const rows = Array.from(byId.values()).sort((x, y) => {
-    if (y.points !== x.points) return y.points - x.points
-    if (y.gamesFor !== x.gamesFor) return y.gamesFor - x.gamesFor
-    const xgd = x.gamesFor - x.gamesAgainst
-    const ygd = y.gamesFor - y.gamesAgainst
-    if (ygd !== xgd) return ygd - xgd
-    if (x.seed_order !== y.seed_order) return x.seed_order - y.seed_order
-    return x.displayName.localeCompare(y.displayName)
-  })
+  const rows = Array.from(byId.values()).sort(compareRankingRowsForLeaderboard)
 
   return rows.map((r, idx) => ({ ...r, position: idx + 1 }))
 }
@@ -132,12 +189,15 @@ export function perspectiveSetsForCell(
   _colPlayerId: string,
   match: MatchRow | undefined,
 ): ScoreSet[] | null {
-  if (!match?.score_raw) return null
+  if (!match) return null
+  const canonical =
+    match.score_raw?.length ? match.score_raw : syntheticAdministrativeSetsForDefaultMatch(match)
+  if (!canonical?.length) return null
   if (idsEqual(rowPlayerId, match.player_a_id)) {
-    return match.score_raw
+    return canonical
   }
   if (idsEqual(rowPlayerId, match.player_b_id)) {
-    return invertScoreSets(match.score_raw)
+    return invertScoreSets(canonical)
   }
   return null
 }

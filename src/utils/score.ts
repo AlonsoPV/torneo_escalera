@@ -1,6 +1,6 @@
 import type { MatchRow, ScorePayload, ScoreSet, ScoreWinnerSide, TournamentRules } from '@/types/database'
 
-import { validateTennisScore } from '@/lib/tournamentRulesEngine'
+import { validateTennisScore, validateTournamentGamesSet } from '@/lib/tournamentRulesEngine'
 
 export function invertScoreSets(sets: ScoreSet[]): ScoreSet[] {
   return sets.map((s) => ({ a: s.b, b: s.a }))
@@ -74,35 +74,103 @@ function validateNormalSet(set: ScoreSet): string | null {
     return 'Cada set debe tener games enteros mayores o iguales a 0.'
   }
   if (set.a === set.b) return 'Un set no puede terminar empatado.'
-
-  const max = Math.max(set.a, set.b)
-  const min = Math.min(set.a, set.b)
-  if (max === 6 && min <= 4) return null
-  if (max === 7 && (min === 5 || min === 6)) return null
-  return `Set inválido: ${set.a}-${set.b}. Usa 6-0 a 6-4, 7-5 o 7-6.`
+  return null
 }
 
-export function validateBestOf3Score(scoreSets: ScoreSet[]): {
+/** Set flexible (import histórico / tie-break corto decisivo): solo entero, no negativo, sin empate. */
+export function validateFlexibleBo3Set(set: ScoreSet): string | null {
+  if (!Number.isInteger(set.a) || !Number.isInteger(set.b) || set.a < 0 || set.b < 0) {
+    return 'Cada set debe tener números enteros ≥ 0.'
+  }
+  if (set.a === set.b) return 'Un set no puede terminar empatado.'
+  return null
+}
+
+/** Carga CSV / histórico: solo enteros ≥ 0; permite empates por set y no exige formato ATP. */
+export function validateImportLooseSet(set: ScoreSet): string | null {
+  if (!Number.isInteger(set.a) || !Number.isInteger(set.b) || set.a < 0 || set.b < 0) {
+    return 'Cada set debe tener números enteros ≥ 0.'
+  }
+  return null
+}
+
+export type ValidateBestOf3Options = {
+  /** Tercer set 1-1: permite marcadores tipo mini tie-break (ej. 1-0, 8-6) sin reglas de muerte súbita a 10. */
+  allowShortDecisiveSet?: boolean
+  /** Reservado para compatibilidad; con `allowShortDecisiveSet` no se exige diferencia mínima de 2 en el 3.er set. */
+  shortDecisiveSetNoMinDifference?: boolean
+  /** Import histórico: acepta sets irregulares siempre que definan 2 sets ganados y sin empates por set. */
+  historicalFlexibleSets?: boolean
+  /**
+   * Importación masiva CSV: omite reglas de «2 sets ganados», empates por set y formato de games.
+   * Si `forcedWinnerSide` está definido, ese lado es el ganador aunque el marcador sea incompleto o irregular.
+   */
+  importCsvRelaxed?: boolean
+  forcedWinnerSide?: ScoreWinnerSide
+}
+
+export function validateBestOf3Score(
+  scoreSets: ScoreSet[],
+  opts?: ValidateBestOf3Options,
+): {
   ok: boolean
   errors: string[]
   winner: ScoreWinnerSide | null
 } {
   const sets = scoreSets.filter((set) => Number.isFinite(set.a) && Number.isFinite(set.b))
   const errors: string[] = []
-  if (sets.length < 2) errors.push('Captura al menos 2 sets.')
+
+  const csvRelaxed = opts?.importCsvRelaxed === true
+  const minSets = csvRelaxed && opts?.forcedWinnerSide ? 1 : 2
+
+  if (sets.length < minSets) {
+    errors.push(
+      csvRelaxed && minSets === 1
+        ? 'Captura al menos un set con números.'
+        : 'Captura al menos 2 sets.',
+    )
+  }
   if (sets.length > 3) errors.push('Máximo 3 sets.')
 
-  for (const set of sets) {
-    const error = validateNormalSet(set)
-    if (error) errors.push(error)
+  if (csvRelaxed) {
+    for (const set of sets) {
+      const error = validateImportLooseSet(set)
+      if (error) errors.push(error)
+    }
+    let winner: ScoreWinnerSide | null = opts.forcedWinnerSide ?? null
+    if (!winner) {
+      const won = getSetsWon(sets)
+      if (won.a === 2 && won.b < 2) winner = 'a'
+      else if (won.b === 2 && won.a < 2) winner = 'b'
+    }
+    return { ok: errors.length === 0, errors, winner }
   }
 
-  if (sets.length >= 3 && isMatchDecidedAfterTwoSets(sets)) {
+  const flex = opts?.historicalFlexibleSets === true
+
+  if (flex) {
+    for (const set of sets) {
+      const error = validateFlexibleBo3Set(set)
+      if (error) errors.push(error)
+    }
+  } else {
+    for (let i = 0; i < sets.length; i++) {
+      const set = sets[i]
+      const isThird = i === 2 && sets.length === 3
+      const firstTwoSplit = getSetsWon(sets.slice(0, 2))
+      const thirdIsShortDecider =
+        isThird && firstTwoSplit.a === 1 && firstTwoSplit.b === 1 && opts?.allowShortDecisiveSet === true
+      const error = thirdIsShortDecider ? validateFlexibleBo3Set(set) : validateNormalSet(set)
+      if (error) errors.push(error)
+    }
+  }
+
+  if (!flex && sets.length >= 3 && isMatchDecidedAfterTwoSets(sets)) {
     errors.push('El partido ya se definió en 2 sets. No captures tercer set.')
   }
 
   const firstTwoWon = getSetsWon(sets.slice(0, 2))
-  if (sets.length === 2 && firstTwoWon.a === 1 && firstTwoWon.b === 1) {
+  if (!flex && sets.length === 2 && firstTwoWon.a === 1 && firstTwoWon.b === 1) {
     errors.push('Van 1-1 en sets. El tercer set es obligatorio.')
   }
 
@@ -115,24 +183,103 @@ export function validateBestOf3Score(scoreSets: ScoreSet[]): {
   return { ok: errors.length === 0 && winner != null, errors, winner }
 }
 
-export function validateSuddenDeathScore(result: { game_type: string; winner: string | null }): {
-  ok: boolean
-  errors: string[]
+/** Tercer set (muerte súbita): solo enteros ≥ 0 y sin empate (sin exigir carrera a 7). */
+export function validateSuddenDeathThirdSet(set: ScoreSet): string | null {
+  if (!Number.isInteger(set.a) || !Number.isInteger(set.b) || set.a < 0 || set.b < 0) {
+    return 'El tercer set (muerte súbita) solo acepta enteros ≥ 0.'
+  }
+  if (set.a === set.b) return 'El tercer set de muerte súbita no puede terminar empatado.'
+  return null
+}
+
+export function getSuddenDeathWinnerSide(sets: ScoreSet[]): ScoreWinnerSide | null {
+  if (sets.length < 3) return null
+  return getSetWinner(sets[2])
+}
+
+export type ValidateSuddenDeathMatchScoreOptions = {
+  /** Import histórico: sets 1-2 solo enteros, sin empate, sin formato ATP. */
+  historicalFlexibleSets?: boolean
+}
+
+export function validateSuddenDeathMatchScore(
+  sets: ScoreSet[],
+  rules: TournamentRules | null,
+  opts?: ValidateSuddenDeathMatchScoreOptions,
+): { ok: boolean; errors: string[]; winner: ScoreWinnerSide | null } {
+  const errors: string[] = []
+  if (sets.length !== 3) {
+    errors.push('La muerte súbita debe capturar 3 sets.')
+    return { ok: false, errors, winner: null }
+  }
+
+  const flex = opts?.historicalFlexibleSets === true
+  for (let i = 0; i < 2; i++) {
+    const msg = flex
+      ? validateFlexibleBo3Set(sets[i])
+      : rules
+        ? validateTournamentGamesSet(sets[i], rules)
+        : validateNormalSet(sets[i])
+    if (msg) errors.push(`Set ${i + 1}: ${msg}`)
+  }
+
+  const third = validateSuddenDeathThirdSet(sets[2])
+  if (third) errors.push(third)
+
+  const winner = errors.length === 0 ? getSuddenDeathWinnerSide(sets) : null
+  return { ok: errors.length === 0 && winner != null, errors, winner }
+}
+
+export function validateSuddenDeathScore(input: {
+  game_type: string
+  score_json: ScoreSet[] | null
   winner: ScoreWinnerSide | null
-} {
-  if (result.game_type !== 'sudden_death') {
+  rules?: TournamentRules | null
+  historicalFlexibleSets?: boolean
+}): { ok: boolean; errors: string[]; winner: ScoreWinnerSide | null } {
+  if (input.game_type !== 'sudden_death') {
     return { ok: false, errors: ['Tipo de juego inválido.'], winner: null }
   }
-  if (result.winner !== 'a' && result.winner !== 'b') {
-    return { ok: false, errors: ['Selecciona quién ganó la muerte súbita.'], winner: null }
+
+  const sj = input.score_json
+  if (sj == null || sj.length === 0) {
+    if (input.winner === 'a' || input.winner === 'b') {
+      return { ok: true, errors: [], winner: input.winner }
+    }
+    return {
+      ok: false,
+      errors: ['Captura los 3 sets o indica el ganador (solo resultados sin marcador).'],
+      winner: null,
+    }
   }
-  return { ok: true, errors: [], winner: result.winner }
+
+  const v = validateSuddenDeathMatchScore(sj, input.rules ?? null, {
+    historicalFlexibleSets: input.historicalFlexibleSets,
+  })
+  if (!v.ok || !v.winner) return v
+
+  if (input.winner != null && input.winner !== v.winner) {
+    return {
+      ok: false,
+      errors: ['El ganador no coincide con el tercer set.'],
+      winner: null,
+    }
+  }
+
+  return { ok: true, errors: [], winner: v.winner }
+}
+
+/** Validación para sheet/modal con reglas de torneo (no usa validateTennisScore: el ganador no es por mayoría de sets). */
+export function validateSuddenDeathScoreWithRules(
+  sets: ScoreSet[],
+  rules: TournamentRules,
+): { ok: boolean; errors: string[]; winner: ScoreWinnerSide | null } {
+  return validateSuddenDeathMatchScore(sets, rules)
 }
 
 export function getLongSetWinner(set: ScoreSet): ScoreWinnerSide | null {
   if (!Number.isInteger(set.a) || !Number.isInteger(set.b)) return null
   if (set.a < 0 || set.b < 0 || set.a === set.b) return null
-  if (Math.abs(set.a - set.b) < 2) return null
   return set.a > set.b ? 'a' : 'b'
 }
 
@@ -146,7 +293,6 @@ export function validateLongSetScore(set: ScoreSet): {
     errors.push('El set largo solo acepta games enteros mayores o iguales a 0.')
   }
   if (set.a === set.b) errors.push('El set largo no puede terminar empatado.')
-  if (Math.abs(set.a - set.b) < 2) errors.push('El ganador debe superar al rival por diferencia mínima de 2 games.')
 
   const winner = getLongSetWinner(set)
   return { ok: errors.length === 0 && winner != null, errors, winner }
@@ -160,16 +306,22 @@ export function winnerSideToGroupPlayerId(
 }
 
 export function scorePayloadToSets(payload: ScorePayload): ScoreSet[] {
+  if (payload.game_type === 'sudden_death') return payload.score_json ?? []
   return payload.score_json ?? []
 }
 
 export function formatScoreForDisplay(match: MatchRow, perspectivePlayerId?: string | null): string {
+  const sets = match.score_raw ?? []
   if (match.game_type === 'sudden_death') {
+    if (sets.length >= 3) {
+      const perspectiveSets =
+        perspectivePlayerId === match.player_b_id ? invertScoreSets(sets) : sets
+      return formatScoreCompact(perspectiveSets)
+    }
     if (!perspectivePlayerId || !match.winner_id) return 'Muerte súbita'
     return match.winner_id === perspectivePlayerId ? 'MS · Ganó' : 'MS · Perdió'
   }
 
-  const sets = match.score_raw ?? []
   if (!sets.length) return '—'
   const perspectiveSets = perspectivePlayerId === match.player_b_id ? invertScoreSets(sets) : sets
   return formatScoreCompact(perspectiveSets)
@@ -233,21 +385,6 @@ export function validateScoreAgainstRules(
         code: 'tie',
         message: 'Un set no puede terminar empatado (debe haber un ganador del set).',
       })
-    }
-    const max = Math.max(s.a, s.b)
-    const min = Math.min(s.a, s.b)
-    if (max > rules.set_points) {
-      const isStandardWin = max === rules.set_points && max - min >= 2
-      const isTiebreakWin =
-        rules.tiebreak_enabled &&
-        max === rules.set_points + 1 &&
-        min === rules.set_points
-      if (!isStandardWin && !isTiebreakWin) {
-        issues.push({
-          code: 'set_score',
-          message: `Set inválido para jugar a ${rules.set_points} games (tiebreak simplificado: ${rules.set_points}-${rules.set_points + 1}).`,
-        })
-      }
     }
     if (s.a > s.b) aWins++
     else if (s.b > s.a) bWins++

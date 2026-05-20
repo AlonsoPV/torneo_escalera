@@ -692,7 +692,7 @@ export function NextTournamentWizard() {
                 <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs opacity-90">
                   <dt>Marcador pendiente</dt>
                   <dd className="text-right font-medium">{closureQ.data.counts.pendingScore}</dd>
-                  <dt>Esperando rival</dt>
+                  <dt>Resultado provisional</dt>
                   <dd className="text-right font-medium">{closureQ.data.counts.scoreSubmitted}</dd>
                   <dt>Disputas</dt>
                   <dd className="text-right font-medium">{closureQ.data.counts.scoreDisputed}</dd>
@@ -730,7 +730,7 @@ export function NextTournamentWizard() {
               <Link
                 id="admin-next-tournament-link-results-pending"
                 data-name="link-admin-results"
-                to="/admin/results"
+                to="/admin/matches"
                 className={cn(
                   buttonVariants({ variant: 'outline', size: 'sm' }),
                   'justify-center',

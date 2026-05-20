@@ -11,4 +11,9 @@ export {
 } from './playerQueries'
 export { buildPlayerViewModel, getPlayerViewModelSession, tournamentStatusLabel } from './playerViewModel'
 export type { PlayerSummary, PlayerViewModel } from './playerViewModel'
-export { getPlayerPerspectiveScore, getPlayerPerspectiveScoreSetsForUserId } from '@/lib/matchUserPerspective'
+export {
+  getPlayerPerspectiveScore,
+  getPlayerPerspectiveScoreSetsForUserId,
+  getViewerPerspectiveScoreSets,
+  resolveViewerGroupPlayerId,
+} from '@/lib/matchUserPerspective'

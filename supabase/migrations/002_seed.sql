@@ -20,7 +20,7 @@ insert into public.tournament_rules (
   points_per_loss,
   allow_player_score_entry
 )
-select t.id, 3, 6, true, false, 3, 0, true
+select t.id, 3, 6, true, false, 3, 1, true
 from public.tournaments t
 where t.name = 'Torneo Mega Varonil'
   and not exists (

@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 
+import { cn } from '@/lib/utils'
+
 import {
   Table,
   TableBody,
@@ -35,6 +37,7 @@ export function AdminDataTable<T>({
   columns,
   getRowKey,
   getRowDomId,
+  getRowClassName,
   tableId,
   footer,
   rowSelection,
@@ -44,6 +47,8 @@ export function AdminDataTable<T>({
   getRowKey: (row: T) => string
   /** Atributo `id` en cada `<tr>` (p. ej. pruebas E2E). */
   getRowDomId?: (row: T) => string
+  /** Clases extra por fila (p. ej. resaltar fila enlazada desde notificaciones). */
+  getRowClassName?: (row: T) => string | undefined
   /** Atributo `id` en el contenedor de la tabla. */
   tableId?: string
   /** Contenido opcional en `<tfoot>` (p. ej. paginación “Ver más”). */
@@ -90,7 +95,11 @@ export function AdminDataTable<T>({
         </TableHeader>
         <TableBody>
           {rows.map((row) => (
-            <TableRow key={getRowKey(row)} id={getRowDomId?.(row)}>
+            <TableRow
+              key={getRowKey(row)}
+              id={getRowDomId?.(row)}
+              className={cn(getRowClassName?.(row))}
+            >
               {rowSelection ? (
                 <TableCell className="w-10 px-2">
                   <input

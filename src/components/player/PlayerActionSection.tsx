@@ -1,7 +1,7 @@
 import { CheckCircle2, ClipboardList } from 'lucide-react'
 
 import { PlayerMatchActionCard } from '@/components/player/PlayerMatchActionCard'
-import { canAcceptScore, canSubmitScore } from '@/lib/matchStatus'
+import { canRejectScore, canSubmitScore } from '@/lib/matchStatus'
 import { cn } from '@/lib/utils'
 import type { GroupPlayer, MatchRow, TournamentRules } from '@/types/database'
 
@@ -19,15 +19,15 @@ function actionHeadline(match: MatchRow | undefined, userId: string) {
       title: match.status === 'score_disputed'
         ? 'Tienes un marcador por corregir'
         : 'Tienes un marcador pendiente por registrar',
-      description: 'Abre el partido, captura el resultado desde tu perspectiva y envíalo a tu rival.',
+      description: 'Abre el partido, captura el resultado desde tu perspectiva y envíalo; quedará oficial para la tabla.',
       tone: 'warning' as const,
     }
   }
 
-  if (canAcceptScore(match, userId)) {
+  if (canRejectScore(match, userId)) {
     return {
-      title: 'Tienes un marcador pendiente por aceptar',
-      description: 'Revisa el marcador espejo y acepta o rechaza si algo no coincide.',
+      title: 'Puedes refutar un marcador oficial',
+      description: 'Si el resultado registrado no coincide con lo jugado, explícalo para que tu rival lo corrija.',
       tone: 'warning' as const,
     }
   }
@@ -46,7 +46,7 @@ export function PlayerActionSection({
   myGroupPlayerId,
   userId,
   groupName,
-  onAfterAction,
+  onAfterMatchMutation,
 }: {
   matches: MatchRow[]
   players: GroupPlayer[]
@@ -54,7 +54,7 @@ export function PlayerActionSection({
   myGroupPlayerId: string
   userId: string
   groupName: string
-  onAfterAction: () => Promise<void>
+  onAfterMatchMutation: (payload: { match: MatchRow }) => void
 }) {
   const headline = actionHeadline(matches[0], userId)
   const empty = matches.length === 0
@@ -88,7 +88,7 @@ export function PlayerActionSection({
       <div className="p-3 sm:p-4">
         {empty ? (
           <p className="rounded-2xl border border-dashed border-[#E2E8F0] bg-[#F6F3EE]/50 px-4 py-6 text-center text-sm text-[#64748B]">
-            Todo al día. Cuando tengas un marcador por registrar o aceptar, aparecerá aquí.
+            Todo al día. Cuando tengas un marcador por registrar o una refutación disponible, aparecerá aquí.
           </p>
         ) : (
           <div className="space-y-3">
@@ -101,7 +101,7 @@ export function PlayerActionSection({
                 myGroupPlayerId={myGroupPlayerId}
                 userId={userId}
                 groupName={groupName}
-                onAfterAction={onAfterAction}
+                onAfterMatchMutation={onAfterMatchMutation}
               />
             ))}
           </div>

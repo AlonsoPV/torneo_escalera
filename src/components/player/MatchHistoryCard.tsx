@@ -2,6 +2,10 @@ import { History } from 'lucide-react'
 
 import { getOpponentInMatch, matchStatusLabels, matchStatusToneClasses } from '@/lib/matchStatus'
 import {
+  importResultTypeBothPenalized,
+  importResultTypeUsesDefaultPoints,
+} from '@/lib/matchResultSemantics'
+import {
   calculateMatchGamesDifference,
   getMatchOutcome,
   getPointsForPlayerInMatch,
@@ -21,8 +25,8 @@ const HISTORY_SECTION_ORDER: MatchStatus[] = [
 
 const SECTION_HEADING: Partial<Record<MatchStatus, string>> = {
   closed: 'Resultados oficiales',
-  score_submitted: 'Marcador enviado',
-  player_confirmed: 'Aceptado por rival',
+  score_submitted: 'Confirmado para tabla · puede refutarse',
+  player_confirmed: 'Sin refutación · pendiente organizador',
   score_disputed: 'En disputa',
   pending_score: 'Pendiente de marcador',
   cancelled: 'Cancelados',
@@ -33,12 +37,19 @@ function outcomeText(
   myGroupPlayerId: string,
   resultType: MatchResultType | null,
 ): string {
+  if (importResultTypeBothPenalized(match.result_type)) {
+    return 'No reportado · penalización'
+  }
   if (match.winner_id == null) return '—'
-  const isDefault = resultType && resultType !== 'normal'
+  const walkoverLike = importResultTypeUsesDefaultPoints(resultType)
   const w = getMatchOutcome(match, myGroupPlayerId)
-  if (isDefault) {
-    if (w === 'win') return 'Ganaste (W.O.)'
-    if (w === 'loss') return 'Perdiste (W.O.)'
+  if (walkoverLike) {
+    if (w === 'win') return 'Ganaste (W.O./DEF)'
+    if (w === 'loss') return 'Perdiste (W.O./DEF)'
+  }
+  if (resultType === 'retired') {
+    if (w === 'win') return 'Ganaste (retiro)'
+    if (w === 'loss') return 'Perdiste (retiro)'
   }
   if (w === 'win') return 'Ganaste'
   if (w === 'loss') return 'Perdiste'
@@ -78,7 +89,6 @@ type Props = {
   matches: MatchRow[]
   players: GroupPlayer[]
   myGroupPlayerId: string
-  userId: string
   rules: Pick<
     TournamentRules,
     'points_per_win' | 'points_per_loss' | 'points_default_win' | 'points_default_loss'
@@ -93,7 +103,6 @@ export function MatchHistoryCard({
   matches,
   players,
   myGroupPlayerId,
-  userId,
   rules,
   className,
   sectionId = 'player-section-history',
@@ -103,8 +112,10 @@ export function MatchHistoryCard({
 
   const renderRow = (m: MatchRow) => {
     const rival = getOpponentInMatch(m, myGroupPlayerId, players)
-    const label = getPlayerPerspectiveScore(m, userId)
-    const official = m.status === 'closed' && m.winner_id != null
+    const label = getPlayerPerspectiveScore(m, myGroupPlayerId)
+    const official =
+      (m.status === 'closed' || m.status === 'validated') &&
+      (m.winner_id != null || importResultTypeBothPenalized(m.result_type))
     const cancelled = m.status === 'cancelled'
     const pts = official ? getPointsForPlayerInMatch(m, myGroupPlayerId, rules) : null
     const gamesDiff = official ? calculateMatchGamesDifference(myGroupPlayerId, m) : null

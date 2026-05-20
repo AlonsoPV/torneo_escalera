@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { formValuesToMatchRulesTournament, rulesRowToFormValues } from '@/domain/tournamentRulesForm'
+import { scoreSideNumericInputHandlers } from '@/lib/scoreSideNumericInput'
 import { isSuddenDeathRowIndex, maxSetsFromRules } from '@/lib/tournamentRulesEngine'
 import type { AdminMatchRecord } from '@/services/admin'
 import type { ScoreSet, TournamentRules } from '@/types/database'
@@ -65,12 +66,11 @@ function ScoreEditorForm({
                   id={`set-${index}-a`}
                   type="number"
                   min={0}
-                  value={set.a}
-                  onChange={(event) => {
+                  {...scoreSideNumericInputHandlers(set.a, (n) => {
                     const next = [...sets]
-                    next[index] = { ...set, a: Number(event.target.value) }
+                    next[index] = { ...set, a: n }
                     setSets(next)
-                  }}
+                  })}
                 />
               </div>
               <div className="space-y-2">
@@ -81,12 +81,11 @@ function ScoreEditorForm({
                   id={`set-${index}-b`}
                   type="number"
                   min={0}
-                  value={set.b}
-                  onChange={(event) => {
+                  {...scoreSideNumericInputHandlers(set.b, (n) => {
                     const next = [...sets]
-                    next[index] = { ...set, b: Number(event.target.value) }
+                    next[index] = { ...set, b: n }
                     setSets(next)
-                  }}
+                  })}
                 />
               </div>
               <Button

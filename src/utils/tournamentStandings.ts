@@ -8,7 +8,7 @@ function setsWon(sets: ScoreSet[], forA: boolean): number {
   return sets.filter((s) => (forA ? s.a > s.b : s.b > s.a)).length
 }
 
-/** Puntos: normal → ganador 3, perdedor 1. Default → ganador 2, perdedor -1 (exclusivo). */
+/** Puntos de demo: normal → ganador 3, perdedor 1. Default → ganador 3, perdedor -1 (alineado con reglas por defecto del producto). */
 export function calculateGroupStandings(
   players: SimPlayer[],
   matches: SimMatch[],
@@ -60,14 +60,14 @@ export function calculateGroupStandings(
         sb.lost += 1
         sa.defaultsWon += 1
         sb.defaultsLost += 1
-        sa.points += 2
+        sa.points += 3
         sb.points -= 1
       } else {
         sb.won += 1
         sa.lost += 1
         sb.defaultsWon += 1
         sa.defaultsLost += 1
-        sb.points += 2
+        sb.points += 3
         sa.points -= 1
       }
       continue

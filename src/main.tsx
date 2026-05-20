@@ -12,6 +12,17 @@ import './index.css'
 
 void initAuthListener()
 
+if (import.meta.env.DEV) {
+  void import('@/utils/debugGroupStandings').then((mod) => {
+    const w = window as Window & {
+      debugGroupStandings?: typeof mod.debugGroupStandings
+      debugStandingsForGroup?: typeof mod.debugStandingsForGroup
+    }
+    w.debugGroupStandings = mod.debugGroupStandings
+    w.debugStandingsForGroup = mod.debugStandingsForGroup
+  })
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AppErrorBoundary>

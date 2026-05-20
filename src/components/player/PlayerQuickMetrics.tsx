@@ -22,7 +22,7 @@ export function PlayerQuickMetrics({ summary, className }: { summary: PlayerSumm
     { label: 'Jugados', value: summary.playedLabel, icon: Activity, tone: 'blue' as const },
     {
       label: 'Dif. juegos',
-      labelShort: 'Dif.',
+      labelShort: '± Juegos',
       value: signed(summary.gamesDifference),
       icon: Gauge,
       tone: summary.gamesDifference < 0 ? ('red' as const) : ('green' as const),

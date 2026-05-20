@@ -22,7 +22,8 @@ export function AdminExportsPage() {
     { title: 'Resultados', count: resultsQ.data?.length ?? 0 },
     {
       title: 'Ranking',
-      count: (matchesQ.data ?? []).filter((match) => match.status === 'closed').length,
+      count: (matchesQ.data ?? []).filter((match) => match.status === 'closed' || match.status === 'validated')
+        .length,
     },
   ]
 

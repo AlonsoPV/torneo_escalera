@@ -1,8 +1,10 @@
 import { ChevronRight, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useMemo } from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
+import { useRankPositionFlashKeys } from '@/lib/useRankPositionFlash'
 import { cn } from '@/lib/utils'
 import type { GroupPlayer } from '@/types/database'
 import type { RankingRow } from '@/utils/ranking'
@@ -39,7 +41,17 @@ export function PlayerGroupCard({
   groupDetailHref,
   className,
 }: Props) {
-  const ordered = orderPlayers(players, ranking)
+  const ordered = useMemo(() => orderPlayers(players, ranking), [players, ranking])
+  const flashKeys = useRankPositionFlashKeys(
+    useMemo(
+      () =>
+        ordered.map((p, i) => ({
+          key: p.user_id,
+          position: p.position ?? i + 1,
+        })),
+      [ordered],
+    ),
+  )
 
   return (
     <section
@@ -65,12 +77,15 @@ export function PlayerGroupCard({
         {ordered.map((p, i) => {
           const isYou = p.user_id === currentUserId
           const pos = p.position ?? i + 1
+          const rankMoved = flashKeys.has(p.user_id)
           return (
             <li
               key={p.id}
               className={cn(
                 'flex items-center justify-between gap-2 rounded-lg px-2 py-2.5 sm:px-3',
                 isYou ? 'bg-[#1F5A4C]/6' : 'hover:bg-[#F8FAFC]',
+                rankMoved &&
+                  'motion-safe:ring-2 motion-safe:ring-emerald-500/25 motion-safe:transition-[box-shadow] motion-safe:duration-300',
               )}
             >
               <div className="flex min-w-0 items-center gap-2">

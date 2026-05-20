@@ -1,8 +1,13 @@
+import type { QueryClient } from '@tanstack/react-query'
+
+import { resolveRankingPointsRules } from '@/domain/tournamentRankingPoints'
 import { supabase } from '@/lib/supabase'
+import { importResultTypeBothPenalized, importResultTypeUsesDefaultPoints } from '@/lib/matchResultSemantics'
 import { getTournamentRules } from '@/services/tournaments'
 import type { Group, GroupPlayer, MatchRow, Tournament, TournamentRules } from '@/types/database'
 import { buildGroupProgressItems, type GroupProgressItem } from '@/utils/groupProgress'
-import { computeGroupRanking, type RankingRow } from '@/utils/ranking'
+import { compareRankingRowsForLeaderboard, computeGroupRanking, type RankingRow } from '@/utils/ranking'
+import { getOfficialWinnerGroupPlayerId } from '@/utils/matchOfficialWinner'
 import { computeWinnerGroupPlayerId, formatScoreCompact } from '@/utils/score'
 import { idsEqual } from '@/utils/tournamentInvert'
 import {
@@ -17,7 +22,11 @@ export type TournamentDashboardFiltersInput = {
   /** Ámbito por categoría de grupo del torneo (división). */
   groupCategoryId?: 'all' | 'none' | string
   groupId: 'all' | string
-  matchStatus: TournamentDashboardMatchStatusFilter
+  /**
+   * Solo para llamadas programáticas (p. ej. resultados oficiales).
+   * El dashboard no expone filtro por estado; por defecto es «todos».
+   */
+  matchStatus?: TournamentDashboardMatchStatusFilter
   /** Día concreto (`YYYY-MM-DD`); filtra por `updated_at` ese día (zona local). */
   matchDay?: string
 }
@@ -60,19 +69,99 @@ const RECENT_STATUS_VISIBLE = new Set<MatchRow['status']>([
   'closed',
 ])
 
-function sortMergedLeaderboard(a: TournamentLeaderboardEntry, b: TournamentLeaderboardEntry): number {
-  if (b.points !== a.points) return b.points - a.points
-  if (b.won !== a.won) return b.won - a.won
-  const asd = a.setsFor - a.setsAgainst
-  const bsd = b.setsFor - b.setsAgainst
-  if (bsd !== asd) return bsd - asd
-  const agd = a.gamesFor - a.gamesAgainst
-  const bgd = b.gamesFor - b.gamesAgainst
-  if (bgd !== agd) return bgd - agd
-  return a.displayName.localeCompare(b.displayName)
+/** Recalcula vistas derivadas del dashboard (misma lógica que `getTournamentDashboardData`). */
+export function recomputeTournamentDashboardPresentation(input: {
+  groups: Group[]
+  groupPlayers: GroupPlayer[]
+  allMatches: MatchRow[]
+  rules: TournamentRules
+  filters: TournamentDashboardFiltersInput
+}): Pick<TournamentDashboardData, 'metrics' | 'leaderboard' | 'groupProgress' | 'recentMatches'> {
+  const { groups, groupPlayers, allMatches, rules, filters } = input
+
+  const groupFilterOk = filters.groupId === 'all' || groups.some((g) => g.id === filters.groupId)
+  const effectiveGroupId = groupFilterOk ? filters.groupId : ('all' as const)
+
+  const groupIdsInScope =
+    effectiveGroupId === 'all' ? groups.map((g) => g.id) : [effectiveGroupId]
+
+  const matchesInScope =
+    effectiveGroupId === 'all'
+      ? allMatches
+      : allMatches.filter((m) => m.group_id === effectiveGroupId)
+
+  const metrics = computeScopeMetrics(matchesInScope, groupPlayers, groupIdsInScope, rules)
+
+  const rankingByGroupId = new Map<string, RankingRow[]>()
+  for (const g of groups) {
+    const mpl = groupPlayers.filter((p) => p.group_id === g.id)
+    const mm = allMatches.filter((m) => m.group_id === g.id)
+    rankingByGroupId.set(g.id, computeGroupRanking(mpl, mm, rules))
+  }
+
+  const leaderboard: TournamentLeaderboardEntry[] =
+    effectiveGroupId === 'all'
+      ? mergeTournamentLeaderboard(groups, rankingByGroupId)
+      : (rankingByGroupId.get(effectiveGroupId) ?? []).map((r) => ({
+          ...r,
+          groupId: effectiveGroupId,
+          groupName: groups.find((g) => g.id === effectiveGroupId)?.name ?? 'Grupo',
+        }))
+
+  const groupProgressAll = buildGroupProgressItems(groups, groupPlayers, allMatches, rankingByGroupId, rules)
+  const groupProgress =
+    effectiveGroupId === 'all'
+      ? groupProgressAll
+      : groupProgressAll.filter((g) => g.groupId === effectiveGroupId)
+
+  const recentSource = filterMatchesForDashboard(allMatches, {
+    groupId: effectiveGroupId,
+    status: filters.matchStatus ?? 'all',
+    matchDay: filters.matchDay,
+  })
+  const recentMatches = buildRecentMatches(recentSource, groups, groupPlayers, rules, 20)
+
+  return { metrics, leaderboard, groupProgress, recentMatches }
 }
 
-/** Ranking oficial del torneo (solo partidos cerrados en computeGroupRanking). */
+/** Parche incremental tras submit/refutación jugador (sin refetch completo del torneo). */
+export function patchCachedTournamentDashboardData(
+  prev: TournamentDashboardData,
+  updatedMatch: MatchRow,
+  filters: TournamentDashboardFiltersInput,
+): TournamentDashboardData {
+  const nextMatches = prev.matches.map((m) => (m.id === updatedMatch.id ? updatedMatch : m))
+  const derived = recomputeTournamentDashboardPresentation({
+    groups: prev.groups,
+    groupPlayers: prev.groupPlayers,
+    allMatches: nextMatches,
+    rules: prev.rules,
+    filters,
+  })
+  return { ...prev, matches: nextMatches, ...derived }
+}
+
+export function patchTournamentDashboardCachesForMatch(
+  qc: QueryClient,
+  tournamentId: string,
+  updatedMatch: MatchRow,
+): void {
+  qc.setQueriesData<TournamentDashboardData | undefined>(
+    { queryKey: ['tournament-dashboard', tournamentId], exact: false },
+    (old, query) => {
+      if (!old) return old
+      const f = query.queryKey[2]
+      if (!f || typeof f !== 'object') return old
+      return patchCachedTournamentDashboardData(old, updatedMatch, f as TournamentDashboardFiltersInput)
+    },
+  )
+}
+
+function sortMergedLeaderboard(a: TournamentLeaderboardEntry, b: TournamentLeaderboardEntry): number {
+  return compareRankingRowsForLeaderboard(a, b)
+}
+
+/** Tabla del torneo (partidos cerrados o marcador capturado confirmado para posiciones). */
 export function mergeTournamentLeaderboard(
   groups: Group[],
   rankingByGroupId: Map<string, RankingRow[]>,
@@ -133,6 +222,7 @@ function buildRecentMatches(
       (m.score_raw?.length ||
         m.winner_id ||
         m.status === 'closed' ||
+        m.status === 'validated' ||
         RECENT_STATUS_VISIBLE.has(m.status)),
   )
 
@@ -149,22 +239,35 @@ function buildRecentMatches(
     const aName = names.get(m.player_a_id) ?? 'Jugador A'
     const bName = names.get(m.player_b_id) ?? 'Jugador B'
     let pointsNote: string | null = null
-    if (m.status === 'closed' && m.winner_id) {
-      const w = m.winner_id
-      const winPts = rules.points_per_win
-      const lossPts = rules.points_per_loss
-      pointsNote =
-        w === m.player_a_id
-          ? `+${winPts} / +${lossPts}`
-          : w === m.player_b_id
-            ? `+${lossPts} / +${winPts}`
-            : null
+    if (
+      m.status === 'closed' ||
+      m.status === 'validated' ||
+      m.status === 'score_submitted' ||
+      m.status === 'player_confirmed'
+    ) {
+      const ptsRules = resolveRankingPointsRules(rules)
+      const fmt = (n: number) => `${n >= 0 ? '+' : ''}${n}`
+      if (importResultTypeBothPenalized(m.result_type)) {
+        const p = ptsRules.penaltyBoth
+        pointsNote = `${fmt(p)} / ${fmt(p)}`
+      } else {
+        const winnerGp = getOfficialWinnerGroupPlayerId(m, rules)
+        if (winnerGp) {
+          const defPts = importResultTypeUsesDefaultPoints(m.result_type)
+          const winPts = defPts ? ptsRules.defaultWin : ptsRules.normalWin
+          const lossPts = defPts ? ptsRules.defaultLoss : ptsRules.normalLoss
+          pointsNote = idsEqual(winnerGp, m.player_a_id)
+            ? `${fmt(winPts)} / ${fmt(lossPts)}`
+            : `${fmt(lossPts)} / ${fmt(winPts)}`
+        }
+      }
     }
 
     let winnerPlayer: 'a' | 'b' | null = null
-    if (m.winner_id) {
-      if (idsEqual(m.winner_id, m.player_a_id)) winnerPlayer = 'a'
-      else if (idsEqual(m.winner_id, m.player_b_id)) winnerPlayer = 'b'
+    const official = getOfficialWinnerGroupPlayerId(m, rules)
+    if (official) {
+      if (idsEqual(official, m.player_a_id)) winnerPlayer = 'a'
+      else if (idsEqual(official, m.player_b_id)) winnerPlayer = 'b'
     } else if (sets.length > 0) {
       const wGp = computeWinnerGroupPlayerId(sets, m.player_a_id, m.player_b_id, rules.best_of_sets)
       if (wGp && idsEqual(wGp, m.player_a_id)) winnerPlayer = 'a'
@@ -205,13 +308,20 @@ export async function getTournamentDashboardData(
   const groupsRaw = (groupsRes.data ?? []) as Group[]
   if (groupsRes.error) throw groupsRes.error
 
+  /** Orden estable: `order_index` del torneo y luego nombre con orden numérico (Grupo 2 antes que Grupo 10). */
+  const groupsSorted = [...groupsRaw].sort((a, b) => {
+    const o = (a.order_index ?? 0) - (b.order_index ?? 0)
+    if (o !== 0) return o
+    return a.name.localeCompare(b.name, 'es', { numeric: true, sensitivity: 'base' })
+  })
+
   const cat = filters.groupCategoryId ?? 'all'
   const groups: Group[] =
     cat === 'all'
-      ? groupsRaw
+      ? groupsSorted
       : cat === 'none'
-        ? groupsRaw.filter((g) => !g.group_category_id)
-        : groupsRaw.filter((g) => g.group_category_id === cat)
+        ? groupsSorted.filter((g) => !g.group_category_id)
+        : groupsSorted.filter((g) => g.group_category_id === cat)
 
   const groupIdList = groups.map((g) => g.id)
 
@@ -226,47 +336,14 @@ export async function getTournamentDashboardData(
     allGroupPlayers = (playersRes.data ?? []) as GroupPlayer[]
   }
 
-  const groupFilterOk = filters.groupId === 'all' || groups.some((g) => g.id === filters.groupId)
-  const effectiveGroupId = groupFilterOk ? filters.groupId : ('all' as const)
-
-  const groupIdsInScope =
-    effectiveGroupId === 'all' ? groups.map((g) => g.id) : [effectiveGroupId]
-
-  const matchesInScope =
-    effectiveGroupId === 'all'
-      ? allMatches
-      : allMatches.filter((m) => m.group_id === effectiveGroupId)
-
-  const metrics = computeScopeMetrics(matchesInScope, allGroupPlayers, groupIdsInScope)
-
-  const rankingByGroupId = new Map<string, RankingRow[]>()
-  for (const g of groups) {
-    const mpl = allGroupPlayers.filter((p) => p.group_id === g.id)
-    const mm = allMatches.filter((m) => m.group_id === g.id)
-    rankingByGroupId.set(g.id, computeGroupRanking(mpl, mm, rules))
-  }
-
-  const leaderboard: TournamentLeaderboardEntry[] =
-    effectiveGroupId === 'all'
-      ? mergeTournamentLeaderboard(groups, rankingByGroupId)
-      : (rankingByGroupId.get(effectiveGroupId) ?? []).map((r) => ({
-          ...r,
-          groupId: effectiveGroupId,
-          groupName: groups.find((g) => g.id === effectiveGroupId)?.name ?? 'Grupo',
-        }))
-
-  const groupProgressAll = buildGroupProgressItems(groups, allGroupPlayers, allMatches, rankingByGroupId)
-  const groupProgress =
-    effectiveGroupId === 'all'
-      ? groupProgressAll
-      : groupProgressAll.filter((g) => g.groupId === effectiveGroupId)
-
-  const recentSource = filterMatchesForDashboard(allMatches, {
-    groupId: effectiveGroupId,
-    status: filters.matchStatus,
-    matchDay: filters.matchDay,
-  })
-  const recentMatches = buildRecentMatches(recentSource, groups, allGroupPlayers, rules, 20)
+  const { metrics, leaderboard, groupProgress, recentMatches } =
+    recomputeTournamentDashboardPresentation({
+      groups,
+      groupPlayers: allGroupPlayers,
+      allMatches,
+      rules,
+      filters,
+    })
 
   return {
     tournament,
@@ -309,10 +386,13 @@ export async function getDashboardMetrics(
 }
 
 export async function listTournamentOptionsForDashboard(): Promise<Tournament[]> {
-  const { data, error } = await supabase
-    .from('tournaments')
-    .select('*')
-    .order('created_at', { ascending: false })
+  const { data, error } = await supabase.from('tournaments').select('*')
   if (error) throw error
-  return (data ?? []) as Tournament[]
+  const rows = (data ?? []) as Tournament[]
+  return [...rows].sort((a, b) => {
+    const rank = (t: Tournament) => (t.status === 'active' ? 0 : t.status === 'finished' ? 1 : 2)
+    const dr = rank(a) - rank(b)
+    if (dr !== 0) return dr
+    return a.name.localeCompare(b.name, 'es', { numeric: true, sensitivity: 'base' })
+  })
 }

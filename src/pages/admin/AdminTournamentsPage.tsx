@@ -460,6 +460,7 @@ export function AdminTournamentsPage() {
                 value={overview.activeTournaments}
                 icon={Trophy}
                 tone="success"
+                descriptionMode="info"
                 description={`De ${overview.totalTournaments} torneo(s) en total`}
               />
               <AdminMetricCard
@@ -468,6 +469,7 @@ export function AdminTournamentsPage() {
                 value={overview.totalPlayers}
                 icon={Users}
                 tone="neutral"
+                descriptionMode="info"
                 description="Rol jugador en perfiles"
               />
               <AdminMetricCard
@@ -476,6 +478,7 @@ export function AdminTournamentsPage() {
                 value={overview.totalGroups}
                 icon={Flag}
                 tone="info"
+                descriptionMode="info"
                 description="Grupos creados"
               />
               <AdminMetricCard
@@ -484,6 +487,7 @@ export function AdminTournamentsPage() {
                 value={overview.incompleteGroups}
                 icon={AlertTriangle}
                 tone={overview.incompleteGroups > 0 ? 'warning' : 'neutral'}
+                descriptionMode="info"
                 description="Por debajo del cupo del grupo"
               />
             </div>
@@ -536,6 +540,7 @@ export function AdminTournamentsPage() {
                     value={breakdown.pendingScore}
                     icon={CalendarDays}
                     tone="info"
+                    descriptionMode="info"
                     description="Disponibles para captura"
                   />
                   <AdminMetricCard
@@ -544,6 +549,7 @@ export function AdminTournamentsPage() {
                     value={overview.matchesWithoutDate}
                     icon={CalendarClock}
                     tone={overview.matchesWithoutDate > 0 ? 'warning' : 'neutral'}
+                    descriptionMode="info"
                     description="Aún sin captura"
                   />
                   <AdminMetricCard
@@ -552,7 +558,8 @@ export function AdminTournamentsPage() {
                     value={overview.pendingResults}
                     icon={AlertTriangle}
                     tone={overview.pendingResults > 0 ? 'warning' : 'neutral'}
-                    description="Marcador enviado por jugador"
+                    descriptionMode="info"
+                    description="Resultado provisional (jugadores)"
                   />
                   <AdminMetricCard
                     id="admin-tournaments-pending-metric-confirmed"
@@ -560,6 +567,7 @@ export function AdminTournamentsPage() {
                     value={overview.confirmedResults}
                     icon={CheckCircle2}
                     tone="success"
+                    descriptionMode="info"
                     description="Cerrados por administración"
                   />
                 </div>

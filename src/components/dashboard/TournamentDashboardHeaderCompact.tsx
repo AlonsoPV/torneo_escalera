@@ -30,14 +30,14 @@ export function TournamentDashboardHeaderCompact({
             <p className="text-[11px] font-semibold tracking-wide text-emerald-600 uppercase dark:text-emerald-400">
               Dashboard del torneo
             </p>
-            <h1 className="text-balance text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+            <h1 className="text-balance text-lg font-bold tracking-tight text-foreground sm:text-xl md:text-2xl">
               {tournament.name}
             </h1>
             <p className="mt-1 text-pretty text-sm text-muted-foreground">
               Ranking, avance y desempeño por grupo
             </p>
           </div>
-          <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-end sm:shrink-0">
+          <div className="flex w-full flex-col gap-2 min-[400px]:flex-row min-[400px]:flex-wrap min-[400px]:items-center min-[400px]:justify-between sm:w-auto sm:justify-end sm:shrink-0">
             {categoryOrSeason ? (
               <span className="max-w-[12rem] truncate text-sm text-muted-foreground sm:max-w-none" title={categoryOrSeason}>
                 {categoryOrSeason}

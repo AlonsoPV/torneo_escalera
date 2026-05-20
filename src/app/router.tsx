@@ -1,5 +1,5 @@
 import { lazy } from 'react'
-import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { createBrowserRouter, Navigate, useLocation } from 'react-router-dom'
 
 import { AppShell } from '@/components/layout/AppShell'
 import { IndexRedirect } from '@/components/layout/IndexRedirect'
@@ -12,7 +12,6 @@ import { AdminMatchesPage } from '@/pages/admin/AdminMatchesPage'
 import { AdminNotificationsPage } from '@/pages/admin/AdminNotificationsPage'
 import { AdminOverviewPage } from '@/pages/admin/AdminOverviewPage'
 import { AdminMatchResultsImportPage } from '@/pages/admin/AdminMatchResultsImportPage'
-import { AdminResultsPage } from '@/pages/admin/AdminResultsPage'
 import { AdminRulesPage } from '@/pages/admin/AdminRulesPage'
 import { AdminSettingsPage } from '@/pages/admin/AdminSettingsPage'
 import { AdminTournamentsPage } from '@/pages/admin/AdminTournamentsPage'
@@ -24,6 +23,11 @@ import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
 import { TournamentDashboardPage } from '@/pages/dashboard/TournamentDashboardPage'
 import { PlayerAccountPage } from '@/pages/player/PlayerAccountPage'
 import { PlayerDashboardPage } from '@/pages/player/PlayerDashboardPage'
+
+function RedirectLegacyAdminResultsToMatches() {
+  const { search } = useLocation()
+  return <Navigate to={`/admin/matches${search}`} replace />
+}
 
 const TournamentSimulationPage = lazy(() =>
   import('@/pages/simulation/TournamentSimulationPage').then((m) => ({ default: m.TournamentSimulationPage })),
@@ -67,9 +71,10 @@ export const router = createBrowserRouter([
                   { path: 'next-tournament', element: <NextTournamentPage /> },
                   { path: 'rules', element: <AdminRulesPage /> },
                   { path: 'groups', element: <AdminGroupsPage /> },
+                  { path: 'matches/import', element: <AdminMatchResultsImportPage /> },
                   { path: 'matches', element: <AdminMatchesPage /> },
-                  { path: 'results', element: <AdminResultsPage /> },
-                  { path: 'results/import', element: <AdminMatchResultsImportPage /> },
+                  { path: 'results/import', element: <Navigate to="/admin/matches/import" replace /> },
+                  { path: 'results', element: <RedirectLegacyAdminResultsToMatches /> },
                   { path: 'users', element: <AdminUsersPage /> },
                   { path: 'notifications', element: <AdminNotificationsPage /> },
                   { path: 'exports', element: <AdminExportsPage /> },
