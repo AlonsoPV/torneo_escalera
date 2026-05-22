@@ -105,7 +105,9 @@ export function preparePlayerScoreSubmissionSync(input: {
   let winnerId: string | null = null
 
   if (payload.game_type === 'best_of_3') {
-    const validation = validateBestOf3Score(payload.score_json)
+    const validation = validateBestOf3Score(payload.score_json, {
+      gamesPerSet: rules.games_per_set ?? rules.set_points ?? 6,
+    })
     if (!validation.ok || !validation.winner) throw new Error(validation.errors.join(' '))
     const rulesValidation = validateScoreWithRules(payload.score_json, rules)
     if (!rulesValidation.ok) throw new Error(rulesValidation.errors.join(' '))
@@ -114,6 +116,7 @@ export function preparePlayerScoreSubmissionSync(input: {
     const validation = validateBestOf3Score(payload.score_json, {
       allowShortDecisiveSet: true,
       shortDecisiveSetNoMinDifference: true,
+      gamesPerSet: rules.games_per_set ?? rules.set_points ?? 6,
     })
     if (!validation.ok || !validation.winner) throw new Error(validation.errors.join(' '))
     const rulesValidation = validateScoreWithRules(payload.score_json, rules)

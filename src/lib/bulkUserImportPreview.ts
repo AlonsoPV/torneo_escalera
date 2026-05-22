@@ -12,8 +12,8 @@ export type BulkImportParsedRow = {
   categoryName: string
   password: string
   groupName: string
-  pj: string
-  pts: string
+  recoveryEmail: string
+  accountCuenta: string
 }
 
 export type BulkImportPreviewRow = {
@@ -25,8 +25,8 @@ export type BulkImportPreviewRow = {
   categoryName: string
   password: string
   groupName: string
-  pj: number | null
-  pts: number | null
+  recoveryEmail: string
+  accountStatus: 'active' | 'inactive'
   state: 'ready' | 'warning' | 'error'
   messages: string[]
 }
@@ -52,28 +52,31 @@ function isAllowedRole(r: string): r is UserRole {
   return ALLOWED_ROLES.includes(r as UserRole)
 }
 
-/** Entero ≥ 0 o null si vacío; error si texto no vacío e inválido. */
-function parseOptionalNonNegativeInt(raw: string, label: string): { value: number | null; error?: string } {
-  const s = String(raw ?? '').trim()
-  if (!s) return { value: null }
-  if (!/^\d+$/.test(s)) {
-    return { value: null, error: `${label}: indica un entero ≥ 0 o deja vacío.` }
-  }
-  const n = Number(s)
-  if (!Number.isSafeInteger(n)) return { value: null, error: `${label}: número demasiado grande.` }
-  return { value: n }
+/** Vacío → activo. */
+export function normalizeImportAccountCuenta(raw: string): 'active' | 'inactive' | 'invalid' {
+  const s = String(raw ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  if (!s || s === 'activo' || s === 'active') return 'active'
+  if (s === 'inactivo' || s === 'inactive') return 'inactive'
+  return 'invalid'
 }
 
-/** Entero con signo opcional o null si vacío (p. ej. puntos de ranking arrastrados). */
-function parseOptionalSignedInt(raw: string, label: string): { value: number | null; error?: string } {
-  const s = String(raw ?? '').trim()
-  if (!s) return { value: null }
-  if (!/^[+-]?\d+$/.test(s)) {
-    return { value: null, error: `${label}: indica un entero (puede ser negativo) o deja vacío.` }
+function validateRecoveryEmailForImport(raw: string): { ok: true } | { ok: false; error: string } {
+  const s = raw.trim()
+  if (!s) return { ok: true }
+  if (s.toLowerCase().endsWith('@mega-varonil.local')) {
+    return {
+      ok: false,
+      error: 'Correo de recuperación no puede usar el dominio técnico @mega-varonil.local.',
+    }
   }
-  const n = Number(s)
-  if (!Number.isSafeInteger(n)) return { value: null, error: `${label}: número demasiado grande.` }
-  return { value: n }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) {
+    return { ok: false, error: 'Correo de recuperación inválido.' }
+  }
+  return { ok: true }
 }
 
 export function buildBulkImportPreview(
@@ -104,22 +107,34 @@ export function buildBulkImportPreview(
     const phoneDigits = phoneNorm.ok ? phoneNorm.digits : ''
     const name = row.fullName.trim()
     const pwd = String(row.password ?? '').trim()
-    const cRaw = normalizeImportLabel(row.categoryName)
+    const cRawFull = normalizeImportLabel(row.categoryName)
+    /** Categoría vacía tras normalizar etiqueta: tratamos como sin categoría. */
+    const cRaw = cRawFull.replace(/\s+/g, '').length === 0 ? '' : cRawFull
     const gRaw = normalizeImportLabel(row.groupName)
-    const pjParse = parseOptionalNonNegativeInt(row.pj, 'PJ')
-    const ptsParse = parseOptionalSignedInt(row.pts, 'Pts')
-    if (pjParse.error) messages.push(pjParse.error)
-    if (ptsParse.error) messages.push(ptsParse.error)
-
-    let role = (row.role || 'player').trim().toLowerCase() as UserRole | string
-    if (!role) role = 'player'
-    if (!isAllowedRole(role)) {
-      messages.push(`Rol no válido (“${row.role}”), se usará “player”.`)
-      role = 'player'
+    const recoveryRaw = row.recoveryEmail.trim()
+    const acctParse = normalizeImportAccountCuenta(row.accountCuenta)
+    if (acctParse === 'invalid') {
+      messages.push('Cuenta: indica "activo" o "inactivo" (vacío = activo).')
     }
-    if (role === 'super_admin' && !options.callerIsSuperAdmin) {
+
+    const recVal = validateRecoveryEmailForImport(recoveryRaw)
+    if (!recVal.ok) messages.push(recVal.error)
+
+    const roleRaw = (row.role ?? '').trim().toLowerCase()
+    if (!roleRaw) {
+      messages.push('Rol obligatorio (player, admin o super_admin).')
+    } else if (!isAllowedRole(roleRaw)) {
+      messages.push(`Rol no válido (“${row.role}”). Usa player, admin o super_admin.`)
+    }
+    let role: UserRole | string = roleRaw
+    if (!isAllowedRole(role)) {
+      role = 'player' as UserRole
+    }
+    if (isAllowedRole(role) && role === 'super_admin' && !options.callerIsSuperAdmin) {
       messages.push('No puedes asignar super_admin desde la importación (requiere super admin).')
     }
+
+    if (!ext) messages.push('ID obligatorio.')
 
     if (!phoneRaw) {
       messages.push('Celular obligatorio.')
@@ -128,7 +143,6 @@ export function buildBulkImportPreview(
     }
 
     if (!name) messages.push('Nombre obligatorio.')
-    if (!cRaw) messages.push('Categoría obligatoria.')
 
     const idExists = ext ? context.externalIdsInUse.has(ext.toLowerCase()) : false
     const phoneExists = phoneDigits ? context.phonesInUse.has(phoneDigits) : false
@@ -212,13 +226,17 @@ export function buildBulkImportPreview(
       }
     }
 
-    const catOk = context.categoryNamesLower.has(cRaw.toLowerCase())
-    if (!catOk && !options.createMissingCategories) {
-      messages.push(`La categoría “${cRaw}” no existe (activa “crear categorías faltantes” o créala antes).`)
+    if (cRaw) {
+      const catOk = context.categoryNamesLower.has(cRaw.toLowerCase())
+      if (!catOk && !options.createMissingCategories) {
+        messages.push(`La categoría “${cRaw}” no existe (activa “crear categorías faltantes” o créala antes).`)
+      }
+      if (!catOk && options.createMissingCategories) {
+        messages.push(`Se creará la categoría “${cRaw}”.`)
+      }
     }
-    if (!catOk && options.createMissingCategories) {
-      messages.push(`Se creará la categoría “${cRaw}”.`)
-    }
+
+    const accountStatus: 'active' | 'inactive' = acctParse === 'inactive' ? 'inactive' : 'active'
 
     let state: 'ready' | 'warning' | 'error' = 'ready'
     const hard = [
@@ -231,11 +249,13 @@ export function buildBulkImportPreview(
       'no hay grupos',
       'no existe en el torneo',
       'está lleno',
-      'pj:',
-      'pts:',
       'superaría el cupo',
       'no puede tener más',
       'debe tener al menos',
+      'no válido',
+      'correo de recuperación',
+      'dominio técnico',
+      'cuenta:',
     ]
     if (messages.some((m) => hard.some((h) => m.toLowerCase().includes(h)))) state = 'error'
     else if (messages.length > 0) state = 'warning'
@@ -246,11 +266,11 @@ export function buildBulkImportPreview(
       phone: phoneDigits || phoneRaw,
       fullName: name,
       password: pwd,
-      role,
+      role: isAllowedRole(role) ? role : 'player',
       categoryName: cRaw,
       groupName: gRaw,
-      pj: pjParse.error ? null : pjParse.value,
-      pts: ptsParse.error ? null : ptsParse.value,
+      recoveryEmail: recoveryRaw,
+      accountStatus,
       state,
       messages,
     })

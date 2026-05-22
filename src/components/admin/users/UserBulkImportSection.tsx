@@ -9,9 +9,10 @@ export function UserBulkImportSection() {
 
   return (
     <section aria-label="Importación masiva de usuarios">
-      <details
-        className="group border-t border-slate-200/80 bg-slate-50/30 open:bg-white"
-        onToggle={(event) => setOpen(event.currentTarget.open)}
+    <details
+      id="admin-user-bulk-import-anchor"
+      className="group border-t border-slate-200/80 bg-slate-50/30 open:bg-white"
+      onToggle={(event) => setOpen(event.currentTarget.open)}
       >
         <summary
           className={cn(

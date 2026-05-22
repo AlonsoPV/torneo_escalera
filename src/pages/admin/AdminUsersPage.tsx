@@ -1,7 +1,9 @@
 import {
   ChevronDown,
+  Download,
   FileSpreadsheet,
   KeyRound,
+  MoreHorizontal,
   Pencil,
   RotateCcw,
   Search,
@@ -30,7 +32,7 @@ import { CreateUserModal } from '@/components/admin/users/CreateUserModal'
 import { EditUserModal } from '@/components/admin/users/EditUserModal'
 import { AvailablePlayersPoolSection } from '@/components/admin/users/AvailablePlayersPoolSection'
 import { UserBulkImportSection } from '@/components/admin/users/UserBulkImportSection'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -41,9 +43,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { TableCell, TableRow } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
-import { downloadCredencialesExcel } from '@/lib/export-credenciales'
 import { formatRecoveryEmailDisplay, recoveryEmailComplete } from '@/lib/profileEmail'
 import { ADMIN_USER_FILTER_ROLES, userRoleLabelEs } from '@/lib/permissions'
 import { cn } from '@/lib/utils'
@@ -61,6 +70,16 @@ import {
 import { listPlayerCategories } from '@/services/playerCategories'
 import { useAuthStore } from '@/stores/authStore'
 import type { UserRole } from '@/types/database'
+import {
+  adminUserExportRow,
+  downloadAdminUserExportRowsXlsx,
+  downloadUsersImportTemplate,
+  downloadUsersImportTemplateCsv,
+  exportFilteredUsersCsv,
+  exportFilteredUsersXlsx,
+  exportUsersCredentialsCsv,
+  exportUsersCredentialsXlsx,
+} from '@/services/adminUsersExport'
 
 const PAGE_SIZE = 25
 
@@ -71,18 +90,12 @@ function userMatchesGroupFilter(user: AdminUserRecord, groupFilter: string): boo
   return groupFilter.split('|').filter(Boolean).includes(gid)
 }
 
-function splitFullName(full: string | null | undefined): { nombre: string; apellido: string } {
-  const t = full?.trim() ?? ''
-  if (!t) return { nombre: '', apellido: '' }
-  const parts = t.split(/\s+/)
-  return { nombre: parts[0] ?? '', apellido: parts.slice(1).join(' ') }
-}
-
-function correoOUsuarioExport(user: AdminUserRecord): string {
-  const shown = formatRecoveryEmailDisplay(user.email)
-  if (shown !== 'Sin correo') return shown
-  if (user.phone) return `${user.phone} (acceso por celular)`
-  return '—'
+function scrollToBulkImportSection(): void {
+  const anchor = document.getElementById('admin-user-bulk-import-anchor')
+  anchor?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  if (anchor instanceof HTMLDetailsElement) {
+    anchor.open = true
+  }
 }
 
 export function AdminUsersPage() {
@@ -93,7 +106,7 @@ export function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all')
   const [groupFilter, setGroupFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState<'all' | string>('all')
-  const [estadoFilter, setEstadoFilter] = useState<'all' | 'pendiente' | 'activo'>('all')
+  const [estadoFilter, setEstadoFilter] = useState<'all' | 'pendiente' | 'cuenta_activa' | 'cuenta_inactiva'>('all')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -179,7 +192,8 @@ export function AdminUsersPage() {
       const matchesEstado =
         estadoFilter === 'all' ||
         (estadoFilter === 'pendiente' && !recoveryEmailComplete(user)) ||
-        (estadoFilter === 'activo' && user.status === 'active')
+        (estadoFilter === 'cuenta_activa' && user.status === 'active') ||
+        (estadoFilter === 'cuenta_inactiva' && user.status === 'inactive')
       return matchesSearch && matchesRole && matchesGroup && matchesCategory && matchesEstado
     })
   }, [categoryFilter, deferredSearch, estadoFilter, groupFilter, roleFilter, usersQ.data])
@@ -204,6 +218,26 @@ export function AdminUsersPage() {
     () => filteredUsers.filter((u) => selectedIds.has(u.id)),
     [filteredUsers, selectedIds],
   )
+
+  const requireFilteredUsersToast = (): boolean => {
+    if (!filteredUsers.length) {
+      toast.message('No hay usuarios que coincidan con los filtros actuales.')
+      return false
+    }
+    return true
+  }
+
+  const exportSelectionRows = (): void => {
+    if (!selectedUsers.length) {
+      toast.message('Selecciona al menos un usuario para exportar.')
+      return
+    }
+    downloadAdminUserExportRowsXlsx(
+      selectedUsers.map((u) => adminUserExportRow(u, categories)),
+      `usuarios_seleccion_mega_varonil_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    )
+    toast.success('Excel generado con la selección')
+  }
 
   const toggleSelectionRow = useCallback((id: string, selected: boolean) => {
     setSelectedIds((prev) => {
@@ -254,40 +288,6 @@ export function AdminUsersPage() {
       })
     }
   }, [selectedUsers.length])
-
-  const usersToCredencialRows = (users: AdminUserRecord[]) =>
-    users.map((u) => {
-      const { nombre, apellido } = splitFullName(u.full_name)
-      const cat = categories.find((c) => c.id === u.category_id)
-      return {
-        nombre,
-        apellido,
-        correo: correoOUsuarioExport(u),
-        contrasena_temporal: '—',
-        rol: userRoleLabelEs(u.role),
-        categoria: cat?.name ?? '—',
-        grupo: u.group?.name ?? '—',
-        celular: u.phone ?? '',
-      }
-    })
-
-  const handleDescargarCredenciales = () => {
-    if (!filteredUsers.length) {
-      toast.message('No hay usuarios que coincidan con los filtros actuales.')
-      return
-    }
-    downloadCredencialesExcel(usersToCredencialRows(filteredUsers))
-    toast.success('Archivo Excel generado')
-  }
-
-  const handleExportSelectedCredenciales = () => {
-    if (!selectedUsers.length) {
-      toast.message('Selecciona al menos un usuario para exportar.')
-      return
-    }
-    downloadCredencialesExcel(usersToCredencialRows(selectedUsers))
-    toast.success('Excel generado con la selección')
-  }
 
   const columns = useMemo<AdminDataTableColumn<AdminUserRecord>[]>(
     () => [
@@ -385,8 +385,116 @@ export function AdminUsersPage() {
       <AdminPageHeader
         eyebrow="Administración"
         title="Usuarios"
-        description="Busca, filtra por rol o grupo, edita perfiles y gestiona contraseñas y exportaciones cuando lo necesites."
+        description="Administra jugadores, roles y credenciales. Exporta listados compatibles con la carga masiva (mismas columnas)."
       />
+
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/40 bg-muted/25 px-3 py-2.5">
+        <span className="mr-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Exportaciones</span>
+        <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5 text-xs" onClick={scrollToBulkImportSection}>
+          Importar usuarios
+        </Button>
+        <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5 text-xs" onClick={() => downloadUsersImportTemplate()}>
+          <Download className="size-3.5" aria-hidden />
+          Plantilla · Excel
+        </Button>
+        <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5 text-xs" onClick={() => downloadUsersImportTemplateCsv()}>
+          <Download className="size-3.5" aria-hidden />
+          Plantilla · CSV
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-9 gap-1.5 text-xs border-emerald-200 bg-emerald-50/70 text-emerald-950 hover:bg-emerald-100/80 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-50"
+          disabled={!filteredUsers.length}
+          onClick={() => {
+            if (!requireFilteredUsersToast()) return
+            exportUsersCredentialsXlsx(filteredUsers, categories)
+            toast.success('Credenciales (Excel)')
+          }}
+        >
+          <FileSpreadsheet className="size-3.5" aria-hidden />
+          Credenciales · Excel
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-9 gap-1.5 text-xs border-emerald-200 bg-emerald-50/70 text-emerald-950 hover:bg-emerald-100/80 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-50"
+          disabled={!filteredUsers.length}
+          onClick={() => {
+            if (!requireFilteredUsersToast()) return
+            exportUsersCredentialsCsv(filteredUsers, categories)
+            toast.success('Credenciales (CSV)')
+          }}
+        >
+          <FileSpreadsheet className="size-3.5" aria-hidden />
+          Credenciales · CSV
+        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            type="button"
+            className={cn(
+              buttonVariants({ variant: 'secondary', size: 'sm' }),
+              'h-9 gap-1.5 text-xs shrink-0',
+            )}
+          >
+            <MoreHorizontal className="size-3.5" aria-hidden />
+            Exportar
+            <ChevronDown className="size-3.5 opacity-70" aria-hidden />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
+            <DropdownMenuLabel>Credenciales (filtros actuales)</DropdownMenuLabel>
+            <DropdownMenuItem
+              disabled={!filteredUsers.length}
+              onClick={() => {
+                if (!requireFilteredUsersToast()) return
+                exportUsersCredentialsXlsx(filteredUsers, categories)
+                toast.success('Credenciales (Excel)')
+              }}
+            >
+              Credenciales · Excel
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!filteredUsers.length}
+              onClick={() => {
+                if (!requireFilteredUsersToast()) return
+                exportUsersCredentialsCsv(filteredUsers, categories)
+                toast.success('Credenciales (CSV)')
+              }}
+            >
+              Credenciales · CSV
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Usuarios filtrados</DropdownMenuLabel>
+            <DropdownMenuItem
+              disabled={!filteredUsers.length}
+              onClick={() => {
+                if (!requireFilteredUsersToast()) return
+                exportFilteredUsersXlsx(filteredUsers, categories)
+                toast.success('Usuarios filtrados (Excel)')
+              }}
+            >
+              Excel
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!filteredUsers.length}
+              onClick={() => {
+                if (!requireFilteredUsersToast()) return
+                exportFilteredUsersCsv(filteredUsers, categories)
+                toast.success('Usuarios filtrados (CSV)')
+              }}
+            >
+              CSV
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Plantilla carga masiva</DropdownMenuLabel>
+            <DropdownMenuItem onClick={() => downloadUsersImportTemplate()}>Excel</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => downloadUsersImportTemplateCsv()}>CSV</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       <section className="space-y-3 sm:space-y-4" aria-labelledby="user-intake-heading">
         <AdminSectionTitle
@@ -448,24 +556,6 @@ export function AdminUsersPage() {
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-green-900">Descargar credenciales</p>
-          <p className="mt-0.5 text-xs text-green-700">
-            Exporta nombre, correo o celular de acceso, rol, categoría y grupo según los filtros actuales. Las contraseñas no se almacenan; usa “Cambiar contraseña” para fijar una nueva y comunícala aparte.
-          </p>
-        </div>
-        <Button
-          type="button"
-          onClick={handleDescargarCredenciales}
-          className="shrink-0 gap-2 bg-green-800 text-white hover:bg-green-900"
-          size="sm"
-        >
-          <FileSpreadsheet className="size-3.5" aria-hidden />
-          Descargar Excel
-        </Button>
-      </div>
-
       <section className="space-y-4" aria-labelledby="users-toolbar-heading">
         <AdminSectionTitle
           id="users-toolbar-heading"
@@ -514,7 +604,7 @@ export function AdminUsersPage() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={estadoFilter} onValueChange={(value) => setEstadoFilter(value as 'all' | 'pendiente' | 'activo')}>
+          <Select value={estadoFilter} onValueChange={(value) => setEstadoFilter(value as typeof estadoFilter)}>
             <SelectTrigger className="h-11 min-w-[140px] w-[min(100%,11rem)]">
               <SelectValue placeholder="Estado" />
             </SelectTrigger>
@@ -525,8 +615,11 @@ export function AdminUsersPage() {
               <SelectItem value="pendiente" label="Sin correo de recuperación">
                 Sin correo de recuperación
               </SelectItem>
-              <SelectItem value="activo" label="Cuenta activa">
-                Cuenta activa
+              <SelectItem value="cuenta_activa" label="Cuenta activa (admin)">
+                Cuenta activa (admin)
+              </SelectItem>
+              <SelectItem value="cuenta_inactiva" label="Cuenta desactivada (admin)">
+                Cuenta desactivada (admin)
               </SelectItem>
             </SelectContent>
           </Select>
@@ -646,7 +739,7 @@ export function AdminUsersPage() {
                     variant="outline"
                     size="sm"
                     className="h-8 gap-1.5 text-xs"
-                    onClick={handleExportSelectedCredenciales}
+                    onClick={exportSelectionRows}
                   >
                     <FileSpreadsheet className="size-3.5" aria-hidden />
                     Excel selección

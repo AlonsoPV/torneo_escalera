@@ -213,6 +213,17 @@ Deno.serve(async (req) => {
     return err(upErr.message, 500)
   }
 
+  const { error: credErr } = await admin.from('admin_user_credentials').upsert({
+    user_id: uid,
+    password_plain: password,
+    updated_by: userData.user.id,
+    updated_at: new Date().toISOString(),
+  })
+  if (credErr) {
+    await admin.auth.admin.deleteUser(uid)
+    return err(credErr.message, 500)
+  }
+
   if (role === 'player' && groupId && tournamentId) {
     const gErr = await ensureGroupMembership(admin, {
       uid,

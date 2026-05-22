@@ -1,6 +1,11 @@
 import type { MatchRow, ScorePayload, ScoreSet, ScoreWinnerSide, TournamentRules } from '@/types/database'
 
-import { validateTennisScore, validateTournamentGamesSet } from '@/lib/tournamentRulesEngine'
+import {
+  validateClassicSixGameSet,
+  validateDecisiveSuperTiebreakOneZero,
+  validateTennisScore,
+  validateTournamentGamesSet,
+} from '@/lib/tournamentRulesEngine'
 
 export function invertScoreSets(sets: ScoreSet[]): ScoreSet[] {
   return sets.map((s) => ({ a: s.b, b: s.a }))
@@ -95,10 +100,12 @@ export function validateImportLooseSet(set: ScoreSet): string | null {
 }
 
 export type ValidateBestOf3Options = {
-  /** Tercer set 1-1: permite marcadores tipo mini tie-break (ej. 1-0, 8-6) sin reglas de muerte súbita a 10. */
+  /** Tercer set 1-1 con formato corto: solo 1-0 a favor del ganador (super tie-break). */
   allowShortDecisiveSet?: boolean
-  /** Reservado para compatibilidad; con `allowShortDecisiveSet` no se exige diferencia mínima de 2 en el 3.er set. */
+  /** Reservado para compatibilidad; ya no cambia la validación del 3.er set corto. */
   shortDecisiveSetNoMinDifference?: boolean
+  /** Games por set del torneo; con 6 se aplican marcadores clásicos (6-0…6-4, 7-5, 7-6). */
+  gamesPerSet?: number
   /** Import histórico: acepta sets irregulares siempre que definan 2 sets ganados y sin empates por set. */
   historicalFlexibleSets?: boolean
   /**
@@ -147,6 +154,7 @@ export function validateBestOf3Score(
   }
 
   const flex = opts?.historicalFlexibleSets === true
+  const gamesPs = opts?.gamesPerSet ?? 6
 
   if (flex) {
     for (const set of sets) {
@@ -160,7 +168,14 @@ export function validateBestOf3Score(
       const firstTwoSplit = getSetsWon(sets.slice(0, 2))
       const thirdIsShortDecider =
         isThird && firstTwoSplit.a === 1 && firstTwoSplit.b === 1 && opts?.allowShortDecisiveSet === true
-      const error = thirdIsShortDecider ? validateFlexibleBo3Set(set) : validateNormalSet(set)
+      let error: string | null
+      if (thirdIsShortDecider) {
+        error = validateDecisiveSuperTiebreakOneZero(set)
+      } else if (gamesPs === 6) {
+        error = validateClassicSixGameSet(set.a, set.b)
+      } else {
+        error = validateNormalSet(set)
+      }
       if (error) errors.push(error)
     }
   }
@@ -183,13 +198,9 @@ export function validateBestOf3Score(
   return { ok: errors.length === 0 && winner != null, errors, winner }
 }
 
-/** Tercer set (muerte súbita): solo enteros ≥ 0 y sin empate (sin exigir carrera a 7). */
+/** Tercer set (muerte súbita en partido MS): siempre 1-0 al ganador del mini tie-break. */
 export function validateSuddenDeathThirdSet(set: ScoreSet): string | null {
-  if (!Number.isInteger(set.a) || !Number.isInteger(set.b) || set.a < 0 || set.b < 0) {
-    return 'El tercer set (muerte súbita) solo acepta enteros ≥ 0.'
-  }
-  if (set.a === set.b) return 'El tercer set de muerte súbita no puede terminar empatado.'
-  return null
+  return validateDecisiveSuperTiebreakOneZero(set)
 }
 
 export function getSuddenDeathWinnerSide(sets: ScoreSet[]): ScoreWinnerSide | null {

@@ -2,10 +2,10 @@ import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 
 import { recoverFromAuthError } from '@/lib/authSessionRecovery'
-import { normalizePhone } from '@/lib/phone'
-import { supabase } from '@/lib/supabase'
 import type { BulkImportContext, BulkImportGroupMeta, BulkImportParsedRow } from '@/lib/bulkUserImportPreview'
 import { normalizeImportLabel } from '@/lib/userImportTemplate'
+import { normalizePhone } from '@/lib/phone'
+import { supabase } from '@/lib/supabase'
 import type { Tournament } from '@/types/database'
 
 function normKey(s: string): string {
@@ -39,15 +39,23 @@ function getPasswordCell(row: Record<string, unknown>, candidates: string[]): st
   return ''
 }
 
-/** Valores numéricos enteros desde Excel. */
-function getOptionalIntCell(row: Record<string, unknown>, candidates: string[]): string {
-  return getPasswordCell(row, candidates)
+function detectLegacyPjPtsColumnNames(headers: string[]): boolean {
+  for (const h of headers) {
+    const n = normKey(h)
+    if (n === 'pj' || n === 'pts') return true
+  }
+  return false
+}
+
+export type ParseUserImportFileResult = {
+  rows: BulkImportParsedRow[]
+  legacyPjPtsIgnored: boolean
 }
 
 function mapSheetRow(row: Record<string, unknown>, rowNumber: number): BulkImportParsedRow {
   return {
     rowNumber,
-    externalId: getCell(row, ['ID', 'Id', 'id', 'external_id', 'External id']),
+    externalId: getCell(row, ['id', 'ID', 'Id', 'external_id', 'External id']),
     phone: getPasswordCell(row, [
       'Celular',
       'celular',
@@ -60,18 +68,35 @@ function mapSheetRow(row: Record<string, unknown>, rowNumber: number): BulkImpor
       'Tel',
       'tel',
     ]),
-    fullName: getCell(row, ['Nombre', 'nombre', 'name', 'Full name']),
-    role: getCell(row, ['Rol', 'rol', 'role']),
-    categoryName: getCell(row, ['Categoría', 'Categoria', 'categoria', 'category', 'Category']),
-    password: getPasswordCell(row, ['Contraseña', 'Contrasena', 'contrasena', 'password', 'Password', 'clave', 'Clave']),
-    groupName: getCell(row, ['Grupo', 'grupo', 'group', 'Group name']),
-    pj: getOptionalIntCell(row, ['PJ', 'pj', 'Partidos jugados', 'partidos jugados', 'Partidos Jugados']),
-    pts: getOptionalIntCell(row, ['Pts', 'pts', 'PTS', 'Puntos', 'puntos']),
+    fullName: getCell(row, ['nombre', 'Nombre', 'name', 'Full name']),
+    role: getCell(row, ['rol', 'Rol', 'role', 'Role']),
+    categoryName: getCell(row, ['categoria', 'Categoría', 'Categoria', 'category', 'Category']),
+    password: getPasswordCell(row, [
+      'contraseña',
+      'Contrasena',
+      'contrasena',
+      'password',
+      'Password',
+      'clave',
+      'Clave',
+    ]),
+    groupName: getCell(row, ['grupo', 'Grupo', 'group', 'Group name']),
+    recoveryEmail: getCell(row, [
+      'correo_recuperacion',
+      'correo recuperacion',
+      'Correo recuperación',
+      'Correo recuperacion',
+      'correo de recuperación',
+      'email recuperacion',
+    ]),
+    accountCuenta: getCell(row, ['cuenta', 'Cuenta', 'estado_cuenta', 'Estado cuenta']),
   }
 }
 
-export async function parseUserImportFile(file: File): Promise<BulkImportParsedRow[]> {
+export async function parseUserImportFile(file: File): Promise<ParseUserImportFileResult> {
   const name = file.name.toLowerCase()
+  let legacy = false
+
   if (name.endsWith('.csv')) {
     const text = await file.text()
     const parsed = Papa.parse<Record<string, unknown>>(text, {
@@ -82,7 +107,10 @@ export async function parseUserImportFile(file: File): Promise<BulkImportParsedR
     if (parsed.errors.length) {
       throw new Error(parsed.errors[0]?.message ?? 'CSV inválido')
     }
-    return (parsed.data ?? []).map((row, i) => mapSheetRow(row, i + 2))
+    const fields = parsed.meta.fields?.map((h) => h.trim()).filter(Boolean) ?? []
+    legacy = detectLegacyPjPtsColumnNames(fields)
+    const rows = (parsed.data ?? []).map((row, i) => mapSheetRow(row, i + 2))
+    return { rows, legacyPjPtsIgnored: legacy }
   }
 
   const buf = await file.arrayBuffer()
@@ -90,7 +118,10 @@ export async function parseUserImportFile(file: File): Promise<BulkImportParsedR
   const sheet = wb.Sheets[wb.SheetNames[0]]
   if (!sheet) throw new Error('El Excel no tiene hojas.')
   const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
-  return json.map((row, i) => mapSheetRow(row, i + 2))
+  const headers = json.length ? Object.keys(json[0] as object).map((h) => h.trim()) : []
+  legacy = detectLegacyPjPtsColumnNames(headers)
+  const rows = json.map((row, i) => mapSheetRow(row, i + 2))
+  return { rows, legacyPjPtsIgnored: legacy }
 }
 
 export async function fetchBulkImportPoolContext(tournamentId: string | null): Promise<BulkImportContext> {
@@ -171,8 +202,8 @@ export type BulkImportInvokeRow = {
   categoryName: string
   password: string
   groupName?: string | null
-  pj?: number | null
-  pts?: number | null
+  recoveryEmail?: string | null
+  accountStatus?: 'active' | 'inactive'
 }
 
 export type BulkImportResultRow = {

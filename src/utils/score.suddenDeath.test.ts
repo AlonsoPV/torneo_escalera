@@ -8,16 +8,17 @@ import {
 } from '@/utils/score'
 
 describe('validateSuddenDeathThirdSet', () => {
-  it('acepta cualquier marcador con ganador (sin empates)', () => {
-    expect(validateSuddenDeathThirdSet({ a: 7, b: 0 })).toBeNull()
-    expect(validateSuddenDeathThirdSet({ a: 6, b: 7 })).toBeNull()
-    expect(validateSuddenDeathThirdSet({ a: 10, b: 8 })).toBeNull()
-    expect(validateSuddenDeathThirdSet({ a: 6, b: 5 })).toBeNull()
+  it('solo acepta 1-0 o 0-1', () => {
+    expect(validateSuddenDeathThirdSet({ a: 1, b: 0 })).toBeNull()
+    expect(validateSuddenDeathThirdSet({ a: 0, b: 1 })).toBeNull()
+    expect(validateSuddenDeathThirdSet({ a: 7, b: 0 })).not.toBeNull()
+    expect(validateSuddenDeathThirdSet({ a: 10, b: 8 })).not.toBeNull()
+    expect(validateSuddenDeathThirdSet({ a: 6, b: 5 })).not.toBeNull()
   })
 
   it('rechaza empate', () => {
-    expect(validateSuddenDeathThirdSet({ a: 6, b: 6 })).toContain('empatado')
-    expect(validateSuddenDeathThirdSet({ a: 7, b: 7 })).toContain('empatado')
+    expect(validateSuddenDeathThirdSet({ a: 0, b: 0 })).not.toBeNull()
+    expect(validateSuddenDeathThirdSet({ a: 1, b: 1 })).not.toBeNull()
   })
 })
 
@@ -38,7 +39,7 @@ describe('validateSuddenDeathMatchScore', () => {
     const sets = [
       { a: 0, b: 6 },
       { a: 0, b: 6 },
-      { a: 7, b: 6 },
+      { a: 1, b: 0 },
     ]
     const v = validateSuddenDeathMatchScore(sets, null)
     expect(v.ok).toBe(true)
@@ -50,7 +51,7 @@ describe('validateSuddenDeathMatchScore', () => {
     const sets = [
       { a: 6, b: 4 },
       { a: 6, b: 4 },
-      { a: 6, b: 7 },
+      { a: 0, b: 1 },
     ]
     const ok = validateSuddenDeathScore({
       game_type: 'sudden_death',

@@ -54,10 +54,11 @@ import {
 import { isAdminRole, userRoleLabelEs } from '@/lib/permissions'
 import { cn } from '@/lib/utils'
 import {
-  downloadBulkCredentialsCsv,
-  downloadUserImportTemplate,
-  type CredentialExportRow,
-} from '@/lib/userImportTemplate'
+  downloadAdminUserExportRowsXlsx,
+  downloadUsersImportTemplate,
+  downloadUsersImportTemplateCsv,
+  type AdminUserExportRow,
+} from '@/services/adminUsersExport'
 import {
   fetchBulkImportPoolContext,
   invokeBulkCreateUsersChunked,
@@ -112,7 +113,7 @@ function downloadImportReportCsv(result: BulkImportMergedResponse, fileLabel: st
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  const safe = fileLabel.replace(/[^\w\-]+/g, '_').slice(0, 40) || 'import'
+  const safe = fileLabel.replace(/[^\w-]+/g, '_').slice(0, 40) || 'import'
   a.download = `informe-importacion-${safe}-${new Date().toISOString().slice(0, 10)}.csv`
   a.click()
   URL.revokeObjectURL(url)
@@ -288,8 +289,8 @@ export function BulkImportWizard() {
           categoryName: r.categoryName,
           password: r.password,
           groupName: r.groupName.trim() ? r.groupName : null,
-          pj: r.pj,
-          pts: r.pts,
+          recoveryEmail: r.recoveryEmail.trim() ? r.recoveryEmail.trim() : null,
+          accountStatus: r.accountStatus,
         }))
       if (!rows.length) throw new Error('No hay filas válidas para importar')
       const tid = auditTournamentId.trim() || null
@@ -354,7 +355,14 @@ export function BulkImportWizard() {
     setParseError(null)
     if (!f) return
     try {
-      const rows = await parseUserImportFile(f)
+      const parsed = await parseUserImportFile(f)
+      const rows = parsed.rows
+      if (parsed.legacyPjPtsIgnored) {
+        toast.warning(
+          'Las columnas PJ y PTS ya no se usan en carga de usuarios y fueron ignoradas.',
+          { duration: 8000 },
+        )
+      }
       setParsedRows(rows)
       setFileMeta({ name: f.name, size: f.size })
       bumpReachable(1)
@@ -386,17 +394,31 @@ export function BulkImportWizard() {
   }
 
   const downloadCreds = () => {
-    if (!result?.results?.length) return
+    if (!result?.results?.length || !preview?.length) return
+    const prevByNum = new Map(preview.map((p) => [p.rowNumber, p]))
     const ok = result.results.filter((r) => r.status === 'success')
-    const rows: CredentialExportRow[] = ok.map((r) => ({
-      ID: r.externalId,
-      Nombre: r.fullName,
-      Celular: r.phone ?? '',
-      Contraseña: r.temporaryPassword === '—' ? '(sin cambio)' : r.temporaryPassword,
-      Categoría: r.categoryName,
-      Acción: r.operation === 'updated' ? 'Actualizado' : 'Creado',
-    }))
-    downloadBulkCredentialsCsv(rows)
+    const rows: AdminUserExportRow[] = ok.map((r) => {
+      const p = prevByNum.get(r.rowNumber)
+      let pwd = ''
+      const t = (r.temporaryPassword ?? '').trim()
+      if (t && t !== '—') pwd = t
+      return {
+        id: r.externalId,
+        nombre: r.fullName,
+        correo_recuperacion: (p?.recoveryEmail ?? '').trim(),
+        celular: r.phone ?? '',
+        contraseña: pwd || '(sin cambio)',
+        cuenta: p?.accountStatus === 'inactive' ? 'inactivo' : 'activo',
+        rol: (p?.role ?? '').trim() || '',
+        categoria: (r.categoryName ?? '').trim(),
+        grupo: (p?.groupName ?? '').trim(),
+      }
+    })
+    downloadAdminUserExportRowsXlsx(
+      rows,
+      `credenciales_post_importacion_mega_varonil_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    )
+    toast.success('Credenciales (formato oficial)')
   }
 
   const goValidation = () => {
@@ -448,9 +470,13 @@ export function BulkImportWizard() {
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => downloadUserImportTemplate()}>
+              <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => downloadUsersImportTemplate()}>
                 <Download className="size-4" />
-                Plantilla CSV
+                Plantilla · Excel
+              </Button>
+              <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => downloadUsersImportTemplateCsv()}>
+                <Download className="size-4" />
+                Plantilla · CSV
               </Button>
               <Button type="button" variant="ghost" size="sm" className="text-slate-600" onClick={resetAll} disabled={importMut.isPending}>
                 <X className="size-4" />

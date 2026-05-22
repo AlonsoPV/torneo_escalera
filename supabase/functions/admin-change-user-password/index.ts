@@ -72,5 +72,13 @@ Deno.serve(async (req) => {
   })
   if (pwErr) return err(pwErr.message, 400)
 
+  const { error: credErr } = await admin.from('admin_user_credentials').upsert({
+    user_id: targetId,
+    password_plain: newPassword,
+    updated_by: userData.user.id,
+    updated_at: new Date().toISOString(),
+  })
+  if (credErr) return err(credErr.message, 500)
+
   return ok({ success: true })
 })

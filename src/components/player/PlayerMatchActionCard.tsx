@@ -94,6 +94,7 @@ export function PlayerMatchActionCard({
   const [rejectOpen, setRejectOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const [busy, setBusy] = useState(false)
+  const submitInFlightRef = useRef(false)
   const rejectInFlightRef = useRef(false)
 
   const rival = getOpponentInMatch(match, myGroupPlayerId, players)
@@ -221,6 +222,8 @@ export function PlayerMatchActionCard({
         submitting={busy}
         submitLabel="Enviar marcador"
         onSubmit={async (scorePayload) => {
+          if (submitInFlightRef.current) return
+          submitInFlightRef.current = true
           setBusy(true)
           const perf = isPlayerSubmitPerfEnabled()
           const t0 = perf ? performance.now() : 0
@@ -229,7 +232,6 @@ export function PlayerMatchActionCard({
             const tRpc = perf ? performance.now() : 0
             const serverRow = await submitPlayerScore({ match, scorePayload, actorUserId: userId, rules })
             if (perf) {
-              // eslint-disable-next-line no-console -- flag localStorage perfPlayerSubmit
               console.debug(`[perf] submitPlayerScore RPC ${Math.round(performance.now() - tRpc)}ms`)
             }
             const tMerge = perf ? performance.now() : 0
@@ -238,7 +240,6 @@ export function PlayerMatchActionCard({
               patchPlayerViewModelMatches(old, userId, match.id, merged),
             )
             if (perf) {
-              // eslint-disable-next-line no-console -- flag localStorage perfPlayerSubmit
               console.debug(`[perf] patchPlayerViewModelMatches ${Math.round(performance.now() - tMerge)}ms`)
             }
             toast.success(
@@ -250,7 +251,6 @@ export function PlayerMatchActionCard({
             const tNotify = perf ? performance.now() : 0
             onAfterMatchMutation({ match: merged })
             if (perf) {
-              // eslint-disable-next-line no-console -- flag localStorage perfPlayerSubmit
               console.debug(
                 `[perf] afterMutation hook ${Math.round(performance.now() - tNotify)}ms · total ${Math.round(performance.now() - t0)}ms`,
               )
@@ -258,6 +258,7 @@ export function PlayerMatchActionCard({
           } catch (error) {
             toast.error(error instanceof Error ? error.message : 'No se pudo enviar el marcador')
           } finally {
+            submitInFlightRef.current = false
             setBusy(false)
           }
         }}

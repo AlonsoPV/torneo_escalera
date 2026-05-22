@@ -3,58 +3,58 @@ import type { BulkImportPreviewRow } from '@/lib/bulkUserImportPreview'
 /** Documentación de columnas reconocidas (coincide con `mapSheetRow` en servicios). */
 export const BULK_IMPORT_COLUMN_GUIDE = [
   {
-    headers: 'ID, Id, external_id',
-    field: 'Identificador (opcional)',
-    required: false,
-    hint: 'Opcional. Si coincide con un usuario existente, la fila actualiza ese registro.',
+    headers: 'id, ID, external_id',
+    field: 'Identificador',
+    required: true,
+    hint: 'Obligatorio. ID externo o visible del jugador.',
   },
   {
-    headers: 'Nombre, name',
+    headers: 'nombre, name',
     field: 'Nombre completo',
     required: true,
     hint: 'Se muestra en el torneo y admin.',
   },
   {
+    headers: 'correo_recuperacion',
+    field: 'Correo de recuperación',
+    required: false,
+    hint: 'Correo real del usuario. No uses @mega-varonil.local. Vacío = no cambia (actualizaciones).',
+  },
+  {
     headers: 'Celular, Teléfono, Móvil',
     field: 'Número de celular',
     required: true,
-    hint: 'Obligatorio. Único en archivo y en la base; se normaliza (solo dígitos, sin +52).',
+    hint: 'Obligatorio. Se normaliza (solo dígitos, sin +52).',
   },
   {
-    headers: 'Rol, role',
-    field: 'Rol',
+    headers: 'contraseña, password',
+    field: 'Contraseña',
+    required: 'Condicional',
+    hint: '8 dígitos para altas nuevas; vacía en actualización para no cambiar.',
+  },
+  {
+    headers: 'cuenta',
+    field: 'Cuenta (activo / inactivo)',
     required: false,
+    hint: 'Vacío o "activo" = puede iniciar sesión; "inactivo" = cuenta deshabilitada por admin.',
+  },
+  {
+    headers: 'rol, role',
+    field: 'Rol',
+    required: true,
     hint: 'player, admin o super_admin (super_admin solo si tu cuenta es super admin).',
   },
   {
-    headers: 'Categoría, category',
+    headers: 'categoria, Categoría',
     field: 'Categoría de jugador',
-    required: true,
-    hint: 'Debe existir o marcarse “crear categorías faltantes”.',
+    required: false,
+    hint: 'Opcional. Debe existir o marcarse “crear categorías faltantes”.',
   },
   {
-    headers: 'Contraseña, password',
-    field: 'Contraseña',
-    required: 'Condicional',
-    hint: '8 dígitos para altas; vacía en actualización para no cambiar.',
-  },
-  {
-    headers: 'Grupo, group',
+    headers: 'grupo, group',
     field: 'Grupo',
     required: false,
     hint: 'Solo jugadores; requiere torneo seleccionado. El servidor puede crear el grupo.',
-  },
-  {
-    headers: 'PJ',
-    field: 'Partidos jugados (histórico)',
-    required: false,
-    hint: 'Entero ≥ 0 o vacío.',
-  },
-  {
-    headers: 'Pts',
-    field: 'Puntos (histórico)',
-    required: false,
-    hint: 'Entero (puede ser negativo) o vacío.',
   },
 ] as const
 

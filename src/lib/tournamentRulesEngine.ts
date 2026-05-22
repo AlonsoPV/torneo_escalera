@@ -40,9 +40,46 @@ export function gamesPerSet(rules: TournamentRules): number {
   return rules.games_per_set ?? rules.set_points
 }
 
+/**
+ * Sets regulares a 6 games con tie-break a 6-6 (registrado siempre 7-6).
+ * Resultados posibles: 7-6, 7-5 y 6-0 … 6-4 (ningún lado > 7 games).
+ */
+export function validateClassicSixGameSet(a: number, b: number): string | null {
+  if (!Number.isInteger(a) || !Number.isInteger(b)) {
+    return 'Cada set debe tener games enteros.'
+  }
+  if (a < 0 || b < 0) return 'Los valores no pueden ser negativos.'
+  if (a === b) return 'Un set no puede terminar empatado.'
+  const hi = Math.max(a, b)
+  const lo = Math.min(a, b)
+  if (hi > 7) return 'Ningún set puede superar 7 games.'
+  if (hi === 7) {
+    if (lo === 5 || lo === 6) return null
+    return 'Si un set llega a 7 games, el rival debió tener 5 o 6 (7-5 o 7-6).'
+  }
+  if (hi === 6) {
+    if (lo <= 4) return null
+    return 'Con 6 games ganados, el rival puede tener como máximo 4 (6-0 … 6-4).'
+  }
+  return 'Marcador de set no válido (válidos: 6-0 … 6-4, 7-5, 7-6).'
+}
+
+/** Set decisivo por muerte súbita / super tie-break: siempre 1-0 al ganador (sin registrar puntos del mini break). */
+export function validateDecisiveSuperTiebreakOneZero(set: ScoreSet): string | null {
+  if (!Number.isInteger(set.a) || !Number.isInteger(set.b) || set.a < 0 || set.b < 0) {
+    return 'El set decisivo solo acepta enteros ≥ 0.'
+  }
+  const ok = (set.a === 1 && set.b === 0) || (set.a === 0 && set.b === 1)
+  if (!ok) {
+    return 'El set decisivo (muerte súbita) se registra como 1-0 a favor del ganador.'
+  }
+  return null
+}
+
 /** Un set a games según reglas del torneo (no formato corto decisivo). */
 export function validateTournamentGamesSet(set: ScoreSet, rules: TournamentRules): string | null {
   const games = gamesPerSet(rules)
+  if (games === 6) return validateClassicSixGameSet(set.a, set.b)
   const minDiff = rules.min_game_difference ?? 2
   const tbAt = rules.tiebreak_at ?? null
   return validateGamesSet(set.a, set.b, games, minDiff, rules.tiebreak_enabled, tbAt)
@@ -63,16 +100,6 @@ export function validateGamesSet(
   void _tbAt
   if (!Number.isInteger(a) || !Number.isInteger(b)) {
     return 'Cada set debe tener games enteros.'
-  }
-  if (a < 0 || b < 0) return 'Los valores no pueden ser negativos'
-  if (a === b) return 'Un set no puede terminar empatado'
-  return null
-}
-
-function validateSuddenSet(a: number, b: number, _sdp: number): string | null {
-  void _sdp
-  if (!Number.isInteger(a) || !Number.isInteger(b)) {
-    return 'El set decisivo debe tener valores enteros.'
   }
   if (a < 0 || b < 0) return 'Los valores no pueden ser negativos'
   if (a === b) return 'Un set no puede terminar empatado'
@@ -102,7 +129,6 @@ export function validateTennisScore(
   const tbAt = rules.tiebreak_at
   const finalFmt =
     rules.final_set_format ?? (rules.super_tiebreak_final_set ? ('super_tiebreak' as const) : ('sudden_death' as const))
-  const sdp = rules.sudden_death_points ?? 10
 
   if (score.length > maxSets) {
     errors.push(`Máximo ${maxSets} sets según el torneo`)
@@ -119,7 +145,14 @@ export function validateTennisScore(
     }
     const deciding = need > 1 && aWins === need - 1 && bWins === need - 1
     const useShort = deciding && (finalFmt === 'sudden_death' || finalFmt === 'super_tiebreak')
-    const err = useShort ? validateSuddenSet(a, b, sdp) : validateGamesSet(a, b, games, minDiff, tbOn, tbAt)
+    let err: string | null
+    if (useShort) {
+      err = validateDecisiveSuperTiebreakOneZero(score[i])
+    } else if (games === 6) {
+      err = validateClassicSixGameSet(a, b)
+    } else {
+      err = validateGamesSet(a, b, games, minDiff, tbOn, tbAt)
+    }
     if (err) errors.push(err)
     if (a > b) aWins += 1
     else if (b > a) bWins += 1

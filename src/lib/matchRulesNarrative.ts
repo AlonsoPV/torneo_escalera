@@ -27,9 +27,9 @@ export function buildMatchRulesNarrative(values: TournamentRulesFormValues): str
 }
 
 export function matchRulesValidExamples(): string[] {
-  return ['6-3, 6-4', '6-4, 4-6, 10-8', '7-6, 6-3']
+  return ['6-3, 6-4', '6-4, 4-6, 1-0', '7-6, 6-3']
 }
 
 export function matchRulesInvalidExamples(): string[] {
-  return ['6-5, 6-4 (falta diferencia en el primer set)', '6-3, 5-5 (set empatado)', '10-7 como primer set si solo aplica al decisivo']
+  return ['6-5, 6-4 (el primer set no puede cerrar 6-5)', '6-3, 5-5 (set empatado)', '8-6 en set regular (máx. 7 games)']
 }

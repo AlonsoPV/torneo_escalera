@@ -45,6 +45,9 @@ type RowInput = {
   groupName?: string | null
   pj?: number | null
   pts?: number | null
+  recoveryEmail?: string | null
+  /** Preferido frente al legado pj/pts: estado de cuenta en la aplicación */
+  accountStatus?: 'active' | 'inactive' | null
 }
 
 type Body = {
@@ -77,6 +80,30 @@ function normalizeLabel(s: string): string {
     .filter(Boolean)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(' ')
+}
+
+function validateRecoveryEmailImport(raw: unknown): { ok: true; value: string | null } | { ok: false; msg: string } {
+  const s = String(raw ?? '').trim()
+  if (!s) return { ok: true, value: null }
+  if (s.toLowerCase().endsWith('@mega-varonil.local')) {
+    return { ok: false, msg: 'Correo de recuperación no puede usar el dominio técnico @mega-varonil.local.' }
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) {
+    return { ok: false, msg: 'Correo de recuperación inválido.' }
+  }
+  return { ok: true, value: s }
+}
+
+/** Vacío → activo (default). */
+function parseAccountRowStatus(raw: unknown): { ok: true; status: 'active' | 'inactive' } | { ok: false; msg: string } {
+  const s = String(raw ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  if (!s || s === 'activo' || s === 'active') return { ok: true, status: 'active' }
+  if (s === 'inactivo' || s === 'inactive') return { ok: true, status: 'inactive' }
+  return { ok: false, msg: 'Cuenta: usa "activo" o "inactivo" (vacío = activo).' }
 }
 
 function isValidBulkImportPassword(p: string): boolean {
@@ -151,6 +178,21 @@ async function insertBulkRow(
     error_message: args.errorMessage,
     created_profile_id: args.createdProfileId ?? null,
   })
+}
+
+async function upsertVisiblePassword(
+  adminClient: ReturnType<typeof createClient>,
+  args: { userId: string; password: string; actorId: string },
+): Promise<string | null> {
+  const password = String(args.password ?? '').trim()
+  if (!password || password === '—') return null
+  const { error } = await adminClient.from('admin_user_credentials').upsert({
+    user_id: args.userId,
+    password_plain: password,
+    updated_by: args.actorId,
+    updated_at: new Date().toISOString(),
+  })
+  return error?.message ?? null
 }
 
 /** Asigna grupo si aplica; devuelve mensaje de error o null si OK. */
@@ -318,10 +360,16 @@ Deno.serve(async (req) => {
       const rowGroupAudit = normalizeLabel(row.groupName ?? '') || null
       const ext = row.externalId?.trim() ?? ''
       const name = row.fullName?.trim() ?? ''
-      let role = (row.role?.trim() || 'player').toLowerCase()
-      if (!ALLOWED.has(role)) role = 'player'
-      const cname = normalizeLabel(row.categoryName ?? '')
+      const roleRaw = (row.role ?? '').trim().toLowerCase()
+      const cnameRaw = normalizeLabel(row.categoryName ?? '')
+      const cname = cnameRaw.replace(/\s+/g, '').length === 0 ? '' : cnameRaw
       const phoneParsed = normalizePhone(String(row.phone ?? ''))
+
+      const recoveryCheck = validateRecoveryEmailImport(row.recoveryEmail ?? '')
+      const accountParsed =
+        row.accountStatus === 'active' || row.accountStatus === 'inactive'
+          ? ({ ok: true as const, status: row.accountStatus } as const)
+          : parseAccountRowStatus('')
 
       const baseResult = (phoneDigits: string, temp: string): Omit<ResultRow, 'status' | 'error' | 'userId'> => ({
         rowNumber: row.rowNumber,
@@ -332,6 +380,113 @@ Deno.serve(async (req) => {
         temporaryPassword: temp,
         categoryName: cname,
       })
+
+      if (!ext) {
+        errors += 1
+        results.push({
+          ...baseResult('', ''),
+          status: 'error',
+          error: 'ID obligatorio',
+        })
+        await insertBulkRow(adminClient, {
+          batchId,
+          rowNumber: row.rowNumber,
+          external_id: ext || null,
+          full_name: name || null,
+          role: roleRaw || 'player',
+          groupName: rowGroupAudit,
+          categoryName: cname,
+          status: 'error',
+          errorMessage: 'ID obligatorio',
+        })
+        continue
+      }
+
+      if (!recoveryCheck.ok) {
+        errors += 1
+        results.push({
+          ...baseResult('', ''),
+          status: 'error',
+          error: recoveryCheck.msg,
+        })
+        await insertBulkRow(adminClient, {
+          batchId,
+          rowNumber: row.rowNumber,
+          external_id: ext || null,
+          full_name: name || null,
+          role: roleRaw || 'player',
+          groupName: rowGroupAudit,
+          categoryName: cname,
+          status: 'error',
+          errorMessage: recoveryCheck.msg,
+        })
+        continue
+      }
+
+      if (!accountParsed.ok) {
+        errors += 1
+        results.push({
+          ...baseResult('', ''),
+          status: 'error',
+          error: accountParsed.msg,
+        })
+        await insertBulkRow(adminClient, {
+          batchId,
+          rowNumber: row.rowNumber,
+          external_id: ext || null,
+          full_name: name || null,
+          role: roleRaw || 'player',
+          groupName: rowGroupAudit,
+          categoryName: cname,
+          status: 'error',
+          errorMessage: accountParsed.msg,
+        })
+        continue
+      }
+      const rowAccountStatus = accountParsed.status
+
+      if (!roleRaw) {
+        errors += 1
+        results.push({
+          ...baseResult('', ''),
+          status: 'error',
+          error: 'Rol obligatorio',
+        })
+        await insertBulkRow(adminClient, {
+          batchId,
+          rowNumber: row.rowNumber,
+          external_id: ext || null,
+          full_name: name || null,
+          role: 'player',
+          groupName: rowGroupAudit,
+          categoryName: cname,
+          status: 'error',
+          errorMessage: 'Rol obligatorio',
+        })
+        continue
+      }
+
+      const role = roleRaw
+      if (!ALLOWED.has(role)) {
+        errors += 1
+        results.push({
+          ...baseResult('', ''),
+          status: 'error',
+          error: 'Rol no válido: usa player, admin o super_admin',
+        })
+        await insertBulkRow(adminClient, {
+          batchId,
+          rowNumber: row.rowNumber,
+          external_id: ext || null,
+          full_name: name || null,
+          role,
+          groupName: rowGroupAudit,
+          categoryName: cname,
+          status: 'error',
+          errorMessage: 'Rol no válido',
+        })
+        continue
+      }
 
       if (role === 'super_admin' && !callerIsSuper) {
         errors += 1
@@ -354,12 +509,12 @@ Deno.serve(async (req) => {
         continue
       }
 
-      if (!name || !cname) {
+      if (!name) {
         errors += 1
         results.push({
           ...baseResult('', ''),
           status: 'error',
-          error: 'Nombre y categoría son obligatorios',
+          error: 'Nombre obligatorio',
         })
         await insertBulkRow(adminClient, {
           batchId,
@@ -370,7 +525,7 @@ Deno.serve(async (req) => {
           groupName: rowGroupAudit,
           categoryName: cname,
           status: 'error',
-          errorMessage: 'Campos obligatorios faltantes',
+          errorMessage: 'Nombre obligatorio',
         })
         continue
       }
@@ -519,51 +674,54 @@ Deno.serve(async (req) => {
         }
       }
 
-      let categoryId = categoryByNorm.get(cname.toLowerCase())
-      if (!categoryId && createCat) {
-        const { data: insCat, error: catErr } = await adminClient
-          .from('player_categories')
-          .insert({
-            name: cname,
-            description: null,
-            created_by: userData.user.id,
-          })
-          .select('id')
-          .single()
-        if (!catErr && insCat) {
-          categoryId = (insCat as { id: string }).id
-          categoryByNorm.set(cname.toLowerCase(), categoryId)
-        } else if (catErr?.code === '23505') {
-          const { data: exCat } = await adminClient
+      let categoryId: string | null = null
+      if (cname) {
+        categoryId = categoryByNorm.get(cname.toLowerCase()) ?? null
+        if (!categoryId && createCat) {
+          const { data: insCat, error: catErr } = await adminClient
             .from('player_categories')
-            .select('id, name')
-            .eq('name', cname)
-            .maybeSingle()
-          if (exCat) {
-            categoryId = (exCat as { id: string }).id
+            .insert({
+              name: cname,
+              description: null,
+              created_by: userData.user.id,
+            })
+            .select('id')
+            .single()
+          if (!catErr && insCat) {
+            categoryId = (insCat as { id: string }).id
             categoryByNorm.set(cname.toLowerCase(), categoryId)
+          } else if (catErr?.code === '23505') {
+            const { data: exCat } = await adminClient
+              .from('player_categories')
+              .select('id, name')
+              .eq('name', cname)
+              .maybeSingle()
+            if (exCat) {
+              categoryId = (exCat as { id: string }).id
+              categoryByNorm.set(cname.toLowerCase(), categoryId)
+            }
           }
         }
-      }
-      if (!categoryId) {
-        errors += 1
-        results.push({
-          ...baseResult(digits, ''),
-          status: 'error',
-          error: `Categoría "${cname}" no existe`,
-        })
-        await insertBulkRow(adminClient, {
-          batchId,
-          rowNumber: row.rowNumber,
-          external_id: ext || null,
-          full_name: name,
-          role,
-          groupName: rowGroupAudit,
-          categoryName: cname,
-          status: 'error',
-          errorMessage: 'Categoría inexistente',
-        })
-        continue
+        if (!categoryId) {
+          errors += 1
+          results.push({
+            ...baseResult(digits, ''),
+            status: 'error',
+            error: `Categoría "${cname}" no existe`,
+          })
+          await insertBulkRow(adminClient, {
+            batchId,
+            rowNumber: row.rowNumber,
+            external_id: ext || null,
+            full_name: name,
+            role,
+            groupName: rowGroupAudit,
+            categoryName: cname,
+            status: 'error',
+            errorMessage: 'Categoría inexistente',
+          })
+          continue
+        }
       }
 
       let targetGroupId: string | null = null
@@ -622,8 +780,8 @@ Deno.serve(async (req) => {
             await insertBulkRow(adminClient, {
               batchId,
               rowNumber: row.rowNumber,
-              external_id: ext || null,
-              full_name: name,
+              externalId: ext || null,
+              fullName: name,
               role,
               groupName: rowGroupAudit,
               categoryName: cname,
@@ -703,9 +861,13 @@ Deno.serve(async (req) => {
           full_name: name,
           role,
           category_id: categoryId,
-          status: 'active',
+          status: rowAccountStatus,
           phone: digits,
           external_id: ext || null,
+        }
+        if (recoveryCheck.value) {
+          profilePayload.email = recoveryCheck.value
+          profilePayload.must_complete_email = false
         }
         if (pjVal !== null) profilePayload.import_carry_pj = pjVal
         if (ptsVal !== null) profilePayload.import_carry_pts = ptsVal
@@ -744,13 +906,38 @@ Deno.serve(async (req) => {
             await insertBulkRow(adminClient, {
               batchId,
               rowNumber: row.rowNumber,
-              external_id: ext || null,
-              full_name: name,
+              externalId: ext || null,
+              fullName: name,
               role,
               groupName: rowGroupAudit,
               categoryName: cname,
               status: 'error',
               errorMessage: pwErr.message,
+            })
+            continue
+          }
+          const credErr = await upsertVisiblePassword(adminClient, {
+            userId: uid,
+            password: passwordRaw,
+            actorId: userData.user.id,
+          })
+          if (credErr) {
+            errors += 1
+            results.push({
+              ...baseResult(digits, passwordRaw),
+              status: 'error',
+              error: credErr,
+            })
+            await insertBulkRow(adminClient, {
+              batchId,
+              rowNumber: row.rowNumber,
+              externalId: ext || null,
+              fullName: name,
+              role,
+              groupName: rowGroupAudit,
+              categoryName: cname,
+              status: 'error',
+              errorMessage: credErr,
             })
             continue
           }
@@ -795,8 +982,8 @@ Deno.serve(async (req) => {
         await insertBulkRow(adminClient, {
           batchId,
           rowNumber: row.rowNumber,
-          external_id: ext || null,
-          full_name: name,
+          externalId: ext || null,
+          fullName: name,
           role,
           groupName: rowGroupAudit,
           categoryName: cname,
@@ -840,7 +1027,7 @@ Deno.serve(async (req) => {
           bulk_import: 'true',
           role,
           phone: digits,
-          category_id: categoryId,
+          ...(categoryId ? { category_id: categoryId } : {}),
           ...(ext ? { external_id: ext } : {}),
         },
       })
@@ -869,16 +1056,22 @@ Deno.serve(async (req) => {
 
       const uid = created.user.id
 
+      const recEmail = recoveryCheck.value
       const profilePayload: Record<string, unknown> = {
         full_name: name,
-        email: null,
         role,
         external_id: ext || null,
         category_id: categoryId,
         phone: digits,
-        status: 'active',
-        must_complete_email: true,
+        status: rowAccountStatus,
         email_verified: false,
+      }
+      if (recEmail) {
+        profilePayload.email = recEmail
+        profilePayload.must_complete_email = false
+      } else {
+        profilePayload.email = null
+        profilePayload.must_complete_email = true
       }
       if (pjVal !== null) profilePayload.import_carry_pj = pjVal
       if (ptsVal !== null) profilePayload.import_carry_pts = ptsVal
@@ -903,6 +1096,33 @@ Deno.serve(async (req) => {
           categoryName: cname,
           status: 'error',
           errorMessage: upErr.message,
+        })
+        continue
+      }
+
+      const credErr = await upsertVisiblePassword(adminClient, {
+        userId: uid,
+        password: passwordRaw,
+        actorId: userData.user.id,
+      })
+      if (credErr) {
+        errors += 1
+        await adminClient.auth.admin.deleteUser(uid)
+        results.push({
+          ...baseResult(digits, passwordRaw),
+          status: 'error',
+          error: credErr,
+        })
+        await insertBulkRow(adminClient, {
+          batchId,
+          rowNumber: row.rowNumber,
+          external_id: ext || null,
+          full_name: name,
+          role,
+          groupName: rowGroupAudit,
+          categoryName: cname,
+          status: 'error',
+          errorMessage: credErr,
         })
         continue
       }

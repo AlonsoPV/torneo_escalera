@@ -62,7 +62,7 @@ export const adminNavEntries: readonly AdminNavGroup[] = [
       { label: 'Grupos', href: '/admin/groups', icon: Flag },
       { label: 'Usuarios', href: '/admin/users', icon: Users },
       { label: 'Notificaciones', href: '/admin/notifications', icon: Bell },
-      { label: 'Exportaciones', href: '/admin/exports', icon: Download, upcoming: true },
+      { label: 'Exportaciones', href: '/admin/exports', icon: Download },
       { label: 'Configuración', href: '/admin/settings', icon: Settings },
     ],
   },

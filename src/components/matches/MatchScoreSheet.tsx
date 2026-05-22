@@ -157,8 +157,8 @@ function srOnlyCanonCellLabel(
 ) {
   const detail = sudden
     ? rules.final_set_format === 'super_tiebreak'
-      ? 'puntos (super tie-break)'
-      : 'puntos (muerte súbita)'
+      ? '1-0 (super tie-break registrado sin puntos)'
+      : '1-0 (muerte súbita registrada sin puntos)'
     : `games · set ${setIndex + 1}`
   if (head.mode === 'name_only') {
     return `${head.display} (${canonSlotName}), ${detail}`
@@ -562,6 +562,7 @@ export function MatchScoreSheet(props: {
                     {fields.map((field, index) => {
                       const sudden =
                         isSuddenDeathMatch ? index === 2 : isSuddenDeathRowIndex(index, rules)
+                      const gameCellMax = sudden ? 1 : 7
                       const rowLabel =
                         isSuddenDeathMatch && index === 2
                           ? `${index + 1} / MS`
@@ -578,8 +579,8 @@ export function MatchScoreSheet(props: {
                           title={
                             sudden
                               ? rules.final_set_format === 'super_tiebreak'
-                                ? 'Set decisivo: super tie-break (puntos)'
-                                : 'Set decisivo: muerte súbita (puntos)'
+                              ? 'Set decisivo: super tie-break (se registra 1-0)'
+                              : 'Set decisivo: muerte súbita (se registra 1-0)'
                               : undefined
                           }
                         >
@@ -605,7 +606,9 @@ export function MatchScoreSheet(props: {
                                     name={field.name}
                                     ref={field.ref}
                                     onBlur={field.onBlur}
-                                    {...scoreSideNumericInputHandlers(Number(field.value) || 0, (n) => field.onChange(n))}
+                                    {...scoreSideNumericInputHandlers(Number(field.value) || 0, (n) => field.onChange(n), {
+                                      max: gameCellMax,
+                                    })}
                                   />
                                 )}
                               />
@@ -633,7 +636,9 @@ export function MatchScoreSheet(props: {
                                     name={field.name}
                                     ref={field.ref}
                                     onBlur={field.onBlur}
-                                    {...scoreSideNumericInputHandlers(Number(field.value) || 0, (n) => field.onChange(n))}
+                                    {...scoreSideNumericInputHandlers(Number(field.value) || 0, (n) => field.onChange(n), {
+                                      max: gameCellMax,
+                                    })}
                                   />
                                 )}
                               />

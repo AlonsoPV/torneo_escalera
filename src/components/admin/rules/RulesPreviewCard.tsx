@@ -40,7 +40,7 @@ export function RulesPreviewCard() {
         [
           { a: 6, b: 4 },
           { a: 4, b: 6 },
-          { a: 10, b: 7 },
+          { a: 1, b: 0 },
         ],
         rulesForValidation,
       ),

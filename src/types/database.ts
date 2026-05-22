@@ -125,6 +125,25 @@ export interface Database {
           import_carry_pts?: number | null
         }
       }
+      admin_user_credentials: {
+        Row: {
+          user_id: string
+          password_plain: string
+          updated_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          password_plain: string
+          updated_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          password_plain?: string
+          updated_by?: string | null
+          updated_at?: string
+        }
+      }
       tournaments: {
         Row: {
           id: string
@@ -795,3 +814,4 @@ export type MatchRow = Database['public']['Tables']['matches']['Row']
 export type MatchScoreLog = Database['public']['Tables']['match_score_logs']['Row']
 export type StaffMatchNotification = Database['public']['Tables']['staff_match_notifications']['Row']
 export type PlayerCategory = Database['public']['Tables']['player_categories']['Row']
+export type TournamentFinalStanding = Database['public']['Tables']['tournament_final_standings']['Row']
