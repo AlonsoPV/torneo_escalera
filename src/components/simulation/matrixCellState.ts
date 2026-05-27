@@ -8,6 +8,7 @@ export type MatrixCellKind =
   | 'loss'
   | 'default-win'
   | 'default-loss'
+  | 'disputed'
 
 export function getMatrixCellKind(
   rowId: string,
@@ -16,6 +17,7 @@ export function getMatrixCellKind(
 ): MatrixCellKind {
   if (rowId === colId) return 'diagonal'
   if (!match) return 'empty'
+  if (match.status === 'score_disputed') return 'disputed'
   if (match.winnerId == null) return 'empty'
   if (match.resultType === 'default') {
     const rowIsA = idsEqual(rowId, match.playerAId)

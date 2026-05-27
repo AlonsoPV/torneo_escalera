@@ -5,7 +5,6 @@ import {
   Flag,
   LayoutDashboard,
   List,
-  Settings,
   Settings2,
   ShieldCheck,
   Trophy,
@@ -63,7 +62,7 @@ export const adminNavEntries: readonly AdminNavGroup[] = [
       { label: 'Usuarios', href: '/admin/users', icon: Users },
       { label: 'Notificaciones', href: '/admin/notifications', icon: Bell },
       { label: 'Exportaciones', href: '/admin/exports', icon: Download },
-      { label: 'Configuración', href: '/admin/settings', icon: Settings },
+      // { label: 'Configuración', href: '/admin/settings', icon: Settings },
     ],
   },
   {

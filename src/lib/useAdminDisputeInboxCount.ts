@@ -1,17 +1,17 @@
-import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
-import { tabFilterRows } from '@/components/admin/results/adminResultsReviewUtils'
-import { getAdminResults } from '@/services/admin'
+import { getAdminDisputedResults } from '@/services/admin'
 
-/** Partidos en `score_disputed` — misma bandeja que `/admin/notifications`. */
+/** Refutaciones recientes: vuelven a `pending_score`, pero conservan `disputed_by` para la bandeja admin. */
 export function useAdminDisputeInboxCount() {
-  const resultsQ = useQuery({ queryKey: ['admin-results'], queryFn: getAdminResults })
+  const resultsQ = useQuery({
+    queryKey: ['admin-disputed-results'],
+    queryFn: getAdminDisputedResults,
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
+  })
 
-  const count = useMemo(() => {
-    if (!resultsQ.data) return 0
-    return tabFilterRows(resultsQ.data, 'disputed').length
-  }, [resultsQ.data])
+  const count = resultsQ.data?.length ?? 0
 
   return { count, isLoading: resultsQ.isLoading }
 }

@@ -6,6 +6,7 @@ import { computeGroupRanking } from '@/utils/ranking'
 
 export type TournamentClosureCounts = {
   pendingScore: number
+  pendingScoreWithoutMarker: number
   scoreSubmitted: number
   scoreDisputed: number
   playerConfirmed: number
@@ -17,12 +18,14 @@ export type TournamentClosureBlockersResult = {
   canClose: boolean
   counts: TournamentClosureCounts
   messages: string[]
+  canCloseWithDefaultRules: boolean
 }
 
 export async function getTournamentClosureBlockers(tournamentId: string): Promise<TournamentClosureBlockersResult> {
   const groups = await getAdminGroupsForTournament(tournamentId)
   const counts: TournamentClosureCounts = {
     pendingScore: 0,
+    pendingScoreWithoutMarker: 0,
     scoreSubmitted: 0,
     scoreDisputed: 0,
     playerConfirmed: 0,
@@ -37,8 +40,12 @@ export async function getTournamentClosureBlockers(tournamentId: string): Promis
       if (m.status !== 'closed' && m.status !== 'cancelled') {
         counts.openMatches += 1
       }
-      if (m.status === 'pending_score') counts.pendingScore += 1
-      else if (m.status === 'score_submitted') counts.scoreSubmitted += 1
+      if (m.status === 'pending_score') {
+        counts.pendingScore += 1
+        if (!m.score_raw?.length && !m.winner_id) {
+          counts.pendingScoreWithoutMarker += 1
+        }
+      } else if (m.status === 'score_submitted') counts.scoreSubmitted += 1
       else if (m.status === 'score_disputed') counts.scoreDisputed += 1
       else if (m.status === 'player_confirmed') counts.playerConfirmed += 1
     }
@@ -59,14 +66,59 @@ export async function getTournamentClosureBlockers(tournamentId: string): Promis
   }
 
   const canClose = counts.openMatches === 0
+  const canCloseWithDefaultRules =
+    !canClose &&
+    counts.pendingScore > 0 &&
+    counts.pendingScore === counts.pendingScoreWithoutMarker &&
+    counts.openMatches === counts.pendingScoreWithoutMarker &&
+    counts.scoreSubmitted === 0 &&
+    counts.scoreDisputed === 0 &&
+    counts.playerConfirmed === 0
 
-  return { canClose, counts, messages }
+  return { canClose, counts, messages, canCloseWithDefaultRules }
 }
 
-export async function finishTournament(params: { tournamentId: string; closedBy: string }): Promise<void> {
+async function applyDefaultClosureForUnreportedMatches(params: {
+  tournamentId: string
+  closedBy: string
+}): Promise<number> {
+  const now = new Date().toISOString()
+  const { data, error } = await supabase
+    .from('matches')
+    .update({
+      status: 'closed',
+      result_type: 'double_penalty',
+      score_raw: null,
+      winner_id: null,
+      admin_validated_by: params.closedBy,
+      admin_validated_at: now,
+      closed_at: now,
+      updated_by: params.closedBy,
+      updated_at: now,
+      admin_notes: 'Cierre de torneo: partido sin marcador, aplica doble penalizacion por reglas.',
+    })
+    .eq('tournament_id', params.tournamentId)
+    .eq('status', 'pending_score')
+    .is('winner_id', null)
+    .select('id')
+
+  if (error) throw error
+  return data?.length ?? 0
+}
+
+export async function finishTournament(params: {
+  tournamentId: string
+  closedBy: string
+  applyMissingScoresAsDoublePenalty?: boolean
+}): Promise<void> {
   const { tournamentId, closedBy } = params
 
-  const blockers = await getTournamentClosureBlockers(tournamentId)
+  let blockers = await getTournamentClosureBlockers(tournamentId)
+  if (!blockers.canClose && params.applyMissingScoresAsDoublePenalty && blockers.canCloseWithDefaultRules) {
+    await applyDefaultClosureForUnreportedMatches({ tournamentId, closedBy })
+    blockers = await getTournamentClosureBlockers(tournamentId)
+  }
+
   if (!blockers.canClose) {
     const intro = 'No puedes cerrar este torneo todavía.'
     const detail = blockers.messages.length > 0 ? blockers.messages.join('\n') : 'Hay partidos u operaciones pendientes.'

@@ -1,6 +1,8 @@
 // @ts-nocheck — mismo caso que otras Edge Functions: cliente sin Database genérico.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
 
+import { formatAuthPasswordError, isPasswordLongEnough, passwordMinLengthError } from '../_shared/passwordPolicy.ts'
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -98,6 +100,19 @@ async function ensureGroupMembership(
   return null
 }
 
+async function assignPlayerExternalId(
+  adminClient: ReturnType<typeof createClient>,
+  uid: string,
+): Promise<{ externalId: string | null; error: string | null }> {
+  const { data, error } = await adminClient.rpc('assign_next_player_external_id', {
+    p_user_id: uid,
+    p_min_external_id: 95,
+  })
+
+  if (error) return { externalId: null, error: error.message }
+  return { externalId: typeof data === 'string' ? data : null, error: null }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { status: 200, headers: corsHeaders })
@@ -134,7 +149,9 @@ Deno.serve(async (req) => {
     return err(parsedPhone.error, 400)
   }
   if (!fullName) return err('El nombre es obligatorio', 400)
-  if (password.length < 6) return err('La contraseña temporal debe tener al menos 6 caracteres', 400)
+  if (!isPasswordLongEnough(password)) {
+    return err(passwordMinLengthError('La contraseña temporal'), 400)
+  }
 
   const categoryId = body.categoryId?.trim() || null
   if (!categoryId) return err('La categoría es obligatoria', 400)
@@ -191,7 +208,7 @@ Deno.serve(async (req) => {
   })
 
   if (authErr || !created.user) {
-    return err(authErr?.message ?? 'No se pudo crear el usuario', 400)
+    return err(formatAuthPasswordError(authErr?.message ?? 'No se pudo crear el usuario'), 400)
   }
 
   const uid = created.user.id
@@ -211,6 +228,16 @@ Deno.serve(async (req) => {
   if (upErr) {
     await admin.auth.admin.deleteUser(uid)
     return err(upErr.message, 500)
+  }
+
+  let externalId: string | null = null
+  if (role === 'player') {
+    const assigned = await assignPlayerExternalId(admin, uid)
+    if (assigned.error) {
+      await admin.auth.admin.deleteUser(uid)
+      return err(assigned.error, 500)
+    }
+    externalId = assigned.externalId
   }
 
   const { error: credErr } = await admin.from('admin_user_credentials').upsert({
@@ -237,5 +264,5 @@ Deno.serve(async (req) => {
     }
   }
 
-  return ok({ userId: uid, phone: parsedPhone.digits })
+  return ok({ userId: uid, phone: parsedPhone.digits, externalId })
 })

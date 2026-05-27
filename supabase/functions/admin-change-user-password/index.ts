@@ -1,5 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
 
+import { formatAuthPasswordError, isPasswordLongEnough, passwordMinLengthError } from '../_shared/passwordPolicy.ts'
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -41,7 +43,9 @@ Deno.serve(async (req) => {
   const targetId = String(body.userId ?? '').trim()
   const newPassword = String(body.newPassword ?? '').trim()
   if (!targetId) return err('Usuario no válido', 400)
-  if (newPassword.length < 6) return err('La contraseña debe tener al menos 6 caracteres', 400)
+  if (!isPasswordLongEnough(newPassword)) {
+    return err(passwordMinLengthError(), 400)
+  }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -70,7 +74,7 @@ Deno.serve(async (req) => {
   const { error: pwErr } = await admin.auth.admin.updateUserById(targetId, {
     password: newPassword,
   })
-  if (pwErr) return err(pwErr.message, 400)
+  if (pwErr) return err(formatAuthPasswordError(pwErr.message), 400)
 
   const { error: credErr } = await admin.from('admin_user_credentials').upsert({
     user_id: targetId,

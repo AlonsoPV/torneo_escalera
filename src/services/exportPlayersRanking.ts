@@ -378,7 +378,7 @@ export function downloadPlayersRankingExcel(rows: ExportablePlayerRankingRow[], 
   const fecha = new Date().toISOString().slice(0, 10)
   triggerDownload(
     new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
-    `export_jugadores_ranking_${safe}_${fecha}.xlsx`,
+    `export_jugadores_${safe}_${fecha}.xlsx`,
   )
 }
 
@@ -390,7 +390,7 @@ export function downloadPlayersRankingCsv(rows: ExportablePlayerRankingRow[], to
   const bom = '\uFEFF'
   const safe = sanitizeExportFilenameSegment(tournamentSlug)
   const fecha = new Date().toISOString().slice(0, 10)
-  triggerDownload(new Blob([bom + csv], { type: 'text/csv;charset=utf-8' }), `export_jugadores_ranking_${safe}_${fecha}.csv`)
+  triggerDownload(new Blob([bom + csv], { type: 'text/csv;charset=utf-8' }), `export_jugadores_${safe}_${fecha}.csv`)
 }
 
 export async function listExportGroupOptions(tournamentId: string): Promise<Pick<Group, 'id' | 'name' | 'group_category_id' | 'order_index'>[]> {

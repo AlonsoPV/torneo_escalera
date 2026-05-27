@@ -154,10 +154,13 @@ export function patchTournamentDashboardCachesForMatch(
     const old = query.state.data as TournamentDashboardData | undefined
     if (!old) continue
     const f = query.queryKey[2]
-    if (!f || typeof f !== 'object') continue
+    const filters =
+      f && typeof f === 'object'
+        ? (f as TournamentDashboardFiltersInput)
+        : ({ groupCategoryId: 'all', groupId: 'all' } satisfies TournamentDashboardFiltersInput)
     qc.setQueryData(
       query.queryKey,
-      patchCachedTournamentDashboardData(old, updatedMatch, f as TournamentDashboardFiltersInput),
+      patchCachedTournamentDashboardData(old, updatedMatch, filters),
     )
   }
 }

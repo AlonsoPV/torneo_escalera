@@ -1,4 +1,4 @@
-import { Flag, LayoutGrid, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Flag, LayoutGrid, Pencil, Plus, Shuffle, Trash2, UserCheck, UsersRound } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
@@ -30,6 +30,13 @@ import {
   listGroupCategories,
   updateGroupCategory,
 } from '@/services/groupCategories'
+import {
+  bulkAssignPlayersToIncompleteGroups,
+  bulkCreateNamedGroupsFromPlayerPool,
+  chunkProfilesForNewGroups,
+  profileLabelForDistribution,
+  sortAdminGroupsForDistribution,
+} from '@/services/adminGroupQuickDistribution'
 import { createGroup, createMissingGroupsOnePerCategory } from '@/services/groups'
 import { generateRoundRobinMatches, type GenerateRrMode } from '@/services/matches'
 import { listProfilesForAdmin } from '@/services/profiles'
@@ -39,6 +46,111 @@ import { useAuthStore } from '@/stores/authStore'
 
 /** Placeholder controlado hasta que `useEffect` asigne el torneo por defecto (evita `value={undefined}` → warning de modo mixto). */
 const ADMIN_GROUPS_TOURNAMENT_PENDING = '__admin_groups_tournament_pending__'
+
+function FreePlayersPanel({
+  freeCount,
+  incompleteCount,
+  fillSlots,
+  createGroupCount,
+  disabled,
+  isFilling,
+  isCreating,
+  onFillIncomplete,
+  onCreateGroups,
+}: {
+  freeCount: number
+  incompleteCount: number
+  fillSlots: number
+  createGroupCount: number
+  disabled?: boolean
+  isFilling?: boolean
+  isCreating?: boolean
+  onFillIncomplete: () => void
+  onCreateGroups: () => void
+}) {
+  const canFill = freeCount > 0 && fillSlots > 0
+  const canCreate = freeCount >= 2
+  const busy = Boolean(isFilling || isCreating)
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-[#D7E2DD] bg-white shadow-sm">
+      <div className="flex flex-col lg:flex-row">
+        <div className="min-w-0 flex-1 space-y-4 p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#E7F4EE] text-[#1F5A4C]">
+              <UsersRound className="size-5" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold tracking-tight text-[#102A43]">
+                Jugadores libres y armado de grupos
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[#64748B]">
+                Primero rellena cupos abiertos. Si sobran jugadores, crea grupos nuevos y deja sus cruces listos en el
+                mismo flujo.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+            <div className="min-w-0 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">Libres</p>
+              <p className="mt-1 font-mono text-2xl font-bold text-[#102A43]">{freeCount}</p>
+            </div>
+            <div className="min-w-0 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">Incompletos</p>
+              <p className="mt-1 font-mono text-2xl font-bold text-[#102A43]">{incompleteCount}</p>
+            </div>
+            <div className="min-w-0 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">Cupos</p>
+              <p className="mt-1 font-mono text-2xl font-bold text-[#102A43]">{fillSlots}</p>
+            </div>
+            <div className="min-w-0 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">Grupos nuevos</p>
+              <p className="mt-1 font-mono text-2xl font-bold text-[#102A43]">{createGroupCount}</p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-[#E2E8F0] bg-[#FCFDFD] px-3 py-2 text-xs leading-relaxed text-[#475569]">
+            {freeCount === 0
+              ? 'No hay jugadores libres pendientes de asignar en este torneo.'
+              : canFill
+                ? `Recomendación: rellena hasta ${Math.min(freeCount, fillSlots)} cupo(s) antes de crear grupos nuevos; si tras eso siguen incompletos, usa más abajo «Distribución masiva» para los cruces faltantes (2–5 jugadores por grupo).`
+                : 'No hay cupos abiertos: crea grupos nuevos para los jugadores libres. Revisa después la distribución masiva si faltaran partidos en algún grupo.'}
+          </div>
+        </div>
+
+        <div className="w-full shrink-0 border-t border-[#E2E8F0] bg-[#F8FAFC] p-4 sm:p-5 lg:w-[22rem] lg:border-l lg:border-t-0">
+          <div className="grid gap-2">
+            <Button
+              type="button"
+              className="h-10 w-full gap-2 bg-[#1F5A4C] hover:bg-[#174a3f]"
+              disabled={disabled || !canFill || busy}
+              onClick={onFillIncomplete}
+            >
+              <UserCheck className="size-4" aria-hidden />
+              {isFilling ? 'Rellenando...' : 'Rellenar incompletos'}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 w-full gap-2 border-[#BED4CA] bg-white"
+              disabled={disabled || !canCreate || busy}
+              onClick={onCreateGroups}
+            >
+              <Shuffle className="size-4" aria-hidden />
+              {isCreating ? 'Creando...' : 'Crear grupos y partidos'}
+            </Button>
+          </div>
+          <p className="mt-3 text-xs leading-relaxed text-[#64748B]">
+            {freeCount === 1
+              ? 'Se necesitan al menos 2 jugadores libres para crear un grupo con partidos.'
+              : 'Operación rápida: asigna jugadores, completa cupos y crea RR con la misma lógica que «Distribución de cruces», sin repetir trabajo grupo por grupo.'}
+          </p>
+        </div>
+      </div>
+    </section>
+  )
+}
 
 function GroupCategoriesPanel({
   categories,
@@ -457,6 +569,104 @@ export function AdminGroupsPage() {
 
   const groupsInTournament = useMemo(() => groupsQ.data ?? [], [groupsQ.data])
 
+  const assignedUserIdsInTournament = useMemo(() => {
+    const ids = new Set<string>()
+    for (const group of groupsInTournament) {
+      for (const player of group.players) ids.add(player.user_id)
+    }
+    return ids
+  }, [groupsInTournament])
+
+  const freePlayers = useMemo(
+    () =>
+      (profilesQ.data ?? [])
+        .filter((profile) => profile.role === 'player' && profile.status !== 'inactive' && !assignedUserIdsInTournament.has(profile.id))
+        .sort((a, b) =>
+          profileLabelForDistribution(a).localeCompare(profileLabelForDistribution(b), 'es', {
+            numeric: true,
+            sensitivity: 'base',
+          }),
+        ),
+    [assignedUserIdsInTournament, profilesQ.data],
+  )
+
+  const incompleteGroups = useMemo(
+    () =>
+      groupsInTournament
+        .filter((group) => group.players.length > 0 && group.players.length < (group.max_players ?? 5))
+        .sort(sortAdminGroupsForDistribution),
+    [groupsInTournament],
+  )
+
+  const freeSlotsInIncompleteGroups = useMemo(
+    () =>
+      incompleteGroups.reduce(
+        (sum, group) => sum + Math.max(0, (group.max_players ?? 5) - group.players.length),
+        0,
+      ),
+    [incompleteGroups],
+  )
+
+  const estimatedNewGroupsForFreePlayers = chunkProfilesForNewGroups(freePlayers, 5).filter((chunk) => chunk.length >= 2)
+    .length
+
+  const fillIncompleteGroupsMut = useMutation({
+    mutationFn: async () => {
+      if (!tournamentId) throw new Error('Selecciona un torneo.')
+      if (freePlayers.length === 0) throw new Error('No hay jugadores libres para asignar.')
+      if (incompleteGroups.length === 0) throw new Error('No hay grupos incompletos con cupo disponible.')
+
+      return bulkAssignPlayersToIncompleteGroups({
+        incompleteGroupsSorted: incompleteGroups,
+        queue: freePlayers,
+        label: profileLabelForDistribution,
+      })
+    },
+    onSuccess: async ({ assigned }) => {
+      toast.success(`Se asignaron ${assigned} jugador(es) a grupos incompletos.`)
+      await Promise.all([
+        refreshGroups(),
+        qc.invalidateQueries({ queryKey: ['admin-matches'] }),
+        qc.invalidateQueries({ queryKey: ['matches'] }),
+        qc.invalidateQueries({ queryKey: ['tournament-dashboard'] }),
+      ])
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'No se pudieron rellenar los grupos'),
+  })
+
+  const createGroupsForFreePlayersMut = useMutation({
+    mutationFn: async () => {
+      if (!tournamentId) throw new Error('Selecciona un torneo.')
+      if (freePlayers.length === 0) throw new Error('No hay jugadores libres para agrupar.')
+      if (freePlayers.length < 2) throw new Error('Se necesitan al menos 2 jugadores libres para crear partidos.')
+
+      const nextOrder =
+        groupsInTournament.length === 0
+          ? 0
+          : Math.max(...groupsInTournament.map((group) => group.order_index ?? 0), 0) + 1
+
+      return bulkCreateNamedGroupsFromPlayerPool({
+        tournamentId,
+        startingGroupTitleNumber: groupsInTournament.length + 1,
+        startingOrderIndex: nextOrder,
+        freePlayers,
+        label: profileLabelForDistribution,
+        createdBy: currentUserId,
+      })
+    },
+    onSuccess: async ({ createdGroups, assignedPlayers, roundRobinMatchesInserted }) => {
+      toast.success(
+        `Listo: ${createdGroups} grupo(s), ${assignedPlayers} jugador(es) y ${roundRobinMatchesInserted} partido(s) nuevos (round-robin, mismas reglas que la distribución masiva).`,
+      )
+      await Promise.all([
+        refreshGroups(),
+        qc.invalidateQueries({ queryKey: ['admin-matches'] }),
+        qc.invalidateQueries({ queryKey: ['matches'] }),
+      ])
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'No se pudieron crear grupos'),
+  })
+
   /** Evita UUID en el trigger si Base UI no enlaza el ítem seleccionado. */
   const headerTournamentLabel = useMemo(() => {
     if (!tournamentId) return undefined
@@ -586,12 +796,26 @@ export function AdminGroupsPage() {
         </section>
       ) : null}
 
+      {tournamentId ? (
+        <FreePlayersPanel
+          freeCount={freePlayers.length}
+          incompleteCount={incompleteGroups.length}
+          fillSlots={freeSlotsInIncompleteGroups}
+          createGroupCount={estimatedNewGroupsForFreePlayers}
+          disabled={groupsQ.isLoading || profilesQ.isLoading || actionMut.isPending}
+          isFilling={fillIncompleteGroupsMut.isPending}
+          isCreating={createGroupsForFreePlayersMut.isPending}
+          onFillIncomplete={() => fillIncompleteGroupsMut.mutate()}
+          onCreateGroups={() => createGroupsForFreePlayersMut.mutate()}
+        />
+      ) : null}
+
       {tournamentId && groupsInTournament.length > 0 ? (
         <section className="space-y-4" aria-labelledby="bulk-rr-heading">
           <AdminSectionTitle
             id="bulk-rr-heading"
-            title="Cruces round-robin masivos"
-            description="Genera o completa la distribución de partidos para todos los grupos del torneo seleccionado, según modo y alcance."
+            title="Distribución masiva round-robin"
+            description="Genera o completa partidos en bloque (mismo motor que al crear grupos desde jugadores libres). Elige modo y alcance por cupo o por grupos con 2 a 5 jugadores."
           />
           <TournamentRoundRobinBulkCard
             tournamentId={tournamentId}

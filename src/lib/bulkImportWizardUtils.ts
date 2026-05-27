@@ -1,4 +1,5 @@
 import type { BulkImportPreviewRow } from '@/lib/bulkUserImportPreview'
+import { MIN_PASSWORD_LENGTH } from '@/lib/passwordPolicy'
 
 /** Documentación de columnas reconocidas (coincide con `mapSheetRow` en servicios). */
 export const BULK_IMPORT_COLUMN_GUIDE = [
@@ -30,7 +31,7 @@ export const BULK_IMPORT_COLUMN_GUIDE = [
     headers: 'contraseña, password',
     field: 'Contraseña',
     required: 'Condicional',
-    hint: '8 dígitos para altas nuevas; vacía en actualización para no cambiar.',
+    hint: `Mínimo ${MIN_PASSWORD_LENGTH} caracteres para altas nuevas; vacía en actualización para no cambiar.`,
   },
   {
     headers: 'cuenta',
@@ -43,6 +44,12 @@ export const BULK_IMPORT_COLUMN_GUIDE = [
     field: 'Rol',
     required: true,
     hint: 'player, admin o super_admin (super_admin solo si tu cuenta es super admin).',
+  },
+  {
+    headers: 'torneo, tournament',
+    field: 'Torneo',
+    required: false,
+    hint: 'Opcional. Si coincide con un torneo existente, el asistente lo selecciona para validar grupos.',
   },
   {
     headers: 'categoria, Categoría',

@@ -15,16 +15,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { AdminUserRecord } from '@/services/admin'
+import type { AdminGroupRecord, AdminUserRecord } from '@/services/admin'
 import { listPlayerCategories } from '@/services/playerCategories'
-import type { Group, UserRole } from '@/types/database'
+import type { UserRole } from '@/types/database'
 
 type Props = {
   users: AdminUserRecord[]
-  groups: Group[]
+  groups: AdminGroupRecord[]
   isLoading: boolean
   onUpdateUser: (input: {
     user: AdminUserRecord
+    phone: string
+    recoveryEmail: string | null
     fullName: string
     role: UserRole
     categoryId: string

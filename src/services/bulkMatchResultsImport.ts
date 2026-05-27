@@ -467,8 +467,15 @@ export async function buildMatchResultsImportPreview(
     const hasWinnerCell = Boolean(winnerIdCell)
 
     let effectiveResultType: MatchResultType = declaredResult
+    const openPendingWithoutScore =
+      mappedStatus === 'pending_score' &&
+      !hasWinnerCell &&
+      !anySets &&
+      (declaredResult === 'pending_score' || declaredResult === 'normal')
 
-    const effectiveStatus: MatchStatus =
+    const effectiveStatus: MatchStatus = openPendingWithoutScore
+      ? 'pending_score'
+      :
       mappedStatus === 'cancelled'
         ? 'cancelled'
         : historicalImportMode
@@ -476,7 +483,11 @@ export async function buildMatchResultsImportPreview(
           : mappedStatus
 
     let penaltyClosure = false
-    if (
+    if (openPendingWithoutScore) {
+      effectiveResultType = 'normal'
+      infoMessages.push('Partido abierto importado sin marcador; queda disponible para captura posterior.')
+      bumpKind('normalized')
+    } else if (
       effectiveResultType === 'not_reported' ||
       effectiveResultType === 'double_penalty' ||
       effectiveResultType === 'pending_score'
@@ -531,6 +542,7 @@ export async function buildMatchResultsImportPreview(
     if (effectiveStatus === 'cancelled') {
       winnerGroupPlayerId = null
     } else if (
+      !openPendingWithoutScore &&
       !penaltyClosure &&
       !importResultTypeAllowsNullWinner(effectiveResultType) &&
       !winnerGroupPlayerId
@@ -578,7 +590,9 @@ export async function buildMatchResultsImportPreview(
     let scoreRaw: ScoreSet[] | null = null
     let effectiveGameType: MatchGameType = gameTypeParsed
 
-    if (effectiveStatus === 'cancelled') {
+    if (openPendingWithoutScore) {
+      scoreRaw = null
+    } else if (effectiveStatus === 'cancelled') {
       scoreRaw = null
     } else if (penaltyClosure) {
       scoreRaw = IMPORT_ADMIN_PENALTY_SCORE.map((s) => ({ ...s }))
@@ -755,6 +769,7 @@ export async function buildMatchResultsImportPreview(
     }
 
     if (
+      !openPendingWithoutScore &&
       !penaltyClosure &&
       effectiveStatus !== 'cancelled' &&
       !importResultTypeAllowsNullWinner(effectiveResultType) &&
@@ -796,6 +811,10 @@ export async function buildMatchResultsImportPreview(
 
 function mapPgError(e: { message: string }): string {
   return e.message
+}
+
+function isOpenPendingResolvedRow(r: NonNullable<MatchResultsImportPreviewRow['resolved']>): boolean {
+  return r.status === 'pending_score' && !r.scoreRaw && !r.winnerGroupPlayerId
 }
 
 export type ApplyMatchResultsImportResult = {
@@ -843,6 +862,30 @@ async function applyOneResolvedMatchRow(input: {
         closed_at: null,
         admin_validated_at: null,
         admin_validated_by: null,
+      })
+      .eq('id', r.matchId)
+    if (upErr) throw new Error(mapPgError(upErr))
+    return
+  }
+
+  if (isOpenPendingResolvedRow(r)) {
+    const { error: upErr } = await supabase
+      .from('matches')
+      .update({
+        status: 'pending_score',
+        winner_id: null,
+        score_raw: null,
+        result_type: 'normal',
+        game_type: r.gameType,
+        updated_by: input.uploadedBy,
+        updated_at: new Date().toISOString(),
+        closed_at: null,
+        admin_validated_at: null,
+        admin_validated_by: null,
+        score_submitted_by: null,
+        score_submitted_at: null,
+        opponent_confirmed_by: null,
+        opponent_confirmed_at: null,
       })
       .eq('id', r.matchId)
     if (upErr) throw new Error(mapPgError(upErr))
@@ -972,13 +1015,23 @@ export async function applyMatchResultsImport(input: {
     for (const pr of chunk) {
       const payload = rowToAuditPayload(pr.cells) as Json
       const r = pr.resolved!
-      const res =
+      let res =
         resultByRow.get(pr.rowNumber) ??
         ({
           rowNumber: pr.rowNumber,
           ok: false,
           message: 'Respuesta incompleta del servidor de importación.',
-        } as const)
+        } as { rowNumber: number; ok: boolean; message?: string })
+      if (!res.ok && isOpenPendingResolvedRow(r)) {
+        try {
+          await applyOneResolvedMatchRow({ uploadedBy: input.uploadedBy, resolved: r })
+          hadSequentialFallback = true
+          res = { rowNumber: pr.rowNumber, ok: true }
+        } catch (e) {
+          const raw = e instanceof Error ? e.message : 'Error desconocido'
+          res = { rowNumber: pr.rowNumber, ok: false, message: humanizeMatchImportError(raw) }
+        }
+      }
       if (res.ok) {
         success += 1
         rowDetailsMap.set(pr.rowNumber, { ok: true })

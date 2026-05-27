@@ -1,9 +1,6 @@
 import {
   ChevronDown,
-  Download,
-  FileSpreadsheet,
   KeyRound,
-  MoreHorizontal,
   Pencil,
   RotateCcw,
   Search,
@@ -20,9 +17,11 @@ import {
   AdminDataTable,
   ADMIN_TABLE_ROW_CHECKBOX_CLASS,
   type AdminDataTableColumn,
+  type AdminDataTableSort,
 } from '@/components/admin/shared/AdminDataTable'
 import { AdminEmptyState } from '@/components/admin/shared/AdminEmptyState'
 import { AdminPageHeader } from '@/components/admin/shared/AdminPageHeader'
+import { AdminMetricCard, ADMIN_METRIC_GRID_4 } from '@/components/admin/shared/AdminMetricCard'
 import { AdminSectionTitle } from '@/components/admin/shared/AdminSectionTitle'
 import { AdminStatusBadge } from '@/components/admin/shared/AdminStatusBadge'
 import { AdminToolbar } from '@/components/admin/shared/AdminToolbar'
@@ -30,9 +29,8 @@ import { groupFilterOptionsFromRecords } from '@/components/admin/shared/adminMa
 import { ChangePasswordModal } from '@/components/admin/users/ChangePasswordModal'
 import { CreateUserModal } from '@/components/admin/users/CreateUserModal'
 import { EditUserModal } from '@/components/admin/users/EditUserModal'
-import { AvailablePlayersPoolSection } from '@/components/admin/users/AvailablePlayersPoolSection'
 import { UserBulkImportSection } from '@/components/admin/users/UserBulkImportSection'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -43,14 +41,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { TableCell, TableRow } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatRecoveryEmailDisplay, recoveryEmailComplete } from '@/lib/profileEmail'
@@ -67,35 +57,48 @@ import {
   updateUser,
   type AdminUserRecord,
 } from '@/services/admin'
+import { invokeAdminUpdateUserContact } from '@/services/authEdge'
 import { listPlayerCategories } from '@/services/playerCategories'
 import { useAuthStore } from '@/stores/authStore'
 import type { UserRole } from '@/types/database'
-import {
-  adminUserExportRow,
-  downloadAdminUserExportRowsXlsx,
-  downloadUsersImportTemplate,
-  downloadUsersImportTemplateCsv,
-  exportFilteredUsersCsv,
-  exportFilteredUsersXlsx,
-  exportUsersCredentialsCsv,
-  exportUsersCredentialsXlsx,
-} from '@/services/adminUsersExport'
 
 const PAGE_SIZE = 25
+
+type UserSortKey = 'id' | 'name' | 'phone' | 'recovery' | 'recovery_status' | 'group' | 'account'
+
+function userSortValue(user: AdminUserRecord, key: UserSortKey): string {
+  switch (key) {
+    case 'id':
+      return user.external_id ?? ''
+    case 'name':
+      return user.full_name ?? ''
+    case 'phone':
+      return user.phone ?? ''
+    case 'recovery':
+      return formatRecoveryEmailDisplay(user.email)
+    case 'recovery_status':
+      return recoveryEmailComplete(user) ? '1' : '0'
+    case 'group':
+      return user.group?.name ?? ''
+    case 'account':
+      return user.status ?? ''
+    default:
+      return ''
+  }
+}
+
+function compareUsers(a: AdminUserRecord, b: AdminUserRecord, sort: { key: UserSortKey; direction: 'asc' | 'desc' }) {
+  const av = userSortValue(a, sort.key)
+  const bv = userSortValue(b, sort.key)
+  const cmp = av.localeCompare(bv, 'es', { numeric: true, sensitivity: 'base' })
+  return sort.direction === 'asc' ? cmp : -cmp
+}
 
 function userMatchesGroupFilter(user: AdminUserRecord, groupFilter: string): boolean {
   if (groupFilter === 'all') return true
   const gid = user.group?.id
   if (!gid) return false
   return groupFilter.split('|').filter(Boolean).includes(gid)
-}
-
-function scrollToBulkImportSection(): void {
-  const anchor = document.getElementById('admin-user-bulk-import-anchor')
-  anchor?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  if (anchor instanceof HTMLDetailsElement) {
-    anchor.open = true
-  }
 }
 
 export function AdminUsersPage() {
@@ -107,6 +110,7 @@ export function AdminUsersPage() {
   const [groupFilter, setGroupFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState<'all' | string>('all')
   const [estadoFilter, setEstadoFilter] = useState<'all' | 'pendiente' | 'cuenta_activa' | 'cuenta_inactiva'>('all')
+  const [sort, setSort] = useState<AdminDataTableSort>({ key: 'name', direction: 'asc' })
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -119,6 +123,15 @@ export function AdminUsersPage() {
   const categories = useMemo(() => categoriesQ.data ?? [], [categoriesQ.data])
   const groupOpts = useMemo(() => groupFilterOptionsFromRecords(groups), [groups])
 
+  /** Orden estable para el desplegable de categorías (solo UI de filtros). */
+  const categoriesSortedForFilter = useMemo(
+    () =>
+      [...categories].sort((a, b) =>
+        a.name.localeCompare(b.name, 'es', { numeric: true, sensitivity: 'base' }),
+      ),
+    [categories],
+  )
+
   const refreshUsers = async () => {
     await qc.invalidateQueries({ queryKey: ['admin-users'] })
     await qc.invalidateQueries({ queryKey: ['admin-groups'] })
@@ -128,16 +141,30 @@ export function AdminUsersPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset explícito de página al cambiar criterios
     setVisibleCount(PAGE_SIZE)
-  }, [deferredSearch, roleFilter, groupFilter, categoryFilter, estadoFilter])
+  }, [deferredSearch, roleFilter, groupFilter, categoryFilter, estadoFilter, sort.key, sort.direction])
+
+  const handleSortChange = useCallback((next: AdminDataTableSort) => {
+    setSort(next)
+  }, [])
 
   const updateUserMut = useMutation({
     mutationFn: async (input: {
       user: AdminUserRecord
+      phone: string
+      recoveryEmail: string | null
       fullName: string
       role: UserRole
       categoryId: string
       groupId?: string
     }) => {
+      if (!input.phone.trim()) {
+        throw new Error('El celular es obligatorio.')
+      }
+      await invokeAdminUpdateUserContact({
+        userId: input.user.id,
+        phone: input.phone,
+        recoveryEmail: input.recoveryEmail,
+      })
       await updateUser(input.user.id, {
         full_name: input.fullName || null,
         role: input.role,
@@ -178,6 +205,14 @@ export function AdminUsersPage() {
     }
   }, [usersQ.data])
 
+  const userMetricContext = useMemo(() => {
+    const { total, jugadores } = stats
+    return {
+      playersPct: total > 0 ? Math.round((jugadores / total) * 100) : 0,
+      otrosRoles: total - jugadores,
+    }
+  }, [stats.total, stats.jugadores])
+
   const filteredUsers = useMemo(() => {
     const normalizedSearch = deferredSearch.trim().toLowerCase()
     return (usersQ.data ?? []).filter((user) => {
@@ -185,6 +220,7 @@ export function AdminUsersPage() {
         !normalizedSearch ||
         user.full_name?.toLowerCase().includes(normalizedSearch) ||
         user.phone?.toLowerCase().includes(normalizedSearch) ||
+        user.external_id?.toLowerCase().includes(normalizedSearch) ||
         formatRecoveryEmailDisplay(user.email).toLowerCase().includes(normalizedSearch)
       const matchesRole = roleFilter === 'all' || user.role === roleFilter
       const matchesGroup = userMatchesGroupFilter(user, groupFilter)
@@ -198,46 +234,32 @@ export function AdminUsersPage() {
     })
   }, [categoryFilter, deferredSearch, estadoFilter, groupFilter, roleFilter, usersQ.data])
 
+  const sortedFilteredUsers = useMemo(() => {
+    const list = [...filteredUsers]
+    list.sort((a, b) => compareUsers(a, b, sort as { key: UserSortKey; direction: 'asc' | 'desc' }))
+    return list
+  }, [filteredUsers, sort])
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- recorta selección a filas aún visibles con filtros
     setSelectedIds((prev) => {
-      const allowed = new Set(filteredUsers.map((u) => u.id))
+      const allowed = new Set(sortedFilteredUsers.map((u) => u.id))
       const next = new Set<string>()
       for (const id of prev) {
         if (allowed.has(id)) next.add(id)
       }
       return next
     })
-  }, [filteredUsers])
+  }, [sortedFilteredUsers])
 
-  const visibleUsers = useMemo(() => filteredUsers.slice(0, visibleCount), [filteredUsers, visibleCount])
-  const hayMas = visibleCount < filteredUsers.length
-  const totalOcultos = filteredUsers.length - visibleCount
+  const visibleUsers = useMemo(() => sortedFilteredUsers.slice(0, visibleCount), [sortedFilteredUsers, visibleCount])
+  const hayMas = visibleCount < sortedFilteredUsers.length
+  const totalOcultos = sortedFilteredUsers.length - visibleCount
 
   const selectedUsers = useMemo(
-    () => filteredUsers.filter((u) => selectedIds.has(u.id)),
-    [filteredUsers, selectedIds],
+    () => sortedFilteredUsers.filter((u) => selectedIds.has(u.id)),
+    [sortedFilteredUsers, selectedIds],
   )
-
-  const requireFilteredUsersToast = (): boolean => {
-    if (!filteredUsers.length) {
-      toast.message('No hay usuarios que coincidan con los filtros actuales.')
-      return false
-    }
-    return true
-  }
-
-  const exportSelectionRows = (): void => {
-    if (!selectedUsers.length) {
-      toast.message('Selecciona al menos un usuario para exportar.')
-      return
-    }
-    downloadAdminUserExportRowsXlsx(
-      selectedUsers.map((u) => adminUserExportRow(u, categories)),
-      `usuarios_seleccion_mega_varonil_${new Date().toISOString().slice(0, 10)}.xlsx`,
-    )
-    toast.success('Excel generado con la selección')
-  }
 
   const toggleSelectionRow = useCallback((id: string, selected: boolean) => {
     setSelectedIds((prev) => {
@@ -251,16 +273,16 @@ export function AdminUsersPage() {
   const toggleSelectionAllVisible = useCallback((select: boolean) => {
     setSelectedIds((prev) => {
       const next = new Set(prev)
-      const keys = filteredUsers.slice(0, visibleCount).map((u) => u.id)
+      const keys = sortedFilteredUsers.slice(0, visibleCount).map((u) => u.id)
       if (select) keys.forEach((id) => next.add(id))
       else keys.forEach((id) => next.delete(id))
       return next
     })
-  }, [filteredUsers, visibleCount])
+  }, [sortedFilteredUsers, visibleCount])
 
   const selectAllFiltered = useCallback(() => {
-    setSelectedIds(new Set(filteredUsers.map((u) => u.id)))
-  }, [filteredUsers])
+    setSelectedIds(new Set(sortedFilteredUsers.map((u) => u.id)))
+  }, [sortedFilteredUsers])
 
   const allVisibleSelected =
     visibleUsers.length > 0 && visibleUsers.every((u) => selectedIds.has(u.id))
@@ -292,8 +314,25 @@ export function AdminUsersPage() {
   const columns = useMemo<AdminDataTableColumn<AdminUserRecord>[]>(
     () => [
       {
+        key: 'id',
+        header: 'ID',
+        sortable: true,
+        className: 'w-[5.5rem]',
+        render: (user) => (
+          <span
+            id={`admin-user-cell-id-${user.id}`}
+            data-name="user-id-cell"
+            className="font-mono text-xs tabular-nums leading-tight text-[#64748B]"
+            title={user.external_id ?? undefined}
+          >
+            {user.external_id ?? '—'}
+          </span>
+        ),
+      },
+      {
         key: 'name',
         header: 'Nombre',
+        sortable: true,
         render: (user) => (
           <span className="text-xs font-medium leading-tight text-[#102A43]">{user.full_name ?? 'Sin nombre'}</span>
         ),
@@ -301,6 +340,7 @@ export function AdminUsersPage() {
       {
         key: 'phone',
         header: 'Celular',
+        sortable: true,
         render: (user) => (
           <span className="tabular-nums text-xs leading-tight text-[#334E68]">{user.phone ?? '—'}</span>
         ),
@@ -308,6 +348,7 @@ export function AdminUsersPage() {
       {
         key: 'recovery',
         header: 'Correo recuperación',
+        sortable: true,
         render: (user) => (
           <span className="max-w-[14rem] truncate text-xs leading-tight text-[#334E68]" title={formatRecoveryEmailDisplay(user.email)}>
             {formatRecoveryEmailDisplay(user.email)}
@@ -317,6 +358,7 @@ export function AdminUsersPage() {
       {
         key: 'recovery_status',
         header: 'Recuperación',
+        sortable: true,
         headerTitle:
           'Indica si ya registró un correo para recuperar contraseña. No confundir con la columna «Cuenta» (activo/desactivado por admin).',
         render: (user) =>
@@ -339,6 +381,7 @@ export function AdminUsersPage() {
       {
         key: 'group',
         header: 'Grupo',
+        sortable: true,
         render: (user) => (
           <span className="max-w-[10rem] truncate text-xs leading-tight" title={user.group?.name ?? 'Sin grupo'}>
             {user.group?.name ?? 'Sin grupo'}
@@ -348,6 +391,7 @@ export function AdminUsersPage() {
       {
         key: 'account',
         header: 'Cuenta',
+        sortable: true,
         headerTitle: 'Cuenta activa o desactivada por un administrador (no puede iniciar sesión si está desactivada).',
         render: (user) => (
           <AdminStatusBadge
@@ -361,10 +405,26 @@ export function AdminUsersPage() {
   )
 
   const groupTriggerLabel =
-    groupFilter === 'all' ? 'Todos los grupos' : (groupOpts.find((o) => o.value === groupFilter)?.label ?? 'Grupo')
+    groupFilter === 'all' ? 'Todos' : (groupOpts.find((o) => o.value === groupFilter)?.label ?? 'Grupo')
+
+  const roleTriggerLabel = roleFilter === 'all' ? 'Todos' : userRoleLabelEs(roleFilter)
+
+  const categoryTriggerLabel =
+    categoryFilter === 'all'
+      ? 'Todas'
+      : categoriesSortedForFilter.find((c) => c.id === categoryFilter)?.name ?? categories.find((c) => c.id === categoryFilter)?.name ?? 'Categoría'
+
+  const estadoTriggerLabel =
+    estadoFilter === 'all'
+      ? 'Todos'
+      : estadoFilter === 'pendiente'
+        ? 'Sin correo de recuperación'
+        : estadoFilter === 'cuenta_activa'
+          ? 'Cuenta activa (admin)'
+          : 'Cuenta desactivada (admin)'
 
   const loadMoreFooter =
-    hayMas && filteredUsers.length > 0 ? (
+    hayMas && sortedFilteredUsers.length > 0 ? (
       <TableRow className="border-0 hover:bg-transparent">
         <TableCell colSpan={columns.length + 1} className="py-2 text-center">
           <button
@@ -385,116 +445,10 @@ export function AdminUsersPage() {
       <AdminPageHeader
         eyebrow="Administración"
         title="Usuarios"
-        description="Administra jugadores, roles y credenciales. Exporta listados compatibles con la carga masiva (mismas columnas)."
+        description="Administra jugadores, roles y credenciales. Verás métricas en tarjetas (totales y pendientes por categoría/grupo), filtros y listado. La carga masiva está en «Dar de alta usuarios»."
       />
 
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/40 bg-muted/25 px-3 py-2.5">
-        <span className="mr-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Exportaciones</span>
-        <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5 text-xs" onClick={scrollToBulkImportSection}>
-          Importar usuarios
-        </Button>
-        <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5 text-xs" onClick={() => downloadUsersImportTemplate()}>
-          <Download className="size-3.5" aria-hidden />
-          Plantilla · Excel
-        </Button>
-        <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5 text-xs" onClick={() => downloadUsersImportTemplateCsv()}>
-          <Download className="size-3.5" aria-hidden />
-          Plantilla · CSV
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-9 gap-1.5 text-xs border-emerald-200 bg-emerald-50/70 text-emerald-950 hover:bg-emerald-100/80 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-50"
-          disabled={!filteredUsers.length}
-          onClick={() => {
-            if (!requireFilteredUsersToast()) return
-            exportUsersCredentialsXlsx(filteredUsers, categories)
-            toast.success('Credenciales (Excel)')
-          }}
-        >
-          <FileSpreadsheet className="size-3.5" aria-hidden />
-          Credenciales · Excel
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-9 gap-1.5 text-xs border-emerald-200 bg-emerald-50/70 text-emerald-950 hover:bg-emerald-100/80 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-50"
-          disabled={!filteredUsers.length}
-          onClick={() => {
-            if (!requireFilteredUsersToast()) return
-            exportUsersCredentialsCsv(filteredUsers, categories)
-            toast.success('Credenciales (CSV)')
-          }}
-        >
-          <FileSpreadsheet className="size-3.5" aria-hidden />
-          Credenciales · CSV
-        </Button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            type="button"
-            className={cn(
-              buttonVariants({ variant: 'secondary', size: 'sm' }),
-              'h-9 gap-1.5 text-xs shrink-0',
-            )}
-          >
-            <MoreHorizontal className="size-3.5" aria-hidden />
-            Exportar
-            <ChevronDown className="size-3.5 opacity-70" aria-hidden />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
-            <DropdownMenuLabel>Credenciales (filtros actuales)</DropdownMenuLabel>
-            <DropdownMenuItem
-              disabled={!filteredUsers.length}
-              onClick={() => {
-                if (!requireFilteredUsersToast()) return
-                exportUsersCredentialsXlsx(filteredUsers, categories)
-                toast.success('Credenciales (Excel)')
-              }}
-            >
-              Credenciales · Excel
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={!filteredUsers.length}
-              onClick={() => {
-                if (!requireFilteredUsersToast()) return
-                exportUsersCredentialsCsv(filteredUsers, categories)
-                toast.success('Credenciales (CSV)')
-              }}
-            >
-              Credenciales · CSV
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Usuarios filtrados</DropdownMenuLabel>
-            <DropdownMenuItem
-              disabled={!filteredUsers.length}
-              onClick={() => {
-                if (!requireFilteredUsersToast()) return
-                exportFilteredUsersXlsx(filteredUsers, categories)
-                toast.success('Usuarios filtrados (Excel)')
-              }}
-            >
-              Excel
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={!filteredUsers.length}
-              onClick={() => {
-                if (!requireFilteredUsersToast()) return
-                exportFilteredUsersCsv(filteredUsers, categories)
-                toast.success('Usuarios filtrados (CSV)')
-              }}
-            >
-              CSV
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Plantilla carga masiva</DropdownMenuLabel>
-            <DropdownMenuItem onClick={() => downloadUsersImportTemplate()}>Excel</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => downloadUsersImportTemplateCsv()}>CSV</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      {/* Barra «Exportaciones» (plantillas Excel/CSV, credenciales y menú Exportar) deshabilitada; ver historial git para recuperar el marcado JSX. */}
 
       <section className="space-y-3 sm:space-y-4" aria-labelledby="user-intake-heading">
         <AdminSectionTitle
@@ -535,26 +489,62 @@ export function AdminUsersPage() {
         </Card>
       </section>
 
-      <AvailablePlayersPoolSection
-        users={usersQ.data ?? []}
-        groups={groups}
-        isLoading={usersQ.isLoading}
-        onUpdateUser={(input) => updateUserMut.mutate(input)}
-      />
-
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        {[
-          { label: 'Total usuarios', value: stats.total },
-          { label: 'Jugadores', value: stats.jugadores },
-          { label: 'Sin categoría', value: stats.sinCategoria },
-          { label: 'Sin grupo', value: stats.sinGrupo },
-        ].map(({ label, value }) => (
-          <div key={label} className="rounded-lg bg-muted/50 p-3">
-            <p className="mb-1 text-xs text-muted-foreground">{label}</p>
-            <p className="text-xl font-medium tabular-nums">{value}</p>
-          </div>
-        ))}
-      </div>
+      <section className="space-y-4 sm:space-y-5" aria-labelledby="users-metrics-heading">
+        <AdminSectionTitle
+          id="users-metrics-heading"
+          title="Métricas del directorio"
+          density="compact"
+          description="Totales globales del sistema; no cambian con los filtros del listado inferior. Úsalas para detectar pendientes de categoría o grupo antes de dar de alta más jugadores o abrir torneos."
+        />
+        <div className={cn(ADMIN_METRIC_GRID_4, 'max-sm:gap-3')}>
+          <AdminMetricCard
+            id="admin-users-metric-total"
+            label="Total usuarios"
+            value={stats.total}
+            tone="neutral"
+            compact
+            descriptionMode="info"
+            description="Cuenta de perfiles en base de datos sin aplicar filtros. Incluye administradores, jugadores y demás roles configurados."
+            trend={stats.total === 0 ? undefined : `${userMetricContext.playersPct}% son rol jugador`}
+          />
+          <AdminMetricCard
+            id="admin-users-metric-players"
+            label="Jugadores"
+            value={stats.jugadores}
+            tone="info"
+            compact
+            descriptionMode="info"
+            description="Usuarios con rol jugador activo o inactivo según la columna «Cuenta» en el listado (aquí sólo contamos perfil)."
+            trend={
+              stats.total === 0
+                ? undefined
+                : userMetricContext.otrosRoles > 0
+                  ? `${userMetricContext.otrosRoles} cuenta${userMetricContext.otrosRoles === 1 ? '' : 's'} con otro rol`
+                  : '100% del directorio tiene rol jugador'
+            }
+          />
+          <AdminMetricCard
+            id="admin-users-metric-no-category"
+            label="Sin categoría"
+            value={stats.sinCategoria}
+            tone={stats.sinCategoria > 0 ? 'warning' : 'success'}
+            compact
+            descriptionMode="info"
+            description="Jugadores u otros usuarios sin categoría deportiva asignada en su perfil. Asígnalas desde editar usuario o cargas masivas."
+            trend={stats.sinCategoria === 0 ? 'Todas las cuentas tienen categoría' : 'Revísalos en filtros o edición'}
+          />
+          <AdminMetricCard
+            id="admin-users-metric-no-group"
+            label="Sin grupo"
+            value={stats.sinGrupo}
+            tone={stats.sinGrupo > 0 ? 'warning' : 'success'}
+            compact
+            descriptionMode="info"
+            description="Perfiles que aún no pertenecen a ningún grupo de torneo. Inscribirlos desde Grupos o al crear el usuario ayuda al armado del draw."
+            trend={stats.sinGrupo === 0 ? 'Nadie quedó huérfano de grupo' : 'Útiles para completar roster'}
+          />
+        </div>
+      </section>
 
       <section className="space-y-4" aria-labelledby="users-toolbar-heading">
         <AdminSectionTitle
@@ -567,7 +557,7 @@ export function AdminUsersPage() {
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
             <Input
               className={cn('h-11 pl-9', search !== deferredSearch && 'opacity-70')}
-              placeholder="Buscar por nombre, celular o correo"
+              placeholder="Buscar por nombre, ID, celular o correo"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               aria-label="Buscar usuarios"
@@ -576,11 +566,11 @@ export function AdminUsersPage() {
           </div>
           <Select value={roleFilter} onValueChange={(value) => setRoleFilter(value as UserRole | 'all')}>
             <SelectTrigger className="h-11 min-w-[140px] w-[min(100%,11rem)]">
-              <SelectValue placeholder="Rol" />
+              <SelectValue placeholder="Rol">{roleTriggerLabel}</SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all" label="Todos los roles">
-                Rol: todos
+              <SelectItem value="all" label="Todos">
+                Todos
               </SelectItem>
               {ADMIN_USER_FILTER_ROLES.map((r) => (
                 <SelectItem key={r} value={r} label={userRoleLabelEs(r)}>
@@ -591,13 +581,13 @@ export function AdminUsersPage() {
           </Select>
           <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value ?? 'all')}>
             <SelectTrigger className="h-11 min-w-[150px] w-[min(100%,12rem)]">
-              <SelectValue placeholder="Categoría" />
+              <SelectValue placeholder="Categoría">{categoryTriggerLabel}</SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all" label="Todas las categorías">
-                Categoría: todas
+              <SelectItem value="all" label="Todas">
+                Todas
               </SelectItem>
-              {categories.map((c) => (
+              {categoriesSortedForFilter.map((c) => (
                 <SelectItem key={c.id} value={c.id} label={c.name}>
                   {c.name}
                 </SelectItem>
@@ -606,11 +596,11 @@ export function AdminUsersPage() {
           </Select>
           <Select value={estadoFilter} onValueChange={(value) => setEstadoFilter(value as typeof estadoFilter)}>
             <SelectTrigger className="h-11 min-w-[140px] w-[min(100%,11rem)]">
-              <SelectValue placeholder="Estado" />
+              <SelectValue placeholder="Estado">{estadoTriggerLabel}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all" label="Todos">
-                Estado: todos
+                Todos
               </SelectItem>
               <SelectItem value="pendiente" label="Sin correo de recuperación">
                 Sin correo de recuperación
@@ -637,8 +627,8 @@ export function AdminUsersPage() {
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all" label="Todos los grupos">
-                Todos los grupos
+              <SelectItem value="all" label="Todos">
+                Todos
               </SelectItem>
               {groupOpts.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value} label={opt.label}>
@@ -654,12 +644,12 @@ export function AdminUsersPage() {
         <AdminSectionTitle
           id="users-list-heading"
           title="Listado"
-          description={`${filteredUsers.length} resultado(s) con filtros actuales · ${stats.total} usuarios en total. Marca filas y usa la barra de acciones. «Recuperación» = correo para reset. «Cuenta» = alta o baja por administrador.`}
+          description={`${sortedFilteredUsers.length} resultado(s) con filtros actuales · ${stats.total} usuarios en total. Marca filas y usa la barra de acciones. «Recuperación» = correo para reset. «Cuenta» = alta o baja por administrador.`}
         />
 
         {usersQ.isLoading ? (
           <Skeleton className="h-72 rounded-2xl" />
-        ) : filteredUsers.length === 0 ? (
+        ) : sortedFilteredUsers.length === 0 ? (
           <AdminEmptyState
             title="No encontramos usuarios con esos filtros."
             description="Ajusta la búsqueda, rol o grupo para ver más resultados."
@@ -693,10 +683,10 @@ export function AdminUsersPage() {
                   variant="outline"
                   size="sm"
                   className="h-8 text-xs"
-                  disabled={filteredUsers.length === 0}
+                  disabled={sortedFilteredUsers.length === 0}
                   onClick={selectAllFiltered}
                 >
-                  Seleccionar todos ({filteredUsers.length})
+                  Seleccionar todos ({sortedFilteredUsers.length})
                 </Button>
                 {selectedIds.size > 0 ? (
                   <Button
@@ -733,16 +723,6 @@ export function AdminUsersPage() {
                   >
                     <KeyRound className="size-3.5" aria-hidden />
                     Contraseña
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 gap-1.5 text-xs"
-                    onClick={exportSelectionRows}
-                  >
-                    <FileSpreadsheet className="size-3.5" aria-hidden />
-                    Excel selección
                   </Button>
                   <AdminConfirmDialog
                     title={
@@ -849,10 +829,14 @@ export function AdminUsersPage() {
 
             <div className="hidden md:block">
               <AdminDataTable
+                tableId="admin-users-table"
                 rows={visibleUsers}
                 columns={columns}
                 getRowKey={(user) => user.id}
+                getRowDomId={(user) => `admin-user-row-${user.id}`}
                 footer={loadMoreFooter}
+                sort={sort}
+                onSortChange={handleSortChange}
                 rowSelection={{
                   selectedKeys: selectedIds,
                   onToggleRow: toggleSelectionRow,
@@ -860,9 +844,59 @@ export function AdminUsersPage() {
                 }}
               />
             </div>
-            <div className="grid gap-4 md:hidden">
+            <div className="flex flex-col gap-3 md:hidden">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs font-medium text-slate-600">Ordenar listado</p>
+                <div className="flex flex-wrap gap-2">
+                  <Select
+                    value={sort.key}
+                    onValueChange={(value) => {
+                      if (!value) return
+                      setSort((prev) => ({ key: value, direction: prev.direction }))
+                    }}
+                  >
+                    <SelectTrigger id="admin-users-mobile-sort-key" className="h-9 min-w-[9rem] flex-1 sm:flex-none">
+                      <SelectValue placeholder="Columna" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="id" label="ID">
+                        ID
+                      </SelectItem>
+                      <SelectItem value="name" label="Nombre">
+                        Nombre
+                      </SelectItem>
+                      <SelectItem value="phone" label="Celular">
+                        Celular
+                      </SelectItem>
+                      <SelectItem value="recovery" label="Correo recuperación">
+                        Correo recuperación
+                      </SelectItem>
+                      <SelectItem value="recovery_status" label="Recuperación">
+                        Recuperación
+                      </SelectItem>
+                      <SelectItem value="group" label="Grupo">
+                        Grupo
+                      </SelectItem>
+                      <SelectItem value="account" label="Cuenta">
+                        Cuenta
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    id="admin-users-mobile-sort-direction"
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 shrink-0"
+                    onClick={() => setSort((prev) => ({ ...prev, direction: prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                  >
+                    {sort.direction === 'asc' ? 'Ascendente' : 'Descendente'}
+                  </Button>
+                </div>
+              </div>
+              <div className="grid gap-4">
               {visibleUsers.map((user) => (
-                <Card key={user.id} className="rounded-2xl border border-slate-200/70 bg-white shadow-sm">
+                <Card key={user.id} id={`admin-user-row-${user.id}`} className="rounded-2xl border border-slate-200/70 bg-white shadow-sm">
                   <CardContent className="space-y-4 p-5">
                     <div className="flex items-start gap-3">
                       <input
@@ -875,6 +909,9 @@ export function AdminUsersPage() {
                       <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
                         <div className="min-w-0 flex-1 space-y-2">
                           <p className="font-semibold text-[#102A43]">{user.full_name ?? user.phone ?? '—'}</p>
+                          <p className="font-mono text-xs tabular-nums text-[#64748B]">
+                            ID: {user.external_id ?? '—'}
+                          </p>
                           <div className="flex flex-wrap items-center gap-2 text-xs text-[#64748B]">
                             <span className="tabular-nums">{user.phone ?? '—'}</span>
                             <span className="hidden sm:inline">·</span>
@@ -923,6 +960,7 @@ export function AdminUsersPage() {
                   </button>
                 </div>
               ) : null}
+              </div>
             </div>
           </>
         )}

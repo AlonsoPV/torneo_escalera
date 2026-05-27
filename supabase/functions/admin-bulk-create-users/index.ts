@@ -1,6 +1,8 @@
 // @ts-nocheck — tipado Postgrest/Supabase sin Database genérico; runtime validado por Deno en deploy.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
 
+import { formatAuthPasswordError, isPasswordLongEnough, MIN_PASSWORD_LENGTH, passwordMinLengthError } from '../_shared/passwordPolicy.ts'
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -107,7 +109,18 @@ function parseAccountRowStatus(raw: unknown): { ok: true; status: 'active' | 'in
 }
 
 function isValidBulkImportPassword(p: string): boolean {
-  return /^\d{8}$/.test(String(p ?? '').trim())
+  return isPasswordLongEnough(p)
+}
+
+function normalizePasswordImportValue(raw: unknown): string {
+  const s = String(raw ?? '').trim()
+  const n = s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  if (!s || s === '—' || s === '-') return ''
+  if (n === 'no disponible' || n === 'sin cambio' || n === '(sin cambio)') return ''
+  return s
 }
 
 function parseCarryStatInput(
@@ -151,6 +164,19 @@ type ResultRow = {
   operation?: 'created' | 'updated'
 }
 
+type BulkImportAuditInsert = {
+  batch_id: string
+  row_number: number
+  external_id: string | null
+  full_name: string | null
+  role: string
+  group_name: string | null
+  category_name: string
+  status: 'success' | 'error'
+  error_message: string | null
+  created_profile_id: string | null
+}
+
 async function insertBulkRow(
   adminClient: ReturnType<typeof createClient>,
   args: {
@@ -166,18 +192,26 @@ async function insertBulkRow(
     createdProfileId?: string | null
   },
 ) {
-  await adminClient.from('bulk_import_rows').insert({
+  const externalId = args.externalId ?? args.external_id ?? null
+  const fullName = args.fullName ?? args.full_name ?? null
+  const auditRow: BulkImportAuditInsert = {
     batch_id: args.batchId,
     row_number: args.rowNumber,
-    external_id: args.externalId,
-    full_name: args.fullName,
+    external_id: externalId,
+    full_name: fullName,
     role: args.role,
     group_name: args.groupName ?? null,
     category_name: args.categoryName,
     status: args.status,
     error_message: args.errorMessage,
     created_profile_id: args.createdProfileId ?? null,
-  })
+  }
+  const queued = (adminClient as unknown as { __bulkImportAuditRows?: BulkImportAuditInsert[] }).__bulkImportAuditRows
+  if (queued) {
+    queued.push(auditRow)
+    return
+  }
+  await adminClient.from('bulk_import_rows').insert(auditRow)
 }
 
 async function upsertVisiblePassword(
@@ -205,36 +239,88 @@ async function ensureGroupMembership(
     tournamentId: string | null
     liveGroupCount: Map<string, number>
     affectedGroupIds: Set<string>
+    tournamentGroupIds?: string[]
+    existingMembershipByUser?: Map<string, { id: string; group_id: string; user_id: string }>
+    matchCountByGroupPlayer?: Map<string, number>
   },
 ): Promise<string | null> {
   const { uid, name, targetGroupId, tournamentId, liveGroupCount, affectedGroupIds } = args
   if (!targetGroupId || !tournamentId) return null
 
-  const { data: tGroups } = await adminClient.from('groups').select('id').eq('tournament_id', tournamentId)
-  const tgIds = (tGroups ?? []).map((x) => (x as { id: string }).id)
+  let tgIds = args.tournamentGroupIds ?? []
+  if (!args.tournamentGroupIds) {
+    const { data: tGroups } = await adminClient.from('groups').select('id').eq('tournament_id', tournamentId)
+    tgIds = (tGroups ?? []).map((x) => (x as { id: string }).id)
+  }
   if (!tgIds.length) return 'El torneo no tiene grupos'
 
-  const { data: existingGp } = await adminClient
-    .from('group_players')
-    .select('id, group_id')
-    .eq('user_id', uid)
-    .in('group_id', tgIds)
-    .maybeSingle()
+  let existingGp: { id: string; group_id: string; user_id: string } | null =
+    args.existingMembershipByUser?.get(uid) ?? null
+  if (!args.existingMembershipByUser) {
+    const { data } = await adminClient
+      .from('group_players')
+      .select('id, group_id, user_id')
+      .eq('user_id', uid)
+      .in('group_id', tgIds)
+      .maybeSingle()
+    existingGp = (data as { id: string; group_id: string; user_id: string } | null) ?? null
+  }
 
   if (existingGp) {
-    const gid = (existingGp as { group_id: string }).group_id
-    if (gid === targetGroupId) return null
-    return 'El jugador ya está inscrito en otro grupo de este torneo'
+    const current = existingGp as { id: string; group_id: string; user_id: string }
+    if (current.group_id === targetGroupId) {
+      const { error: nameErr } = await adminClient
+        .from('group_players')
+        .update({ display_name: name })
+        .eq('id', current.id)
+      return nameErr?.message ?? null
+    }
+    let matchCount = args.matchCountByGroupPlayer?.get(current.id) ?? null
+    if (matchCount === null) {
+      const { count, error: matchCountErr } = await adminClient
+        .from('matches')
+        .select('id', { count: 'exact', head: true })
+        .or(`player_a_id.eq.${current.id},player_b_id.eq.${current.id}`)
+      if (matchCountErr) return matchCountErr.message
+      matchCount = count ?? 0
+    }
+    if ((matchCount ?? 0) > 0) {
+      return 'El jugador ya tiene partidos en otro grupo de este torneo; no se puede mover por importacion.'
+    }
+
+    const ord = liveGroupCount.get(targetGroupId) ?? 0
+    const { error: moveErr } = await adminClient
+      .from('group_players')
+      .update({
+        group_id: targetGroupId,
+        display_name: name,
+        seed_order: ord,
+      })
+      .eq('id', current.id)
+    if (moveErr) return moveErr.message
+    liveGroupCount.set(targetGroupId, ord + 1)
+    liveGroupCount.set(current.group_id, Math.max(0, (liveGroupCount.get(current.group_id) ?? 1) - 1))
+    args.existingMembershipByUser?.set(uid, { ...current, group_id: targetGroupId })
+    affectedGroupIds.add(targetGroupId)
+    affectedGroupIds.add(current.group_id)
+    return null
   }
 
   const ord = liveGroupCount.get(targetGroupId) ?? 0
-  const { error: gpInsErr } = await adminClient.from('group_players').insert({
-    group_id: targetGroupId,
-    user_id: uid,
-    display_name: name,
-    seed_order: ord,
-  })
+  const { data: insertedGp, error: gpInsErr } = await adminClient
+    .from('group_players')
+    .insert({
+      group_id: targetGroupId,
+      user_id: uid,
+      display_name: name,
+      seed_order: ord,
+    })
+    .select('id, group_id, user_id')
+    .single()
   if (gpInsErr) return gpInsErr.message
+  if (insertedGp) {
+    args.existingMembershipByUser?.set(uid, insertedGp as { id: string; group_id: string; user_id: string })
+  }
   liveGroupCount.set(targetGroupId, ord + 1)
   affectedGroupIds.add(targetGroupId)
   return null
@@ -324,6 +410,9 @@ Deno.serve(async (req) => {
     const results: ResultRow[] = []
     let success = 0
     let errors = 0
+    const auditRows: BulkImportAuditInsert[] = []
+    const auditClient = adminClient as unknown as { __bulkImportAuditRows?: BulkImportAuditInsert[] }
+    auditClient.__bulkImportAuditRows = auditRows
 
     const { data: catRows } = await adminClient.from('player_categories').select('id, name')
     const categoryByNorm = new Map<string, string>()
@@ -333,9 +422,13 @@ Deno.serve(async (req) => {
     }
 
     type GroupInfo = { id: string; max_players: number | null }
+    type ProfileLookup = { id: string; external_id: string | null; phone: string | null }
     const groupByNorm = new Map<string, GroupInfo>()
     const liveGroupCount = new Map<string, number>()
+    const groupPlayerByUser = new Map<string, { id: string; group_id: string; user_id: string }>()
+    const matchCountByGroupPlayer = new Map<string, number>()
     const affectedGroupIds = new Set<string>()
+    let tournamentGroupIds: string[] = []
     if (tournamentId) {
       const { data: groupRows } = await adminClient
         .from('groups')
@@ -346,13 +439,61 @@ Deno.serve(async (req) => {
         groupByNorm.set(normalizeLabel(gr.name).toLowerCase(), { id: gr.id, max_players: gr.max_players })
       }
       const gids = [...new Set([...groupByNorm.values()].map((x) => x.id))]
+      tournamentGroupIds = gids
       for (const gid of gids) liveGroupCount.set(gid, 0)
       if (gids.length) {
-        const { data: gp } = await adminClient.from('group_players').select('group_id').in('group_id', gids)
+        const { data: gp } = await adminClient.from('group_players').select('id, group_id, user_id').in('group_id', gids)
+        const gpIds: string[] = []
         for (const r of gp ?? []) {
-          const gid = (r as { group_id: string }).group_id
+          const row = r as { id: string; group_id: string; user_id: string }
+          const gid = row.group_id
           liveGroupCount.set(gid, (liveGroupCount.get(gid) ?? 0) + 1)
+          groupPlayerByUser.set(row.user_id, row)
+          gpIds.push(row.id)
         }
+        if (gpIds.length) {
+          const { data: matchesForPlayers } = await adminClient
+            .from('matches')
+            .select('player_a_id, player_b_id')
+            .in('group_id', gids)
+          for (const m of matchesForPlayers ?? []) {
+            const row = m as { player_a_id: string; player_b_id: string }
+            matchCountByGroupPlayer.set(row.player_a_id, (matchCountByGroupPlayer.get(row.player_a_id) ?? 0) + 1)
+            matchCountByGroupPlayer.set(row.player_b_id, (matchCountByGroupPlayer.get(row.player_b_id) ?? 0) + 1)
+          }
+        }
+      }
+    }
+
+    const extLookup = [...new Set(body.rows.map((r) => String(r.externalId ?? '').trim()).filter(Boolean))]
+    const phoneLookup = [
+      ...new Set(
+        body.rows
+          .map((r) => normalizePhone(String(r.phone ?? '')))
+          .filter((r): r is { ok: true; digits: string } => r.ok)
+          .map((r) => r.digits),
+      ),
+    ]
+    const profileByExt = new Map<string, ProfileLookup>()
+    const profileByPhone = new Map<string, ProfileLookup>()
+    if (extLookup.length) {
+      const { data: profsByExt } = await adminClient
+        .from('profiles')
+        .select('id, external_id, phone')
+        .in('external_id', extLookup)
+      for (const p of profsByExt ?? []) {
+        const row = p as ProfileLookup
+        if (row.external_id) profileByExt.set(row.external_id, row)
+      }
+    }
+    if (phoneLookup.length) {
+      const { data: profsByPhone } = await adminClient
+        .from('profiles')
+        .select('id, external_id, phone')
+        .in('phone', phoneLookup)
+      for (const p of profsByPhone ?? []) {
+        const row = p as ProfileLookup
+        if (row.phone) profileByPhone.set(row.phone, row)
       }
     }
 
@@ -380,27 +521,6 @@ Deno.serve(async (req) => {
         temporaryPassword: temp,
         categoryName: cname,
       })
-
-      if (!ext) {
-        errors += 1
-        results.push({
-          ...baseResult('', ''),
-          status: 'error',
-          error: 'ID obligatorio',
-        })
-        await insertBulkRow(adminClient, {
-          batchId,
-          rowNumber: row.rowNumber,
-          external_id: ext || null,
-          full_name: name || null,
-          role: roleRaw || 'player',
-          groupName: rowGroupAudit,
-          categoryName: cname,
-          status: 'error',
-          errorMessage: 'ID obligatorio',
-        })
-        continue
-      }
 
       if (!recoveryCheck.ok) {
         errors += 1
@@ -598,10 +718,8 @@ Deno.serve(async (req) => {
       const pjVal = pjIn.n
       const ptsVal = ptsIn.n
 
-      const { data: byExt } = ext
-        ? await adminClient.from('profiles').select('id').eq('external_id', ext).maybeSingle()
-        : { data: null }
-      const { data: byPhone } = await adminClient.from('profiles').select('id').eq('phone', digits).maybeSingle()
+      const byExt = ext ? profileByExt.get(ext) ?? null : null
+      const byPhone = profileByPhone.get(digits) ?? null
 
       const extId = byExt ? (byExt as { id: string }).id : null
       const phoneId = byPhone ? (byPhone as { id: string }).id : null
@@ -629,14 +747,34 @@ Deno.serve(async (req) => {
 
       const existingProf = extId ? byExt : phoneId ? byPhone : null
 
-      const passwordRaw = String(row.password ?? '').trim()
+      const passwordRaw = normalizePasswordImportValue(row.password)
       if (!existingProf) {
+        if (!ext) {
+          errors += 1
+          results.push({
+            ...baseResult(digits, ''),
+            status: 'error',
+            error: 'ID obligatorio para altas nuevas',
+          })
+          await insertBulkRow(adminClient, {
+            batchId,
+            rowNumber: row.rowNumber,
+            external_id: null,
+            full_name: name,
+            role,
+            groupName: rowGroupAudit,
+            categoryName: cname,
+            status: 'error',
+            errorMessage: 'ID obligatorio para altas nuevas',
+          })
+          continue
+        }
         if (!isValidBulkImportPassword(passwordRaw)) {
           errors += 1
           results.push({
             ...baseResult(digits, ''),
             status: 'error',
-            error: 'Contraseña inválida: debe ser exactamente 8 dígitos numéricos',
+            error: passwordMinLengthError('Contraseña inválida'),
           })
           await insertBulkRow(adminClient, {
             batchId,
@@ -657,7 +795,7 @@ Deno.serve(async (req) => {
           results.push({
             ...baseResult(digits, ''),
             status: 'error',
-            error: 'Contraseña: usa 8 dígitos o déjala vacía para no cambiar la actual',
+            error: `Contraseña: mínimo ${MIN_PASSWORD_LENGTH} caracteres o déjala vacía para no cambiar la actual`,
           })
           await insertBulkRow(adminClient, {
             batchId,
@@ -794,18 +932,13 @@ Deno.serve(async (req) => {
           const ng = newG as { id: string; max_players: number | null }
           gr = { id: ng.id, max_players: ng.max_players }
           groupByNorm.set(gname.toLowerCase(), gr)
+          tournamentGroupIds.push(gr.id)
           if (!liveGroupCount.has(gr.id)) liveGroupCount.set(gr.id, 0)
         }
         let alreadyInThisGroup = false
         if (existingProf) {
           const uidExisting = (existingProf as { id: string }).id
-          const { data: ugp } = await adminClient
-            .from('group_players')
-            .select('id')
-            .eq('user_id', uidExisting)
-            .eq('group_id', gr.id)
-            .maybeSingle()
-          alreadyInThisGroup = Boolean(ugp)
+          alreadyInThisGroup = groupPlayerByUser.get(uidExisting)?.group_id === gr.id
         }
         const curCap = liveGroupCount.get(gr.id) ?? 0
         const cap = gr.max_players ?? 5
@@ -835,8 +968,8 @@ Deno.serve(async (req) => {
       if (existingProf) {
         const uid = (existingProf as { id: string }).id
 
-        const { data: phoneTaken } = await adminClient.from('profiles').select('id').eq('phone', digits).neq('id', uid).maybeSingle()
-        if (phoneTaken) {
+        const phoneTaken = profileByPhone.get(digits)
+        if (phoneTaken && phoneTaken.id !== uid) {
           errors += 1
           results.push({
             ...baseResult(digits, ''),
@@ -863,8 +996,8 @@ Deno.serve(async (req) => {
           category_id: categoryId,
           status: rowAccountStatus,
           phone: digits,
-          external_id: ext || null,
         }
+        if (ext) profilePayload.external_id = ext
         if (recoveryCheck.value) {
           profilePayload.email = recoveryCheck.value
           profilePayload.must_complete_email = false
@@ -897,11 +1030,12 @@ Deno.serve(async (req) => {
         if (passwordRaw) {
           const { error: pwErr } = await adminClient.auth.admin.updateUserById(uid, { password: passwordRaw })
           if (pwErr) {
+            const msg = formatAuthPasswordError(pwErr.message)
             errors += 1
             results.push({
               ...baseResult(digits, passwordRaw),
               status: 'error',
-              error: pwErr.message,
+              error: msg,
             })
             await insertBulkRow(adminClient, {
               batchId,
@@ -912,7 +1046,7 @@ Deno.serve(async (req) => {
               groupName: rowGroupAudit,
               categoryName: cname,
               status: 'error',
-              errorMessage: pwErr.message,
+              errorMessage: msg,
             })
             continue
           }
@@ -950,6 +1084,9 @@ Deno.serve(async (req) => {
           tournamentId,
           liveGroupCount,
           affectedGroupIds,
+          tournamentGroupIds,
+          existingMembershipByUser: groupPlayerByUser,
+          matchCountByGroupPlayer,
         })
         if (gErr) {
           errors += 1
@@ -1034,7 +1171,7 @@ Deno.serve(async (req) => {
 
       if (authErr || !created.user) {
         errors += 1
-        const msg = authErr?.message ?? 'Error creando usuario'
+        const msg = formatAuthPasswordError(authErr?.message ?? 'Error creando usuario')
         results.push({
           ...baseResult(digits, passwordRaw),
           status: 'error',
@@ -1134,6 +1271,9 @@ Deno.serve(async (req) => {
         tournamentId,
         liveGroupCount,
         affectedGroupIds,
+        tournamentGroupIds,
+        existingMembershipByUser: groupPlayerByUser,
+        matchCountByGroupPlayer,
       })
       if (gErr) {
         errors += 1
@@ -1176,6 +1316,12 @@ Deno.serve(async (req) => {
         errorMessage: null,
         createdProfileId: uid,
       })
+    }
+
+    delete auditClient.__bulkImportAuditRows
+    if (auditRows.length) {
+      const { error: auditErr } = await adminClient.from('bulk_import_rows').insert(auditRows)
+      if (auditErr) console.warn('bulk_import_rows audit insert failed', auditErr.message)
     }
 
     await adminClient

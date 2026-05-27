@@ -23,6 +23,7 @@ import {
   canAdminEditMatch,
   getMatchStatusColor,
   getMatchStatusLabel,
+  isDisputedMatch,
   normalizeMatchStatus,
 } from '@/lib/match-status'
 import { tournamentPathFromIdAndName } from '@/lib/tournamentUrl'
@@ -64,7 +65,7 @@ const RESULT_TYPE_LABELS: Record<MatchResultType, string> = {
 }
 
 function StatusBadge({ match }: { match: AdminMatchRecord }) {
-  const n = normalizeMatchStatus(match.status)
+  const n = isDisputedMatch(match) ? 'disputed' : normalizeMatchStatus(match.status)
   return (
     <span
       className={cn(
@@ -116,7 +117,10 @@ export function AdminMatchTable({
       (m.status === 'player_confirmed' || m.status === 'score_submitted') && onValidate
   const showValidateDisputed = (m: AdminMatchRecord) => m.status === 'score_disputed' && onValidateDisputedAsIs
   const showInvalidate = (m: AdminMatchRecord) =>
-    m.status !== 'cancelled' && m.status !== 'pending_score' && onInvalidate
+    m.status !== 'cancelled' &&
+    m.status !== 'pending_score' &&
+    m.status !== 'score_disputed' &&
+    onInvalidate
 
   const paginationFooter = (
     <div className="flex flex-col gap-2 border-t border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between">
@@ -243,7 +247,7 @@ export function AdminMatchTable({
                                 Registrar marcador
                               </DropdownMenuItem>
                             ) : null}
-                            {canAdminEditMatch(match) && onEditResult && !showRegister(match) ? (
+                            {canAdminEditMatch(match) && onEditResult && !showRegister(match) && match.status !== 'score_disputed' ? (
                               <DropdownMenuItem
                                 className="cursor-pointer gap-2"
                                 onClick={() => onEditResult(match)}
@@ -273,7 +277,7 @@ export function AdminMatchTable({
                                 onClick={() => onEditResult(match)}
                               >
                                 <Pencil className="size-3.5 opacity-80" />
-                                Resolver refutación…
+                                Corregir marcador
                               </DropdownMenuItem>
                             ) : null}
                             {showInvalidate(match) ? (
@@ -399,7 +403,7 @@ export function AdminMatchTable({
                         Registrar marcador
                       </DropdownMenuItem>
                     ) : null}
-                    {canAdminEditMatch(match) && onEditResult && !showRegister(match) ? (
+                    {canAdminEditMatch(match) && onEditResult && !showRegister(match) && match.status !== 'score_disputed' ? (
                       <DropdownMenuItem className="cursor-pointer gap-2" onClick={() => onEditResult(match)}>
                         <Pencil className="size-3.5" />
                         Corregir
@@ -419,7 +423,8 @@ export function AdminMatchTable({
                     ) : null}
                     {match.status === 'score_disputed' && onEditResult ? (
                       <DropdownMenuItem className="cursor-pointer gap-2" onClick={() => onEditResult(match)}>
-                        Resolver refutación…
+                        <Pencil className="size-3.5" />
+                        Corregir marcador
                       </DropdownMenuItem>
                     ) : null}
                     {showInvalidate(match) ? (

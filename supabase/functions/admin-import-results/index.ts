@@ -107,6 +107,27 @@ Deno.serve(async (req) => {
           })
           .eq('id', r.matchId)
         if (upErr) throw new Error(upErr.message)
+      } else if (r.status === 'pending_score' && !r.scoreRaw && !r.winnerGroupPlayerId) {
+        const { error: upErr } = await userClient
+          .from('matches')
+          .update({
+            status: 'pending_score',
+            winner_id: null,
+            score_raw: null,
+            result_type: 'normal',
+            game_type: r.gameType,
+            updated_by: userData.user.id,
+            updated_at: new Date().toISOString(),
+            closed_at: null,
+            admin_validated_at: null,
+            admin_validated_by: null,
+            score_submitted_by: null,
+            score_submitted_at: null,
+            opponent_confirmed_by: null,
+            opponent_confirmed_at: null,
+          })
+          .eq('id', r.matchId)
+        if (upErr) throw new Error(upErr.message)
       } else {
         const pScore = r.scoreRaw
         const { error: rpcErr } = await userClient.rpc('admin_set_match_result', {

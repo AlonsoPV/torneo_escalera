@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   BarChart3,
   ChevronDown,
@@ -58,6 +59,7 @@ export function AppHeader() {
   const user = useAuthStore((s) => s.user)
   const [signingOut, setSigningOut] = useState(false)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const canAccessAdmin = profile ? isAdminRole(profile.role) : false
   const displayName = profile?.full_name?.trim() || profile?.email || user?.email || 'Cuenta'
   const emailHint = profile?.email ?? user?.email ?? null
@@ -65,7 +67,9 @@ export function AppHeader() {
   const handleSignOut = async () => {
     setSigningOut(true)
     try {
+      queryClient.clear()
       await signOut()
+      navigate('/login', { replace: true })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo cerrar sesión')
     } finally {

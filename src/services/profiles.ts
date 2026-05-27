@@ -6,7 +6,7 @@ export async function listProfilesForAdmin(): Promise<Profile[]> {
     .from('profiles')
     .select('*')
     .order('created_at', { ascending: false })
-    .limit(200)
+    .limit(4000)
   if (error) throw error
   return (data ?? []) as Profile[]
 }

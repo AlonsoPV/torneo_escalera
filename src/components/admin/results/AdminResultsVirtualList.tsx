@@ -13,6 +13,8 @@ type Props<T> = {
   empty: ReactNode
   className?: string
   maxHeight?: string
+  id?: string
+  dataName?: string
 }
 
 export function AdminResultsVirtualList<T>({
@@ -22,6 +24,8 @@ export function AdminResultsVirtualList<T>({
   empty,
   className,
   maxHeight = 'min(72vh, 760px)',
+  id,
+  dataName,
 }: Props<T>) {
   const parentRef = useRef<HTMLDivElement>(null)
 
@@ -42,6 +46,8 @@ export function AdminResultsVirtualList<T>({
   return (
     <div
       ref={parentRef}
+      id={id}
+      data-name={dataName}
       className={cn(
         'overflow-auto rounded-xl border border-slate-200/90 bg-white/70 shadow-inner shadow-slate-100',
         className,
@@ -54,7 +60,7 @@ export function AdminResultsVirtualList<T>({
             key={vi.key}
             data-index={vi.index}
             ref={virtualizer.measureElement}
-            className="absolute left-0 top-0 w-full px-2 pb-1.5 pt-0"
+            className="absolute left-0 top-0 w-full px-3 pb-3 pt-1 sm:px-4 sm:pb-4 sm:pt-1.5"
             style={{ transform: `translateY(${vi.start}px)` }}
           >
             {renderRow(items[vi.index], vi.index)}

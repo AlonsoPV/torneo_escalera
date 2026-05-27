@@ -16,8 +16,9 @@ export function partitionPlayerMatches(
   const mine = getPlayerMatches(membershipId, matches)
   const allow = rules.allow_player_score_entry
 
-  /** Pendientes = captura jugador. Partidos cerrados/validados sin acción de refutar van a historial. */
-  const needsCaptureOrResubmit = (m: MatchRow) => Boolean(allow && canSubmitScore(m, userId))
+  /** Pendientes = sin marcador o refutados; ambos siguen fuera del ranking oficial. */
+  const needsCaptureOrResubmit = (m: MatchRow) =>
+    m.status === 'score_disputed' || Boolean(allow && canSubmitScore(m, userId))
 
   const pendientes = mine.filter(needsCaptureOrResubmit)
   const historial = mine.filter(

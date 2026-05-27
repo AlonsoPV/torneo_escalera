@@ -5,6 +5,7 @@ import { AdminFormModal } from '@/components/admin/shared/AdminFormModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { passwordMinLengthMessage } from '@/lib/passwordPolicy'
 import {
   Select,
   SelectContent,
@@ -135,7 +136,9 @@ export function CreateUserModal({
               onChange={(e) => setTemporaryPassword(e.target.value)}
               required
             />
-            <p className="text-[11px] leading-snug text-muted-foreground">Podrá cambiarla desde el perfil o recuperación cuando tenga correo.</p>
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              {passwordMinLengthMessage()}. Podrá cambiarla desde el perfil o recuperación cuando tenga correo.
+            </p>
           </section>
 
           <section className="grid gap-2.5 lg:col-span-1">

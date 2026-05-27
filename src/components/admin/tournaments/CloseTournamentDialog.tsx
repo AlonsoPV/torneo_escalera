@@ -35,6 +35,7 @@ export function CloseTournamentDialog({
 }) {
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
+  const [applyDefaultRules, setApplyDefaultRules] = useState(false)
 
   const blockersQ = useQuery({
     queryKey: ['tournamentClosureBlockers', tournamentId],
@@ -45,7 +46,11 @@ export function CloseTournamentDialog({
   const closeMut = useMutation({
     mutationFn: async () => {
       if (!closedBy) throw new Error('No autenticado.')
-      await finishTournament({ tournamentId, closedBy })
+      await finishTournament({
+        tournamentId,
+        closedBy,
+        applyMissingScoresAsDoublePenalty: applyDefaultRules,
+      })
     },
     onSuccess: async () => {
       toast.success('Torneo cerrado: clasificación final guardada.')
@@ -63,22 +68,27 @@ export function CloseTournamentDialog({
 
   const blockers = blockersQ.data
   const canClose = blockers?.canClose ?? false
+  const canCloseWithDefaultRules = blockers?.canCloseWithDefaultRules ?? false
+  const canConfirmClose = canClose || (applyDefaultRules && canCloseWithDefaultRules)
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {cloneElement(trigger, {
         onClick: (event: MouseEvent<HTMLElement>) => {
           trigger.props.onClick?.(event)
-          if (!event.defaultPrevented) setOpen(true)
+          if (!event.defaultPrevented) {
+            setApplyDefaultRules(false)
+            setOpen(true)
+          }
         },
       })}
       <DialogContent className="max-h-[min(90vh,560px)] gap-0 overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Cerrar torneo</DialogTitle>
           <DialogDescription className="text-pretty">
-            {tournamentName}: se guardará un snapshot de la clasificación por grupo y el estado pasará a{' '}
-            <span className="font-medium">finished</span>. Este paso es necesario antes de crear el siguiente torneo con
-            el flujo oficial.
+            {tournamentName}: se guardara un snapshot de la clasificacion por grupo y el estado pasara a{' '}
+            <span className="font-medium">cerrado</span>. Este paso libera el flujo para crear o activar el siguiente
+            torneo.
           </DialogDescription>
         </DialogHeader>
 
@@ -98,7 +108,7 @@ export function CloseTournamentDialog({
                 <div className="rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-sm text-amber-950">
                   <p className="flex gap-2 font-semibold">
                     <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                    No puedes cerrar este torneo todavía.
+                    Cierre con pendientes detectados.
                   </p>
                   {blockers.messages.length > 0 ? (
                     <ul className="mt-2 list-inside list-disc space-y-1 text-[13px] leading-snug">
@@ -109,14 +119,29 @@ export function CloseTournamentDialog({
                   ) : (
                     <p className="mt-2 text-[13px]">Hay partidos u operaciones pendientes.</p>
                   )}
-                  <div className="mt-3">
-                    <Link
-                      to="/admin/matches"
-                      className={buttonVariants({ variant: 'outline', size: 'sm', className: 'inline-flex w-full justify-center sm:w-auto' })}
-                    >
-                      Ir a resultados pendientes
-                    </Link>
-                  </div>
+                  {canCloseWithDefaultRules ? (
+                    <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-md border border-amber-200 bg-white/70 px-3 py-2 text-[13px] leading-snug text-amber-950">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 size-4 rounded border-amber-300 text-amber-700"
+                        checked={applyDefaultRules}
+                        onChange={(event) => setApplyDefaultRules(event.target.checked)}
+                      />
+                      <span>
+                        Cerrar partidos sin marcador como <span className="font-semibold">doble penalizacion</span>.
+                        Aplica los puntos de regla para no reportado y deja el torneo listo para cierre.
+                      </span>
+                    </label>
+                  ) : (
+                    <div className="mt-3">
+                      <Link
+                        to="/admin/matches"
+                        className={buttonVariants({ variant: 'outline', size: 'sm', className: 'inline-flex w-full justify-center sm:w-auto' })}
+                      >
+                        Ir a resultados pendientes
+                      </Link>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <p className="text-sm text-emerald-900">
@@ -126,6 +151,8 @@ export function CloseTournamentDialog({
               <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600">
                 <dt>Marcador pendiente</dt>
                 <dd className="text-right font-medium text-slate-900">{blockers.counts.pendingScore}</dd>
+                <dt>Sin marcador aplicable</dt>
+                <dd className="text-right font-medium text-slate-900">{blockers.counts.pendingScoreWithoutMarker}</dd>
                 <dt>Resultado provisional</dt>
                 <dd className="text-right font-medium text-slate-900">{blockers.counts.scoreSubmitted}</dd>
                 <dt>Disputas</dt>
@@ -147,7 +174,7 @@ export function CloseTournamentDialog({
               disabled ||
               closeMut.isPending ||
               blockersQ.isLoading ||
-              !canClose ||
+              !canConfirmClose ||
               !closedBy ||
               blockersQ.isError
             }

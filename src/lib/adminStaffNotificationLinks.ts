@@ -18,6 +18,14 @@ export function buildAdminMatchesUrlFromStaffNotification(row: StaffMatchNotific
   return `/admin/matches?${params.toString()}`
 }
 
+/** Alineado con `AdminMatchesPage` (`tournament` + `match` resalta la fila). */
+export function buildAdminMatchDetailUrl(params: { tournamentId: string; matchId: string }): string {
+  const search = new URLSearchParams()
+  search.set('tournament', params.tournamentId)
+  search.set('match', params.matchId)
+  return `/admin/matches?${search.toString()}`
+}
+
 export function parseStaffNotificationMetadata(metadata: Json): Record<string, unknown> {
   if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
     return metadata as Record<string, unknown>

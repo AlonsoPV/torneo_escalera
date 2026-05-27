@@ -3,6 +3,31 @@
 # Sin esto, el gateway puede responder 401 al OPTIONS (preflight CORS) porque no lleva
 # Authorization, y el navegador reporta error CORS en lugar del 401 real.
 
+# IMPORTANTE: `supabase config push` sincroniza TODA la sección [auth] con remoto.
+
+[auth]
+site_url = "https://megavaronil.vercel.app"
+additional_redirect_urls = [
+  "https://megavaronil.vercel.app/simulation",
+  "https://megavaronil.vercel.app/*",
+  "https://megavaronil.vercel.app/**",
+  "https://megavaronil.vercel.app/login",
+  "https://megavaronil.vercel.app/player",
+  "https://megavaronil.vercel.app/register",
+  "https://www.megavaronil.vercel.app/simulation",
+  "https://megavaronil.vercel.app/simulation",
+]
+minimum_password_length = 6
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.email]
+enable_confirmations = true
+max_frequency = "1m0s"
+otp_length = 8
+
 [functions.admin-bulk-create-users]
 verify_jwt = false
 
@@ -21,7 +46,13 @@ verify_jwt = false
 [functions.update-user-recovery-email]
 verify_jwt = false
 
+[functions.update-user-account]
+verify_jwt = false
+
 [functions.admin-change-user-password]
+verify_jwt = false
+
+[functions.admin-update-user-contact]
 verify_jwt = false
 
 [functions.admin-provision-match-results-player]

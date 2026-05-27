@@ -6,7 +6,7 @@ export type MatchScoreModalProps = ComponentProps<typeof AdminScoreCorrectionMod
 
 function deriveTitle(match: NonNullable<MatchScoreModalProps['match']>): string {
   if (match.status === 'pending_score') return 'Registrar marcador'
-  if (match.status === 'score_disputed') return 'Resolver refutación'
+  if (match.status === 'score_disputed') return 'Corregir marcador'
   return 'Corregir marcador'
 }
 

@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { signUpWithEmail } from '@/lib/auth'
+import { MIN_PASSWORD_LENGTH, passwordMinLengthMessage } from '@/lib/passwordPolicy'
 import { cn } from '@/lib/utils'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
@@ -21,8 +22,8 @@ const schema = z
   .object({
     fullName: z.string().min(2, 'Al menos 2 caracteres'),
     email: z.string().min(1, 'Introduce tu email').email('Email no válido'),
-    password: z.string().min(6, 'Mínimo 6 caracteres'),
-    confirm: z.string().min(6, 'Confirma tu contraseña'),
+    password: z.string().min(MIN_PASSWORD_LENGTH, passwordMinLengthMessage()),
+    confirm: z.string().min(MIN_PASSWORD_LENGTH, 'Confirma tu contraseña'),
   })
   .refine((v) => v.password === v.confirm, {
     message: 'Las contraseñas no coinciden',

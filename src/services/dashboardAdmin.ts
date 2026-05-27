@@ -26,7 +26,7 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
   const pendingScore = await supabase
     .from('matches')
     .select('id', { count: 'exact', head: true })
-    .eq('status', 'pending_score')
+    .in('status', ['pending_score', 'score_disputed'])
   const submitted = await supabase
     .from('matches')
     .select('id', { count: 'exact', head: true })

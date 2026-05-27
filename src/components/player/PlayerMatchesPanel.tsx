@@ -1,10 +1,10 @@
 import { ClipboardList } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 import { PlayerMatchActionCard } from '@/components/player/PlayerMatchActionCard'
-import { MatchScoreTimeline } from '@/components/player/MatchScoreTimeline'
+import { PlayerRegisteredMatchCard } from '@/components/player/PlayerRegisteredMatchCard'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -19,30 +19,16 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   canRejectScore,
   canSubmitScore,
-  getOpponentInMatch,
-  isMatchPlayerA,
-  matchStatusLabels,
-  matchStatusToneClasses,
 } from '@/lib/matchStatus'
-import { getPlayerPerspectiveScore } from '@/lib/matchUserPerspective'
-import {
-  calculateMatchGamesDifference,
-  getMatchOutcome,
-  getPointsForPlayerInMatch,
-} from '@/lib/playerDashboard'
 import { partitionPlayerMatches } from '@/lib/playerMatchPartitions'
 import { patchPlayerViewModelAfterOpponentReject } from '@/lib/playerDashboardMatchCache'
 import {
   PLAYER_SCORE_DISPUTE_REASON_MAX_LENGTH,
   validatePlayerScoreDisputeReason,
 } from '@/lib/playerScoreDispute'
-import {
-  importResultTypeBothPenalized,
-  importResultTypeUsesDefaultPoints,
-} from '@/lib/matchResultSemantics'
 import { cn } from '@/lib/utils'
 import { rejectPlayerScore } from '@/services/matches'
-import type { GroupPlayer, MatchGameType, MatchResultType, MatchRow, TournamentRules } from '@/types/database'
+import type { GroupPlayer, MatchRow, TournamentRules } from '@/types/database'
 
 function sortTimelineAsc(a: MatchRow, b: MatchRow) {
   const ta = new Date(a.created_at).getTime()
@@ -56,76 +42,9 @@ function sortTimelineDesc(a: MatchRow, b: MatchRow) {
   return tb - ta
 }
 
-function gameTypeLabel(gt: MatchGameType | null | undefined): string {
-  if (gt === 'long_set') return 'Set largo'
-  if (gt === 'sudden_death') return 'Muerte súbita'
-  if (gt === 'best_of_3_short_tiebreak') return '2 de 3 (tie-break corto)'
-  return 'Al mejor de 3'
-}
-
-function outcomeLine(match: MatchRow, myGroupPlayerId: string, resultType: MatchResultType | null): string {
-  if (importResultTypeBothPenalized(match.result_type)) return 'No reportado · penalización'
-  if (match.winner_id == null) return '—'
-  const walkoverLike = importResultTypeUsesDefaultPoints(resultType)
-  const w = getMatchOutcome(match, myGroupPlayerId)
-  if (walkoverLike) {
-    if (w === 'win') return 'Ganaste (W.O./DEF)'
-    if (w === 'loss') return 'Perdiste (W.O./DEF)'
-  }
-  if (resultType === 'retired') {
-    if (w === 'win') return 'Ganaste (retiro)'
-    if (w === 'loss') return 'Perdiste (retiro)'
-  }
-  if (w === 'win') return 'Ganaste'
-  if (w === 'loss') return 'Perdiste'
-  return '—'
-}
-
-function signed(n: number) {
-  if (n > 0) return `+${n}`
-  return String(n)
-}
-
-function pointsPhrase(points: number) {
-  const sign = points >= 0 ? '+' : ''
-  return `${sign}${points} ${Math.abs(points) === 1 ? 'pt' : 'pts'}`
-}
-
 function pendingActionsHeading(n: number) {
   if (n === 1) return 'Tienes 1 acción pendiente'
   return `Tienes ${n} acciones pendientes`
-}
-
-function enProcesoCopy(match: MatchRow, userId: string, myGroupPlayerId: string): { estado: string; marcador?: string } {
-  const marcador =
-    match.score_raw?.length || match.game_type === 'sudden_death'
-      ? getPlayerPerspectiveScore(match, myGroupPlayerId)
-      : undefined
-
-  if (match.status === 'pending_score') {
-    return { estado: 'Pendiente de marcador', marcador }
-  }
-  if (match.status === 'player_confirmed') {
-    return { estado: 'Pendiente de cierre por el organizador', marcador }
-  }
-  if (match.status === 'score_disputed') {
-    return {
-      estado: 'En revisión administrativa · el marcador no cuenta para la tabla',
-      marcador,
-    }
-  }
-  if (match.status === 'score_submitted') {
-    const iSubmitted =
-      match.score_submitted_by === userId ||
-      (match.score_submitted_by == null && isMatchPlayerA(match, userId))
-    return {
-      estado: iSubmitted
-        ? 'Resultado provisional · tu rival puede refutar'
-        : 'Resultado provisional · puedes confirmar o refutar',
-      marcador,
-    }
-  }
-  return { estado: matchStatusLabels[match.status], marcador }
 }
 
 function TabCount({ n, active }: { n: number; active: boolean }) {
@@ -140,15 +59,6 @@ function TabCount({ n, active }: { n: number; active: boolean }) {
     >
       {n}
     </span>
-  )
-}
-
-function MatchDetailRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5 border-l-2 border-[#1F5A4C]/20 pl-2.5 sm:flex-row sm:items-baseline sm:gap-3 sm:border-l-0 sm:pl-0">
-      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-[#94a3b8]">{label}</span>
-      <div className="min-w-0 flex-1">{children}</div>
-    </div>
   )
 }
 
@@ -190,8 +100,15 @@ export function PlayerMatchesPanel({
 
   const registradosCount = enProceso.length + historial.length
 
-  const [tab, setTab] = useState<'pendientes' | 'registrados'>(
-    pendientes.length > 0 ? 'pendientes' : 'registrados',
+  const defaultTab = pendientes.length > 0 ? 'pendientes' : 'registrados'
+  const [tabState, setTabState] = useState<{ groupKey: string; value: 'pendientes' | 'registrados' }>(() => ({
+    groupKey,
+    value: defaultTab,
+  }))
+  const tab = tabState.groupKey === groupKey ? tabState.value : defaultTab
+  const setTab = useCallback(
+    (value: 'pendientes' | 'registrados') => setTabState({ groupKey, value }),
+    [groupKey],
   )
 
   const relayAfterMutation = useCallback(
@@ -199,7 +116,7 @@ export function PlayerMatchesPanel({
       setTab('registrados')
       onAfterMatchMutation(payload)
     },
-    [onAfterMatchMutation],
+    [onAfterMatchMutation, setTab],
   )
 
   const qc = useQueryClient()
@@ -219,10 +136,14 @@ export function PlayerMatchesPanel({
     refuteInFlightRef.current = true
     setRefuteBusy(true)
     try {
-      await rejectPlayerScore({ matchId: target.id, disputeReason: parsed.reason })
-      const merged = patchPlayerViewModelAfterOpponentReject(qc, userId, target, parsed.reason)
+      const serverMatch = await rejectPlayerScore({ matchId: target.id, disputeReason: parsed.reason })
+      const merged = patchPlayerViewModelAfterOpponentReject(qc, userId, serverMatch ?? target, parsed.reason)
+      void qc.invalidateQueries({ queryKey: ['admin-disputed-results'] })
+      void qc.invalidateQueries({ queryKey: ['admin-results'] })
+      void qc.invalidateQueries({ queryKey: ['admin-matches'] })
+      void qc.invalidateQueries({ queryKey: ['admin-overview'] })
       toast.message('Resultado refutado', {
-        description: 'Organización revisará el caso y definirá el marcador oficial.',
+        description: 'Organización revisará el marcador y podrá validarlo o corregirlo.',
       })
       setRefuteTarget(null)
       setRefuteReason('')
@@ -234,10 +155,6 @@ export function PlayerMatchesPanel({
       setRefuteBusy(false)
     }
   }, [refuteTarget, refuteReason, qc, userId, relayAfterMutation])
-
-  useEffect(() => {
-    setTab(pendientes.length > 0 ? 'pendientes' : 'registrados')
-  }, [groupKey])
 
   return (
     <section
@@ -253,7 +170,7 @@ export function PlayerMatchesPanel({
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-[#102A43] sm:text-lg">Mis partidos</h2>
             <p className="text-xs leading-snug text-[#64748B] sm:text-sm">
-              Pendientes por cerrar y partidos ya registrados en este grupo.
+              Pendientes por capturar o refutados, y partidos ya registrados en este grupo.
             </p>
           </div>
         </div>
@@ -321,7 +238,7 @@ export function PlayerMatchesPanel({
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="pendientes" className="mt-3 space-y-3 outline-none">
+          <TabsContent value="pendientes" className="mt-3 space-y-2.5 outline-none sm:space-y-3">
             {pendSorted.length === 0 ? (
               <EmptyTab text="No tienes acciones pendientes en este momento." />
             ) : (
@@ -335,163 +252,30 @@ export function PlayerMatchesPanel({
                   userId={userId}
                   groupName={groupName}
                   onAfterMatchMutation={relayAfterMutation}
-                  className="p-3 sm:p-4"
                 />
               ))
             )}
           </TabsContent>
 
-          <TabsContent value="registrados" className="mt-3 space-y-2 outline-none">
+          <TabsContent value="registrados" className="mt-3 space-y-2.5 outline-none sm:space-y-3">
             {registradosSorted.length === 0 ? (
               <EmptyTab text="Aún no tienes partidos registrados en este grupo." />
             ) : (
-              <ul className="space-y-2">
+              <ul className="space-y-2.5 sm:space-y-3">
                 {registradosSorted.map((m) => {
-                  const rival = getOpponentInMatch(m, myGroupPlayerId, players)
-
-                  if (m.status === 'score_disputed') {
-                    const label = getPlayerPerspectiveScore(m, myGroupPlayerId)
-                    const disputeTone = matchStatusToneClasses.score_disputed
-                    return (
-                      <li
-                        key={m.id}
-                        className="rounded-2xl border border-[#E2E8F0] bg-gradient-to-br from-white to-[#F8FAFC] p-3 shadow-sm ring-1 ring-black/[0.02] sm:p-4"
-                      >
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                          <div className="min-w-0 flex-1 space-y-2.5">
-                            <p className="text-base font-bold leading-tight text-[#102A43] sm:text-[1.05rem]">
-                              Vs. {rival?.display_name ?? 'Rival'}
-                            </p>
-                            <MatchDetailRow label="Estado">
-                              <span className="text-sm font-medium text-[#92400e]">
-                                Resultado pendiente de revisión administrativa. El marcador no cuenta para la tabla hasta que
-                                organización resuelva la disputa.
-                              </span>
-                            </MatchDetailRow>
-                            {label !== '—' ? (
-                              <MatchDetailRow label="Marcador registrado">
-                                <span className="font-mono text-base font-bold tabular-nums text-[#64748B]">{label}</span>
-                              </MatchDetailRow>
-                            ) : null}
-                            {m.dispute_reason ? (
-                              <MatchDetailRow label="Tu motivo / motivo del rival">
-                                <span className="text-sm text-[#334155]">{m.dispute_reason}</span>
-                              </MatchDetailRow>
-                            ) : null}
-                            <p className="text-[11px] font-medium uppercase tracking-wide text-[#94a3b8]">
-                              Formato · {gameTypeLabel(m.game_type)}
-                            </p>
-                            <MatchScoreTimeline matchId={m.id} />
-                          </div>
-                          <span
-                            className={cn(
-                              'inline-flex w-fit shrink-0 rounded-full border px-3 py-1 text-[11px] font-semibold sm:mt-0.5',
-                              disputeTone,
-                            )}
-                          >
-                            Pendiente revisión
-                          </span>
-                        </div>
-                      </li>
-                    )
-                  }
-
                   const officialCounted =
                     (m.status === 'closed' || m.status === 'validated') && m.winner_id != null
                   const cancelled = m.status === 'cancelled'
-
                   const showResponderCard =
                     rules.allow_player_score_entry &&
                     (canSubmitScore(m, userId) || canRejectScore(m, userId))
 
-                  if (officialCounted || cancelled) {
-                    const pts = officialCounted ? getPointsForPlayerInMatch(m, myGroupPlayerId, rules) : null
-                    const gamesDiff = officialCounted ? calculateMatchGamesDifference(myGroupPlayerId, m) : null
-                    const label = getPlayerPerspectiveScore(m, myGroupPlayerId)
-                    const out = outcomeLine(m, myGroupPlayerId, m.result_type)
-                    const tone = matchStatusToneClasses[m.status]
-                    const canRefuteRegistered =
-                      officialCounted &&
-                      m.status === 'closed' &&
-                      !cancelled &&
-                      rules.allow_player_score_entry &&
-                      canRejectScore(m, userId)
-
-                    return (
-                      <li
-                        key={m.id}
-                        className="rounded-2xl border border-[#E2E8F0] bg-gradient-to-br from-white to-[#F8FAFC] p-3 shadow-sm ring-1 ring-black/[0.02] sm:p-4"
-                      >
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                          <div className="min-w-0 flex-1 space-y-2.5">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="text-base font-bold leading-tight text-[#102A43] sm:text-[1.05rem]">
-                                Vs. {rival?.display_name ?? 'Rival'}
-                              </p>
-                            </div>
-                            {cancelled ? (
-                              <MatchDetailRow label="Estado">
-                                <span className="text-sm font-medium text-[#64748B]">Partido cancelado</span>
-                              </MatchDetailRow>
-                            ) : officialCounted ? (
-                              <>
-                                <MatchDetailRow label="Resultado">
-                                  <span className="text-sm font-semibold text-[#334155]">{out}</span>
-                                </MatchDetailRow>
-                                <MatchDetailRow label="Marcador">
-                                  <span className="font-mono text-base font-bold tabular-nums text-[#102A43]">{label}</span>
-                                </MatchDetailRow>
-                                {pts != null && gamesDiff != null ? (
-                                  <MatchDetailRow label="Puntos">
-                                    <span className="text-sm font-semibold text-[#1F5A4C]">
-                                      {pointsPhrase(pts)} · Juegos {signed(gamesDiff)}
-                                    </span>
-                                  </MatchDetailRow>
-                                ) : null}
-                              </>
-                            ) : null}
-                            <p className="text-[11px] font-medium uppercase tracking-wide text-[#94a3b8]">
-                              Formato · {gameTypeLabel(m.game_type)}
-                            </p>
-                            {!cancelled && officialCounted ? <MatchScoreTimeline matchId={m.id} /> : null}
-                          </div>
-                          <span
-                            className={cn(
-                              'inline-flex w-fit shrink-0 rounded-full border px-3 py-1 text-[11px] font-semibold sm:mt-0.5',
-                              tone,
-                            )}
-                          >
-                            {officialCounted
-                              ? m.status === 'validated'
-                                ? 'Validado'
-                                : 'Resultado oficial'
-                              : matchStatusLabels[m.status]}
-                          </span>
-                        </div>
-                        {canRefuteRegistered ? (
-                          <div className="mt-4 space-y-2 border-t border-[#E2E8F0]/80 pt-3">
-                            <p className="text-xs leading-relaxed text-[#64748B]">
-                              Si el marcador no coincide con lo jugado, puedes refutarlo; organización revisará y definirá el
-                              resultado.
-                            </p>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="min-h-11 w-full touch-manipulation sm:w-auto sm:min-h-10"
-                              onClick={() => {
-                                setRefuteTarget(m)
-                                setRefuteReason('')
-                              }}
-                            >
-                              Refutar resultado
-                            </Button>
-                          </div>
-                        ) : null}
-                      </li>
-                    )
-                  }
-
-                  if (showResponderCard) {
+                  if (
+                    m.status !== 'score_disputed' &&
+                    !officialCounted &&
+                    !cancelled &&
+                    showResponderCard
+                  ) {
                     return (
                       <li key={m.id}>
                         <PlayerMatchActionCard
@@ -502,60 +286,36 @@ export function PlayerMatchesPanel({
                           userId={userId}
                           groupName={groupName}
                           onAfterMatchMutation={relayAfterMutation}
-                          className="p-3 sm:p-4"
                         />
                       </li>
                     )
                   }
 
-                  const { estado, marcador } = enProcesoCopy(m, userId, myGroupPlayerId)
-                  const badgeLabel =
-                    m.status === 'closed'
-                      ? matchStatusLabels.closed
-                      : m.status === 'validated'
-                        ? matchStatusLabels.validated
-                      : m.status === 'score_submitted'
-                        ? 'Confirmado'
-                        : matchStatusLabels[m.status]
-                  const toneSeg =
-                    m.status === 'closed'
-                      ? matchStatusToneClasses.closed
-                      : m.status === 'validated'
-                        ? matchStatusToneClasses.validated
-                      : m.status === 'score_submitted'
-                        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                        : matchStatusToneClasses[m.status]
+                  const canRefuteRegistered =
+                    officialCounted &&
+                    m.status === 'closed' &&
+                    !cancelled &&
+                    rules.allow_player_score_entry &&
+                    canRejectScore(m, userId)
+
                   return (
-                    <li
-                      key={m.id}
-                      className="rounded-2xl border border-[#E2E8F0] bg-gradient-to-br from-white to-[#F8FAFC] p-3 shadow-sm ring-1 ring-black/[0.02] sm:p-4"
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                        <div className="min-w-0 flex-1 space-y-2.5">
-                          <p className="text-base font-bold leading-tight text-[#102A43] sm:text-[1.05rem]">
-                            Vs. {rival?.display_name ?? 'Rival'}
-                          </p>
-                          <MatchDetailRow label="Seguimiento">
-                            <span className="text-sm font-medium text-[#475569]">{estado}</span>
-                          </MatchDetailRow>
-                          {marcador && marcador !== '—' ? (
-                            <MatchDetailRow label="Marcador">
-                              <span className="font-mono text-base font-bold tabular-nums text-[#102A43]">{marcador}</span>
-                            </MatchDetailRow>
-                          ) : null}
-                          <p className="text-[11px] font-medium uppercase tracking-wide text-[#94a3b8]">
-                            Formato · {gameTypeLabel(m.game_type)}
-                          </p>
-                        </div>
-                        <span
-                          className={cn(
-                            'inline-flex w-fit shrink-0 rounded-full border px-3 py-1 text-[11px] font-semibold sm:mt-0.5',
-                            toneSeg,
-                          )}
-                        >
-                          {badgeLabel}
-                        </span>
-                      </div>
+                    <li key={m.id}>
+                      <PlayerRegisteredMatchCard
+                        match={m}
+                        groupName={groupName}
+                        myGroupPlayerId={myGroupPlayerId}
+                        players={players}
+                        rules={rules}
+                        viewerUserId={userId}
+                        onRefute={
+                          canRefuteRegistered
+                            ? () => {
+                                setRefuteTarget(m)
+                                setRefuteReason('')
+                              }
+                            : undefined
+                        }
+                      />
                     </li>
                   )
                 })}

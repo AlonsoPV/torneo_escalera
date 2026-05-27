@@ -1,14 +1,12 @@
 import {
   CalendarClock,
-  Download,
+  Info,
   ListFilter,
   Trophy,
-  Upload,
   User,
-  Zap,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -21,7 +19,8 @@ import {
   groupsForTournamentSelect,
   matchesInFullScope,
   matchesInTournamentGroupScope,
-  playerOptionsFromMatches,
+  playerFilterOptionsFromMatches,
+  statusFilterOptionsFromMatches,
   tournamentOptionsFromGroups,
 } from '@/components/admin/shared/adminMatchFilters'
 import type { AdminScopeFilterSelectConfig } from '@/components/admin/shared/AdminMatchScopeFiltersBar'
@@ -29,7 +28,6 @@ import { AdminMatchScopeFiltersBar } from '@/components/admin/shared/AdminMatchS
 import { AdminEmptyState } from '@/components/admin/shared/AdminEmptyState'
 import { AdminPageHeader } from '@/components/admin/shared/AdminPageHeader'
 import { AdminSectionTitle } from '@/components/admin/shared/AdminSectionTitle'
-import { Button, buttonVariants } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { parseAdminMatchesStatusQueryParam } from '@/lib/adminStaffNotificationLinks'
@@ -55,8 +53,6 @@ import type { MatchStatus, ScoreSet } from '@/types/database'
 
 const PAGE_SIZE = 50
 
-const STATUS_FILTER_ALLOWED: MatchStatus[] = ['player_confirmed', 'score_submitted', 'score_disputed']
-
 export function AdminMatchesPage() {
   const qc = useQueryClient()
   const actorId = useAuthStore((s) => s.user?.id)
@@ -76,13 +72,12 @@ export function AdminMatchesPage() {
 
   const appliedActiveTournamentDefaultRef = useRef(false)
 
-  useEffect(() => {
-    if (status !== 'all' && !STATUS_FILTER_ALLOWED.includes(status)) {
-      setStatus('all')
-    }
-  }, [status])
-
-  const matchesQ = useQuery({ queryKey: ['admin-matches'], queryFn: () => getAdminMatches() })
+  const matchesQ = useQuery({
+    queryKey: ['admin-matches'],
+    queryFn: () => getAdminMatches(),
+    refetchInterval: tab === 'disputed' ? 15_000 : false,
+    refetchOnWindowFocus: true,
+  })
   const groupsQ = useQuery({ queryKey: ['admin-groups'], queryFn: () => getAdminGroups() })
   const rulesForEditor = useQuery({
     queryKey: ['tournament-rules', editingResult?.tournament_id ?? ''],
@@ -100,7 +95,7 @@ export function AdminMatchesPage() {
     () => matchesInTournamentGroupScope(matchesQ.data ?? [], tournamentId, groupId),
     [matchesQ.data, tournamentId, groupId],
   )
-  const playerOpts = useMemo(() => playerOptionsFromMatches(matchesForPlayerDropdown), [matchesForPlayerDropdown])
+  const playerOpts = useMemo(() => playerFilterOptionsFromMatches(matchesForPlayerDropdown), [matchesForPlayerDropdown])
 
   const scopedMatches = useMemo(
     () =>
@@ -111,6 +106,7 @@ export function AdminMatchesPage() {
       }),
     [matchesQ.data, tournamentId, groupId, playerGroupPlayerId],
   )
+  const statusOpts = useMemo(() => statusFilterOptionsFromMatches(scopedMatches), [scopedMatches])
 
   const filteredByControls = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -139,11 +135,30 @@ export function AdminMatchesPage() {
     [tabFilteredSorted, safePage],
   )
 
-  useEffect(() => {
+  const resetPage = useCallback(() => {
     setPage(1)
-  }, [tournamentId, groupId, playerGroupPlayerId, status, search, tab])
+  }, [])
+
+  const applyAdminMatchFilters = useCallback(
+    (next: {
+      tournament?: string
+      group?: string
+      status?: MatchStatus | 'all'
+      tab?: MatchesAdminTabId
+      highlight?: string | null
+    }) => {
+      resetPage()
+      if (next.tournament !== undefined) setTournamentId(next.tournament)
+      if (next.group !== undefined) setGroupId(next.group)
+      if (next.status !== undefined) setStatus(next.status)
+      if (next.tab !== undefined) setTab(next.tab)
+      if ('highlight' in next) setHighlightMatchId(next.highlight ?? null)
+    },
+    [resetPage],
+  )
 
   const refreshMatchQueries = async (opts?: { touchedMatch?: Pick<AdminMatchRecord, 'id' | 'tournament_id'> }) => {
+    await qc.invalidateQueries({ queryKey: ['admin-disputed-results'] })
     await qc.invalidateQueries({ queryKey: ['admin-matches'] })
     await qc.invalidateQueries({ queryKey: ['admin-results'] })
     await qc.invalidateQueries({ queryKey: ['admin-overview'] })
@@ -164,14 +179,21 @@ export function AdminMatchesPage() {
   const resultMut = useMutation({
     mutationFn: async (input: { match: AdminMatchRecord; sets: ScoreSet[]; closeAfter: boolean; adminNote: string }) => {
       if (!actorId) throw new Error('No autenticado')
-      await correctResult(input.match, input.sets, actorId, input.closeAfter, input.adminNote)
+      await correctResult(
+        input.match,
+        input.sets,
+        actorId,
+        input.closeAfter,
+        input.adminNote,
+        rulesForEditor.data ?? null,
+      )
     },
     onSuccess: async (_data, variables) => {
-      const draftDisputed =
-        variables.match.status === 'score_disputed' && variables.closeAfter === false
+      const disputedValidated =
+        variables.match.status === 'score_disputed' && variables.closeAfter
       toast.success(
-        draftDisputed
-          ? 'Corrección guardada (sigue en revisión)'
+        disputedValidated
+          ? 'Marcador corregido y validado'
           : variables.closeAfter
             ? 'Resultado confirmado'
             : 'Corrección guardada',
@@ -217,6 +239,7 @@ export function AdminMatchesPage() {
   })
 
   const setTabAndUrl = (next: MatchesAdminTabId) => {
+    resetPage()
     setTab(next)
     setSearchParams(
       (prev) => {
@@ -246,11 +269,15 @@ export function AdminMatchesPage() {
     }
 
     const activeId = activeTournamentIdFromGroups(groups)
+    let handle: number | undefined
     if (activeId) {
-      setTournamentId(activeId)
+      handle = window.setTimeout(() => applyAdminMatchFilters({ tournament: activeId }), 0)
     }
     appliedActiveTournamentDefaultRef.current = true
-  }, [groupsQ.data, searchParams])
+    return () => {
+      if (handle !== undefined) window.clearTimeout(handle)
+    }
+  }, [applyAdminMatchFilters, groupsQ.data, searchParams])
 
   useEffect(() => {
     const tournament = searchParams.get('tournament')
@@ -260,23 +287,22 @@ export function AdminMatchesPage() {
     const tabRaw = searchParams.get('tab')
 
     const hasDeepLink = Boolean(tournament ?? group ?? statusRaw ?? matchFocus ?? tabRaw)
-    if (!hasDeepLink) {
-      setHighlightMatchId(null)
-      return
-    }
-    if (tournament) setTournamentId(tournament)
-    if (group) setGroupId(group)
-    const parsedStatus = parseAdminMatchesStatusQueryParam(statusRaw)
-    if (parsedStatus && STATUS_FILTER_ALLOWED.includes(parsedStatus)) {
-      setStatus(parsedStatus)
-    }
-    if (isMatchesAdminTabId(tabRaw)) {
-      setTab(tabRaw)
-    } else if (parsedStatus === 'score_disputed') {
-      setTab('disputed')
-    }
-    setHighlightMatchId(matchFocus)
-  }, [searchParams])
+    const handle = window.setTimeout(() => {
+      if (!hasDeepLink) {
+        applyAdminMatchFilters({ highlight: null })
+        return
+      }
+      const parsedStatus = parseAdminMatchesStatusQueryParam(statusRaw)
+      applyAdminMatchFilters({
+        tournament: tournament ?? undefined,
+        group: group ?? undefined,
+        status: parsedStatus ?? undefined,
+        tab: isMatchesAdminTabId(tabRaw) ? tabRaw : parsedStatus === 'score_disputed' ? 'disputed' : undefined,
+        highlight: matchFocus,
+      })
+    }, 0)
+    return () => window.clearTimeout(handle)
+  }, [applyAdminMatchFilters, searchParams])
 
   useEffect(() => {
     if (!highlightMatchId) return
@@ -300,6 +326,7 @@ export function AdminMatchesPage() {
         value: tournamentId,
         valueLabel: tournamentId === 'all' ? 'Todos' : (tournamentOpts.find((t) => t.id === tournamentId)?.name ?? 'Torneo'),
         onValueChange: (value) => {
+          resetPage()
           setTournamentId(value ?? 'all')
           setGroupId('all')
           setPlayerGroupPlayerId('all')
@@ -313,6 +340,7 @@ export function AdminMatchesPage() {
         value: groupId,
         valueLabel: groupId === 'all' ? 'Todos' : (groupOpts.find((o) => o.value === groupId)?.label ?? 'Grupo'),
         onValueChange: (value) => {
+          resetPage()
           setGroupId(value ?? 'all')
           setPlayerGroupPlayerId('all')
         },
@@ -326,32 +354,26 @@ export function AdminMatchesPage() {
         valueLabel:
           playerGroupPlayerId === 'all'
             ? 'Todos'
-            : (playerOpts.find((p) => p.id === playerGroupPlayerId)?.label ?? 'Jugador'),
-        onValueChange: (value) => setPlayerGroupPlayerId(value ?? 'all'),
-        items: [{ value: 'all', label: 'Todos' }, ...playerOpts.map((p) => ({ value: p.id, label: p.label }))],
+            : (playerOpts.find((p) => p.value === playerGroupPlayerId)?.label ?? 'Jugador'),
+        onValueChange: (value) => {
+          resetPage()
+          setPlayerGroupPlayerId(value ?? 'all')
+        },
+        items: [{ value: 'all', label: 'Todos' }, ...playerOpts],
       },
       {
         id: 'status',
         label: 'Estado',
-        value: status === 'all' || STATUS_FILTER_ALLOWED.includes(status) ? status : 'all',
-        valueLabel:
-          status === 'all' || !STATUS_FILTER_ALLOWED.includes(status)
-            ? 'Todos'
-            : status === 'player_confirmed'
-              ? 'Pendientes'
-              : status === 'score_submitted'
-                ? 'Registrados'
-                : 'Refutados',
-        onValueChange: (value) => setStatus((value ?? 'all') as MatchStatus | 'all'),
-        items: [
-          { value: 'all', label: 'Todos' },
-          { value: 'player_confirmed', label: 'Pendientes' },
-          { value: 'score_submitted', label: 'Registrados' },
-          { value: 'score_disputed', label: 'Refutados' },
-        ],
+        value: status,
+        valueLabel: status === 'all' ? 'Todos' : (statusOpts.find((opt) => opt.value === status)?.label ?? 'Estado'),
+        onValueChange: (value) => {
+          resetPage()
+          setStatus((value ?? 'all') as MatchStatus | 'all')
+        },
+        items: [{ value: 'all', label: 'Todos' }, ...statusOpts],
       },
     ]
-  }, [tournamentId, tournamentOpts, groupId, groupOpts, playerGroupPlayerId, playerOpts, status])
+  }, [tournamentId, tournamentOpts, groupId, groupOpts, playerGroupPlayerId, playerOpts, status, statusOpts, resetPage])
 
   const loadingShell = matchesQ.isLoading
 
@@ -361,43 +383,14 @@ export function AdminMatchesPage() {
         <AdminPageHeader
           eyebrow="Administración"
           title="Partidos"
-          description="Administra partidos, marcadores, refutaciones y resultados oficiales del torneo."
         />
-        <div className="flex shrink-0 flex-wrap gap-2">
-          <Link
-            to="/admin/matches/import"
-            className={cn(buttonVariants({ size: 'sm' }), 'gap-1.5 bg-[#1F5A4C] text-white hover:bg-[#174a3f]')}
-          >
-            <Upload className="size-3.5 opacity-90" aria-hidden />
-            Importar resultados
-          </Link>
-          <Link to="/admin/exports" className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'gap-1.5 bg-white')}>
-            <Download className="size-3.5 opacity-80" aria-hidden />
-            Exportar
-          </Link>
-          <Link to="/admin/groups" className={cn(buttonVariants({ size: 'sm', variant: 'secondary' }), 'gap-1.5')}>
-            <User className="size-3.5 opacity-90" aria-hidden />
-            Crear partido manual
-          </Link>
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            className="gap-1.5"
-            onClick={async () => {
-              await qc.invalidateQueries({
-                predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'tournament-dashboard',
-              })
-              await qc.invalidateQueries({
-                predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'playerViewModel',
-              })
-              toast.success('Rankings y vistas del dashboard refrescados.')
-            }}
-          >
-            <Zap className="size-3.5 opacity-90" aria-hidden />
-            Recalcular rankings
-          </Button>
-        </div>
+        <span
+          className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm"
+          title="Administra partidos, marcadores, refutaciones y resultados oficiales del torneo."
+          aria-label="Administra partidos, marcadores, refutaciones y resultados oficiales del torneo."
+        >
+          <Info className="size-4" aria-hidden />
+        </span>
       </div>
 
       <AdminMatchScopeFiltersBar
@@ -405,12 +398,16 @@ export function AdminMatchesPage() {
         description="Torneo, grupo, jugador, estado y búsqueda por nombre."
         search={{
           value: search,
-          onChange: setSearch,
+          onChange: (value) => {
+            resetPage()
+            setSearch(value)
+          },
           placeholder: 'Buscar por jugador, grupo o torneo…',
           ariaLabel: 'Buscar partidos',
         }}
         selects={matchScopeFilterSelects}
         onClear={() => {
+          resetPage()
           setSearch('')
           setTournamentId('all')
           setGroupId('all')
@@ -496,6 +493,7 @@ export function AdminMatchesPage() {
           if (!open) setEditingResult(null)
         }}
         onSubmit={(input) => resultMut.mutate(input)}
+        submitPending={resultMut.isPending}
       />
 
       <AdminMatchHistoryDialog

@@ -58,6 +58,7 @@ function DropdownMenuLabel({
 }: MenuPrimitive.GroupLabel.Props & {
   inset?: boolean
 }) {
+  // Base UI: GroupLabel debe vivir dentro de <Menu.Group>; usa <DropdownMenuGroup> en el padre.
   return (
     <MenuPrimitive.GroupLabel
       data-slot="dropdown-menu-label"

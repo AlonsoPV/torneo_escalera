@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { PlayerGroupSection } from '@/components/player/PlayerGroupSection'
@@ -9,6 +9,7 @@ import { PlayerQuickMetrics } from '@/components/player/PlayerQuickMetrics'
 import { PlayerRecoveryEmailBanner } from '@/components/player/PlayerRecoveryEmailBanner'
 import { PlayerTournamentMovementCard } from '@/components/player/PlayerTournamentMovementCard'
 import { PlayerTournamentSelector } from '@/components/player/PlayerTournamentSelector'
+import { ResultsMatrixCard } from '@/components/tournament-dashboard/ResultsMatrixCard'
 import { buttonVariants } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { recoveryEmailComplete } from '@/lib/profileEmail'
@@ -16,6 +17,11 @@ import { dashboardPathWithGroupScope } from '@/lib/dashboardUrl'
 import {
   invalidatePlayerTournamentMovementQuery,
 } from '@/lib/playerDashboardMatchCache'
+import {
+  groupPlayersToSimPlayers,
+  matchRowsToSimMatches,
+  rankingRowsToGroupStandings,
+} from '@/lib/realTournamentView'
 import { patchTournamentDashboardCachesForMatch } from '@/services/dashboard/tournamentDashboardService'
 import { isAdminRole } from '@/lib/permissions'
 import { defaultGroupIdFromContexts, listPlayerDashboardContexts } from '@/services/dashboardPlayer'
@@ -42,16 +48,8 @@ export function PlayerDashboardPage() {
     enabled: Boolean(userId),
   })
 
-  const contexts = contextsQ.data ?? []
+  const contexts = useMemo(() => contextsQ.data ?? [], [contextsQ.data])
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!contexts.length) return
-    setSelectedGroupId((prev) => {
-      if (prev && contexts.some((c) => c.group.id === prev)) return prev
-      return defaultGroupIdFromContexts(contexts)
-    })
-  }, [contexts])
 
   const effectiveGroupId = useMemo(() => {
     if (!contexts.length) return null
@@ -80,6 +78,15 @@ export function PlayerDashboardPage() {
   )
 
   const name0 = useMemo(() => firstName(profile?.full_name), [profile?.full_name])
+  const matrixData = useMemo(() => {
+    if (!viewQ.data) return null
+    const { data } = viewQ.data
+    return {
+      players: groupPlayersToSimPlayers(data.players, data.group.id),
+      matches: matchRowsToSimMatches(data.matches, data.group.id),
+      standings: rankingRowsToGroupStandings(data.players, data.ranking),
+    }
+  }, [viewQ.data])
 
   if (!userId) {
     return (
@@ -216,9 +223,10 @@ export function PlayerDashboardPage() {
   const membership = data.membership
   const players = data.players
   const heroVerGrupoDashboardHref = dashboardPathWithGroupScope(t.id, g.id)
+  const matrix = matrixData!
 
   return (
-    <div id="page-player" data-name="page-player" className="space-y-6">
+    <div id="page-player" data-name="page-player" className="tdash-root space-y-6">
       <PlayerHeroSummary
         firstName={name0}
         tournamentName={t.name}
@@ -247,6 +255,14 @@ export function PlayerDashboardPage() {
         groupName={g.name}
         ranking={data.ranking}
         currentUserId={userId}
+      />
+
+      <ResultsMatrixCard
+        playerCount={matrix.players.length}
+        matchCount={matrix.matches.length}
+        players={matrix.players}
+        matches={matrix.matches}
+        standings={matrix.standings}
       />
 
       <PlayerMatchesPanel

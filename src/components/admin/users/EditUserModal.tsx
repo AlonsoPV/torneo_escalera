@@ -1,5 +1,5 @@
 import { Pencil } from 'lucide-react'
-import { useEffect, useState, type MouseEventHandler, type ReactElement } from 'react'
+import { useEffect, useMemo, useState, type MouseEventHandler, type ReactElement } from 'react'
 
 import { AdminFormModal } from '@/components/admin/shared/AdminFormModal'
 import { Button } from '@/components/ui/button'
@@ -13,13 +13,26 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ADMIN_USER_ASSIGNABLE_ROLES, normalizeAdminAssignableRole, userRoleLabelEs } from '@/lib/permissions'
-import { formatRecoveryEmailDisplay } from '@/lib/profileEmail'
-import type { AdminUserRecord } from '@/services/admin'
-import type { Group, PlayerCategory, UserRole } from '@/types/database'
+import type { AdminGroupRecord, AdminUserRecord } from '@/services/admin'
+import type { PlayerCategory, UserRole } from '@/types/database'
 
 type TriggerProps = ReactElement<{
   onClick?: MouseEventHandler<HTMLElement>
 }>
+
+function distinctGroupsByName(groups: AdminGroupRecord[], currentGroupId: string | undefined): AdminGroupRecord[] {
+  const byName = new Map<string, AdminGroupRecord>()
+  for (const g of groups) {
+    const key = g.name.trim().toLowerCase()
+    if (!byName.has(key)) byName.set(key, g)
+  }
+  const list = [...byName.values()]
+  if (currentGroupId && !list.some((g) => g.id === currentGroupId)) {
+    const full = groups.find((g) => g.id === currentGroupId)
+    if (full) list.unshift(full)
+  }
+  return list.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }))
+}
 
 export function EditUserModal({
   user,
@@ -31,9 +44,11 @@ export function EditUserModal({
   onOpenChange,
 }: {
   user: AdminUserRecord
-  groups: Group[]
+  groups: AdminGroupRecord[]
   categories: PlayerCategory[]
   onSubmit: (values: {
+    phone: string
+    recoveryEmail: string | null
     fullName: string
     role: UserRole
     categoryId: string
@@ -44,19 +59,34 @@ export function EditUserModal({
   open?: boolean
   onOpenChange?: (open: boolean) => void
 }) {
+  const [phone, setPhone] = useState(user.phone ?? '')
+  const [recoveryEmail, setRecoveryEmail] = useState(user.email?.trim() ?? '')
   const [fullName, setFullName] = useState(user.full_name ?? '')
   const [role, setRole] = useState<UserRole>(normalizeAdminAssignableRole(user.role))
   const [categoryId, setCategoryId] = useState(user.category_id ?? 'none')
   const [groupId, setGroupId] = useState(user.group?.id ?? 'none')
 
   useEffect(() => {
+    /* Sincronizar formulario al cambiar de usuario seleccionado. */
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setPhone(user.phone ?? '')
+    setRecoveryEmail(user.email?.trim() ?? '')
     setFullName(user.full_name ?? '')
     setRole(normalizeAdminAssignableRole(user.role))
     setCategoryId(user.category_id ?? 'none')
     setGroupId(user.group?.id ?? 'none')
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [user])
 
-  const recoveryLabel = formatRecoveryEmailDisplay(user.email)
+  const groupOptions = useMemo(
+    () => distinctGroupsByName(groups, user.group?.id ?? undefined),
+    [groups, user.group?.id],
+  )
+
+  const categoryTriggerLabel =
+    categoryId === 'none' || !categoryId
+      ? 'Sin categoría'
+      : (categories.find((c) => c.id === categoryId)?.name ?? 'Categoría desconocida')
 
   const defaultTrigger = (
     <Button variant="outline" size="sm">
@@ -71,13 +101,16 @@ export function EditUserModal({
       open={open}
       onOpenChange={onOpenChange}
       title="Editar usuario"
-      description="Actualiza datos del perfil y grupo. El correo de recuperación lo gestiona cada jugador en su panel."
+      description="Teléfono, correo de recuperación y datos del perfil. El número actualiza también el correo técnico de acceso (@mega-varonil.local)."
     >
       <form
         className="space-y-4"
         onSubmit={(event) => {
           event.preventDefault()
+          const rec = recoveryEmail.trim()
           onSubmit({
+            phone: phone.trim(),
+            recoveryEmail: rec === '' ? null : rec.toLowerCase(),
             fullName,
             role,
             categoryId: categoryId === 'none' ? '' : categoryId,
@@ -85,13 +118,31 @@ export function EditUserModal({
           })
         }}
       >
-        <div className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-600">
-          <span className="font-medium text-slate-700">Correo de recuperación: </span>
-          {recoveryLabel}
+        <div className="space-y-2">
+          <Label htmlFor={`edit-phone-${user.id}`}>Celular (cuenta)</Label>
+          <Input
+            id={`edit-phone-${user.id}`}
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="Ej. 5512345678"
+            inputMode="tel"
+            autoComplete="tel"
+          />
+          <p className="text-xs text-muted-foreground">Solo dígitos recomendados; se normaliza al guardar.</p>
         </div>
         <div className="space-y-2">
-          <Label htmlFor={`edit-phone-${user.id}`}>Celular</Label>
-          <Input id={`edit-phone-${user.id}`} value={user.phone ?? '—'} readOnly disabled className="bg-muted" />
+          <Label htmlFor={`edit-recovery-${user.id}`}>Correo de recuperación</Label>
+          <Input
+            id={`edit-recovery-${user.id}`}
+            type="email"
+            value={recoveryEmail}
+            onChange={(e) => setRecoveryEmail(e.target.value)}
+            placeholder="usuario@ejemplo.com"
+            autoComplete="email"
+          />
+          <p className="text-xs text-muted-foreground">
+            Déjalo vacío si debe completarlo el jugador. No sustituye el correo técnico de Auth.
+          </p>
         </div>
         <div className="space-y-2">
           <Label htmlFor={`edit-name-${user.id}`}>Nombre completo</Label>
@@ -102,7 +153,7 @@ export function EditUserModal({
             <Label>Rol</Label>
             <Select value={role} onValueChange={(value) => setRole(value as UserRole)}>
               <SelectTrigger className="min-w-[180px] w-full">
-                <SelectValue placeholder="Selecciona un rol" />
+                <SelectValue placeholder="Selecciona un rol">{userRoleLabelEs(role)}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {ADMIN_USER_ASSIGNABLE_ROLES.map((r) => (
@@ -117,7 +168,7 @@ export function EditUserModal({
             <Label>Categoría</Label>
             <Select value={categoryId} onValueChange={(value) => setCategoryId(value ?? 'none')}>
               <SelectTrigger className="min-w-[180px] w-full">
-                <SelectValue placeholder="Sin categoría" />
+                <SelectValue placeholder="Sin categoría">{categoryTriggerLabel}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none" label="Sin categoría">
@@ -136,19 +187,26 @@ export function EditUserModal({
           <Label>Grupo</Label>
           <Select value={groupId} onValueChange={(value) => setGroupId(value ?? 'none')}>
             <SelectTrigger className="min-w-[180px] w-full">
-              <SelectValue placeholder="Sin grupo o elige uno" />
+              <SelectValue placeholder="Sin grupo o elige uno">
+                {groupId === 'none'
+                  ? 'Sin grupo'
+                  : (groups.find((g) => g.id === groupId)?.name ?? groupOptions.find((g) => g.id === groupId)?.name ?? '')}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none" label="Sin grupo">
                 Sin grupo
               </SelectItem>
-              {groups.map((group) => (
+              {groupOptions.map((group) => (
                 <SelectItem key={group.id} value={group.id} label={group.name}>
                   {group.name}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground">
+            Si hay varios torneos con el mismo nombre de grupo, solo se muestra una fila por nombre.
+          </p>
         </div>
         <Button type="submit" className="w-full">
           Guardar cambios

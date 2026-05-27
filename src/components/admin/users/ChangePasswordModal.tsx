@@ -6,6 +6,7 @@ import { AdminFormModal } from '@/components/admin/shared/AdminFormModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { isPasswordLongEnough, passwordMinLengthError } from '@/lib/passwordPolicy'
 
 type TriggerProps = ReactElement<{
   onClick?: MouseEventHandler<HTMLElement>
@@ -52,6 +53,10 @@ export function ChangePasswordModal({
         className="space-y-4"
         onSubmit={(event) => {
           event.preventDefault()
+          if (!isPasswordLongEnough(password)) {
+            toast.error(passwordMinLengthError())
+            return
+          }
           if (password !== confirmPassword) {
             toast.error('Las contraseñas no coinciden')
             return

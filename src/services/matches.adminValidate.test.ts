@@ -1,0 +1,90 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { MatchRow } from '@/types/database'
+
+const rpcMock = vi.fn()
+const singleMock = vi.fn()
+
+vi.mock('@/lib/supabase', () => ({
+  supabase: {
+    rpc: (...args: unknown[]) => rpcMock(...args),
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          single: () => singleMock(),
+        }),
+      }),
+    }),
+  },
+}))
+
+import { adminValidateDisputedWithoutChanges } from '@/services/matches'
+
+function disputedMatch(overrides?: Partial<MatchRow>): MatchRow {
+  return {
+    id: 'match-1',
+    status: 'score_disputed',
+    winner_id: 'player-a-gp',
+    score_raw: [{ a: 6, b: 4 }],
+    result_type: 'normal',
+    game_type: 'best_of_3',
+    ...overrides,
+  } as MatchRow
+}
+
+describe('adminValidateDisputedWithoutChanges', () => {
+  beforeEach(() => {
+    rpcMock.mockReset()
+    singleMock.mockReset()
+    rpcMock.mockResolvedValue({ error: null })
+    singleMock.mockImplementation(async () => ({
+      data: disputedMatch(),
+      error: null,
+    }))
+  })
+
+  it('valida disputa vía admin_set_match_result → closed (RPC 042+ lo mapea a validated)', async () => {
+    const match = disputedMatch()
+    await adminValidateDisputedWithoutChanges(match)
+
+    expect(singleMock).toHaveBeenCalledOnce()
+    expect(rpcMock).toHaveBeenCalledOnce()
+    expect(rpcMock).toHaveBeenCalledWith('admin_set_match_result', {
+      p_match_id: 'match-1',
+      p_score: [{ a: 6, b: 4 }],
+      p_winner_id: 'player-a-gp',
+      p_status: 'closed',
+      p_result_type: 'normal',
+      p_game_type: 'best_of_3',
+    })
+  })
+
+  it('rechaza partidos que no están en score_disputed', async () => {
+    singleMock.mockResolvedValueOnce({
+      data: disputedMatch({ status: 'closed' }),
+      error: null,
+    })
+
+    await expect(adminValidateDisputedWithoutChanges(disputedMatch())).rejects.toThrow(
+      'Solo aplica a partidos pendientes de revisión administrativa.',
+    )
+    expect(rpcMock).not.toHaveBeenCalled()
+  })
+
+  it('rechaza si falta ganador', async () => {
+    singleMock.mockResolvedValueOnce({
+      data: disputedMatch({ winner_id: null }),
+      error: null,
+    })
+
+    await expect(adminValidateDisputedWithoutChanges(disputedMatch())).rejects.toThrow(
+      'Falta ganador en el registro actual.',
+    )
+    expect(rpcMock).not.toHaveBeenCalled()
+  })
+
+  it('propaga errores del RPC (p. ej. no admin)', async () => {
+    rpcMock.mockResolvedValue({ error: { message: 'Solo staff', code: 'P0001' } })
+    await expect(adminValidateDisputedWithoutChanges(disputedMatch())).rejects.toThrow('Solo staff')
+  })
+})

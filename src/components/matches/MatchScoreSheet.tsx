@@ -405,7 +405,7 @@ export function MatchScoreSheet(props: {
     try {
       await respondOpponentMatchScore({ matchId: match.id, accept: false, disputeReason: reason })
       toast.message('Resultado refutado', {
-        description: 'El jugador que registró el marcador podrá corregirlo y reenviarlo.',
+        description: 'Organización revisará el marcador y podrá validarlo o corregirlo.',
       })
       setRejectOpen(false)
       setRejectReason('')

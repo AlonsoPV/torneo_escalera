@@ -73,7 +73,9 @@ export function GroupMatrix(props: {
                   const isDefault = match ? importResultTypeUsesDefaultPoints(match.result_type) : false
                   const isPenaltyCell = match ? importResultTypeBothPenalized(match.result_type) : false
                   const label =
-                    isDefault && !sets?.length
+                    match?.status === 'score_disputed'
+                      ? 'REF'
+                      : isDefault && !sets?.length
                       ? 'W/O'
                       : sets && sets.length > 0
                         ? formatScoreCompact(sets)
@@ -98,7 +100,7 @@ export function GroupMatrix(props: {
                             match?.status === 'pending_score' &&
                               'border-dashed border-primary/40 bg-background hover:bg-muted/60',
                             match?.status === 'score_disputed' &&
-                              'border-rose-500/35 bg-rose-500/10',
+                              'border-rose-400 bg-rose-50 text-rose-950 ring-1 ring-rose-200/70 hover:bg-rose-100/80',
                             !match && 'border-dashed border-muted-foreground/30 bg-muted/20',
                           )}
                         >

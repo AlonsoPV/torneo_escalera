@@ -17,7 +17,7 @@ export function PlayerAccountPage() {
   }, [refreshProfile])
 
   return (
-    <div id="page-player-account" className="mx-auto max-w-lg space-y-5 py-2 sm:py-4">
+    <div id="page-player-account" className="mx-auto max-w-2xl space-y-5 py-2 sm:py-4">
       <div className="flex flex-wrap items-center gap-3">
         <Link
           to="/player"
@@ -34,14 +34,14 @@ export function PlayerAccountPage() {
         </span>
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Datos de cuenta</h1>
-          <p className="text-sm text-[#64748B]">Correo de recuperación y contraseña</p>
+          <p className="text-sm text-[#64748B]">Nombre, celular, correo de recuperación y contraseña</p>
         </div>
       </div>
 
       {!profile ? (
         <Skeleton className="h-80 w-full rounded-2xl" />
       ) : (
-        <PlayerAccountSection profile={profile} />
+        <PlayerAccountSection key={`${profile.id}-${profile.updated_at}`} profile={profile} />
       )}
     </div>
   )

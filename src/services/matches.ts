@@ -94,8 +94,10 @@ export function preparePlayerScoreSubmissionSync(input: {
           winner: (inputSets?.[0]?.b ?? 0) > (inputSets?.[0]?.a ?? 0) ? 'b' : 'a',
         }
       }
+      const normalizedGameType =
+        match.game_type === 'best_of_3_short_tiebreak' ? 'best_of_3_short_tiebreak' : 'best_of_3'
       return {
-        game_type: 'best_of_3',
+        game_type: normalizedGameType,
         score_json: inputSets ?? [],
         winner: fallbackWinner === match.player_b_id ? 'b' : 'a',
       }
@@ -153,13 +155,14 @@ function parseMatchRowFromRpc(data: unknown): MatchRow | undefined {
 
 /**
  * Destino de estado al guardar como admin.
- * Desde disputa: `explicit === 'score_disputed'` guarda borrador (sigue en revisión); cerrar valida (`validated`).
+ * Desde disputa: `explicit === 'score_disputed'` guarda borrador (sigue en revisión); cerrar valida.
+ * Enviamos `closed` al RPC: migración 042+ lo convierte en `validated`; en DB anteriores queda `closed` (oficial).
  */
 export function inferAdminSaveTargetStatus(match: MatchRow, explicit?: MatchStatus): MatchStatus {
   if (explicit === 'cancelled') return 'cancelled'
   if (match.status === 'score_disputed') {
     if (explicit === 'score_disputed') return 'score_disputed'
-    return 'validated'
+    return 'closed'
   }
   if (explicit != null) return explicit
   if (match.status === 'closed' || match.status === 'validated' || match.status === 'cancelled')
@@ -211,7 +214,6 @@ export async function saveMatchScore(input: {
     p_game_type: payload.game_type,
   })
   if (isPlayerSubmitPerfEnabled()) {
-    // eslint-disable-next-line no-console -- flag explícita perfPlayerSubmit
     console.debug(`[perf] submit_player_match_result RPC ${Math.round(performance.now() - tRpc)}ms`)
   }
   if (error) throw new Error(mapPostgresError(error))
@@ -249,6 +251,9 @@ export async function correctAdminScore(input: {
   actorUserId: string
   closeAfter?: boolean
 }): Promise<MatchRow | undefined> {
+  if (input.match.status === 'score_disputed' && input.closeAfter === false) {
+    throw new Error('En un partido refutado solo puedes validar o corregir y validar el marcador.')
+  }
   const explicit: MatchStatus =
     input.match.status === 'score_disputed' && input.closeAfter === false ? 'score_disputed' : 'closed'
   return saveMatchScore({
@@ -303,23 +308,65 @@ export async function cancelMatch(matchId: string, actorUserId: string): Promise
 
 /** Confirma como válido el marcador registrado tras disputa (sin cambiar sets). */
 export async function adminValidateDisputedWithoutChanges(match: MatchRow): Promise<void> {
-  if (match.status !== 'score_disputed') {
+  const { data, error: fetchError } = await supabase.from('matches').select('*').eq('id', match.id).single()
+  if (fetchError) throw new Error(mapPostgresError(fetchError))
+  const fresh = data as MatchRow
+
+  if (fresh.status !== 'score_disputed') {
     throw new Error('Solo aplica a partidos pendientes de revisión administrativa.')
   }
-  if (!match.winner_id) throw new Error('Falta ganador en el registro actual.')
+  if (!fresh.winner_id) throw new Error('Falta ganador en el registro actual.')
+
   const { error } = await supabase.rpc('admin_set_match_result', {
-    p_match_id: match.id,
-    p_score: (match.score_raw ?? []) as unknown as Json,
-    p_winner_id: match.winner_id,
-    p_status: 'validated',
-    p_result_type: match.result_type ?? 'normal',
-    p_game_type: match.game_type,
+    p_match_id: fresh.id,
+    p_score: (fresh.score_raw ?? []) as unknown as Json,
+    p_winner_id: fresh.winner_id,
+    p_status: 'closed',
+    p_result_type: fresh.result_type ?? 'normal',
+    p_game_type: fresh.game_type ?? 'best_of_3',
+  })
+  if (error) throw new Error(mapPostgresError(error))
+}
+
+/** Corrige marcador en disputa y lo valida oficialmente (RPC directo → `validated`). */
+export async function adminCorrectDisputedMatch(input: {
+  match: MatchRow
+  sets: ScoreSet[]
+  rules?: TournamentRules | null
+}): Promise<void> {
+  const { data, error: fetchError } = await supabase.from('matches').select('*').eq('id', input.match.id).single()
+  if (fetchError) throw new Error(mapPostgresError(fetchError))
+  const fresh = data as MatchRow
+
+  if (fresh.status !== 'score_disputed') {
+    throw new Error('Solo aplica a partidos pendientes de revisión administrativa.')
+  }
+
+  const rules = input.rules ?? (await getTournamentRules(fresh.tournament_id))
+  if (!rules) throw new Error('No se encontraron reglas del torneo.')
+
+  const { winnerId, payload, pScoreJson } = preparePlayerScoreSubmissionSync({
+    match: fresh,
+    sets: input.sets,
+    rules,
+  })
+
+  const { error } = await supabase.rpc('admin_set_match_result', {
+    p_match_id: fresh.id,
+    p_score: pScoreJson,
+    p_winner_id: winnerId,
+    p_status: 'closed',
+    p_result_type: fresh.result_type ?? 'normal',
+    p_game_type: payload.game_type ?? fresh.game_type ?? 'best_of_3',
   })
   if (error) throw new Error(mapPostgresError(error))
 }
 
 /** Invalidación administrativa con auditoría vía RPC (logs). */
 export async function adminInvalidateMatchResult(match: MatchRow): Promise<void> {
+  if (match.status === 'score_disputed') {
+    throw new Error('No puedes invalidar un partido refutado; valida o corrige el marcador.')
+  }
   const { error } = await supabase.rpc('admin_set_match_result', {
     p_match_id: match.id,
     p_score: match.score_raw ?? ([] as unknown as Json),
@@ -347,27 +394,31 @@ export async function respondOpponentMatchScore(input: {
   matchId: string
   accept: boolean
   disputeReason?: string | null
-}): Promise<void> {
+}): Promise<MatchRow | undefined> {
   const { error } = await supabase.rpc('opponent_respond_match_score', {
     p_match_id: input.matchId,
     p_accept: input.accept,
     p_dispute_reason: input.disputeReason ?? null,
   })
   if (error) throw new Error(mapPostgresError(error))
+  const { data, error: fetchError } = await supabase.from('matches').select('*').eq('id', input.matchId).single()
+  if (fetchError) throw new Error(mapPostgresError(fetchError))
+  return data as MatchRow
 }
 
-export async function acceptPlayerScore(matchId: string): Promise<void> {
+export async function acceptPlayerScore(matchId: string): Promise<MatchRow | undefined> {
   return respondOpponentMatchScore({ matchId, accept: true })
 }
 
-export async function acceptMatchScore(matchId: string, _playerId?: string): Promise<void> {
+export async function acceptMatchScore(matchId: string, _playerId?: string): Promise<MatchRow | undefined> {
+  void _playerId
   return acceptPlayerScore(matchId)
 }
 
 export async function rejectPlayerScore(input: {
   matchId: string
   disputeReason: string
-}): Promise<void> {
+}): Promise<MatchRow | undefined> {
   return respondOpponentMatchScore({
     matchId: input.matchId,
     accept: false,
@@ -375,7 +426,8 @@ export async function rejectPlayerScore(input: {
   })
 }
 
-export async function rejectMatchScore(matchId: string, _playerId: string | undefined, reason: string): Promise<void> {
+export async function rejectMatchScore(matchId: string, _playerId: string | undefined, reason: string): Promise<MatchRow | undefined> {
+  void _playerId
   return rejectPlayerScore({ matchId, disputeReason: reason })
 }
 
@@ -439,6 +491,8 @@ export type GenerateRrTournamentGroupResult = {
   groupId: string
   groupName: string
   outcome: 'generated' | 'skipped'
+  /** Inserciones en la última pasada RR (`fill`) o después de borrar en (`reset`). */
+  matchesInserted?: number
   detail?: string
 }
 
@@ -497,14 +551,19 @@ export async function generateRoundRobinForTournamentGroups(input: {
     }
 
     try {
-      await generateRoundRobinMatches({
+      const inserted = await generateRoundRobinMatches({
         tournamentId: input.tournamentId,
         groupId: g.id,
         players: g.players,
         createdBy: input.createdBy,
         mode: input.mode,
       })
-      results.push({ groupId: g.id, groupName: g.name, outcome: 'generated' })
+      results.push({
+        groupId: g.id,
+        groupName: g.name,
+        outcome: 'generated',
+        matchesInserted: inserted,
+      })
     } catch (e) {
       results.push({
         groupId: g.id,

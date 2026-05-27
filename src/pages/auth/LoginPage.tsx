@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { z } from 'zod'
+import { MIN_PASSWORD_LENGTH, passwordMinLengthMessage } from '@/lib/passwordPolicy'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -19,7 +20,7 @@ import { AuthPageShell } from '@/pages/auth/AuthPageShell'
 
 const schema = z.object({
   phone: z.string().min(1, 'Introduce tu número de celular'),
-  password: z.string().min(6, 'Mínimo 6 caracteres'),
+  password: z.string().min(MIN_PASSWORD_LENGTH, passwordMinLengthMessage()),
 })
 
 type Form = z.infer<typeof schema>

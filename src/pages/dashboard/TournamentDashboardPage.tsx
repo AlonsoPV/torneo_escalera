@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { GroupProgressCard } from '@/components/dashboard/GroupProgressCard'
@@ -8,10 +8,21 @@ import { TournamentDashboardHeaderCompact } from '@/components/dashboard/Tournam
 import { TournamentFiltersBar } from '@/components/dashboard/TournamentFiltersBar'
 import { TournamentLeaderboardCard } from '@/components/dashboard/TournamentLeaderboardCard'
 import { TournamentPerformanceOverview } from '@/components/dashboard/TournamentPerformanceOverview'
+import { ResultsMatrixCard } from '@/components/tournament-dashboard/ResultsMatrixCard'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getTournamentDashboardData, listTournamentOptionsForDashboard } from '@/services/dashboard/tournamentDashboardService'
+import {
+  groupPlayersToSimPlayers,
+  matchRowsToSimMatches,
+  rankingRowsToGroupStandings,
+} from '@/lib/realTournamentView'
+import {
+  getTournamentDashboardData,
+  listTournamentOptionsForDashboard,
+  recomputeTournamentDashboardPresentation,
+} from '@/services/dashboard/tournamentDashboardService'
 import { ensureDefaultGroupCategories, listGroupCategories } from '@/services/groupCategories'
 import type { Tournament } from '@/types/database'
+import { computeGroupRanking } from '@/utils/ranking'
 
 function defaultTournamentId(tournaments: Tournament[]): string | null {
   const active = tournaments.find((t) => t.status === 'active')
@@ -21,23 +32,19 @@ function defaultTournamentId(tournaments: Tournament[]): string | null {
 export function TournamentDashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const tq = useQuery({ queryKey: ['tournament-dashboard-options'], queryFn: listTournamentOptionsForDashboard })
-  const tournaments = tq.data ?? []
+  const tournaments = useMemo(() => tq.data ?? [], [tq.data])
 
-  const [tournamentId, setTournamentId] = useState<string | null>(null)
+  const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null)
   const [groupCategoryId, setGroupCategoryId] = useState<'all' | 'none' | string>('all')
   const [groupId, setGroupId] = useState<'all' | string>('all')
 
-  useEffect(() => {
-    if (!tq.isSuccess || tournaments.length === 0) return
+  const tournamentId = useMemo(() => {
+    if (!tq.isSuccess || tournaments.length === 0) return null
     const fromUrl = searchParams.get('tournament') ?? searchParams.get('torneo')
-    setTournamentId((prev) => {
-      if (fromUrl && tournaments.some((t) => t.id === fromUrl)) {
-        return fromUrl
-      }
-      if (prev && tournaments.some((t) => t.id === prev)) return prev
-      return defaultTournamentId(tournaments)
-    })
-  }, [tq.isSuccess, tournaments, searchParams])
+    if (fromUrl && tournaments.some((t) => t.id === fromUrl)) return fromUrl
+    if (selectedTournamentId && tournaments.some((t) => t.id === selectedTournamentId)) return selectedTournamentId
+    return defaultTournamentId(tournaments)
+  }, [tq.isSuccess, tournaments, searchParams, selectedTournamentId])
 
   const categoriesQ = useQuery({
     queryKey: ['group-categories', 'dashboard', tournamentId],
@@ -50,14 +57,6 @@ export function TournamentDashboardPage() {
   })
   const groupCategories = categoriesQ.data ?? []
 
-  useEffect(() => {
-    setGroupCategoryId('all')
-  }, [tournamentId])
-
-  useEffect(() => {
-    setGroupId('all')
-  }, [tournamentId, groupCategoryId])
-
   const filters = useMemo(
     () => ({
       groupCategoryId,
@@ -66,28 +65,85 @@ export function TournamentDashboardPage() {
     [groupCategoryId, groupId],
   )
 
+  const baseFilters = useMemo(
+    () => ({
+      groupCategoryId: 'all' as const,
+      groupId: 'all' as const,
+    }),
+    [],
+  )
+
   const dq = useQuery({
-    queryKey: ['tournament-dashboard', tournamentId, filters],
+    queryKey: ['tournament-dashboard', tournamentId],
     queryFn: async () => {
-      const d = await getTournamentDashboardData(tournamentId!, filters)
+      const d = await getTournamentDashboardData(tournamentId!, baseFilters)
       if (!d) throw new Error('Torneo no encontrado')
       return d
     },
     enabled: Boolean(tournamentId),
   })
 
-  const data = dq.data
+  const data = useMemo(() => {
+    const raw = dq.data
+    if (!raw) return raw
 
-  useEffect(() => {
-    const gid = searchParams.get('group') ?? searchParams.get('grupo')
-    if (!gid || !data?.groups?.length || !tournamentId) return
-    if (data.tournament.id !== tournamentId) return
-    if (!data.groups.some((g) => g.id === gid)) return
-    setGroupId(gid)
-  }, [searchParams, data?.groups, data?.tournament?.id, tournamentId])
+    const groups =
+      groupCategoryId === 'all'
+        ? raw.groups
+        : groupCategoryId === 'none'
+          ? raw.groups.filter((g) => !g.group_category_id)
+          : raw.groups.filter((g) => g.group_category_id === groupCategoryId)
+
+    const groupFromUrl = searchParams.get('group') ?? searchParams.get('grupo')
+    const requestedGroupId = groupId !== 'all' ? groupId : groupFromUrl
+    const defaultGroupId = groups[0]?.id ?? null
+    const groupStillVisible = requestedGroupId ? groups.some((g) => g.id === requestedGroupId) : false
+    const effectiveGroupId = groupStillVisible ? requestedGroupId : defaultGroupId
+    const effectiveFilters = {
+      ...filters,
+      groupId: effectiveGroupId ?? ('all' as const),
+    }
+    const derived = recomputeTournamentDashboardPresentation({
+      groups,
+      groupPlayers: raw.groupPlayers,
+      allMatches: raw.matches,
+      rules: raw.rules,
+      filters: effectiveFilters,
+    })
+
+    return { ...raw, groups, ...derived }
+  }, [dq.data, filters, groupCategoryId, groupId, searchParams])
+
+  const selectedGroupId = useMemo(() => {
+    const groupFromUrl = searchParams.get('group') ?? searchParams.get('grupo')
+    const requestedGroupId = groupId !== 'all' ? groupId : groupFromUrl
+    if (!data?.groups.length) return 'all'
+    if (!requestedGroupId || !data.groups.some((g) => g.id === requestedGroupId)) return data.groups[0]?.id ?? 'all'
+    return requestedGroupId
+  }, [data?.groups, groupId, searchParams])
 
   const leaderboardGroupTitle =
-    groupId === 'all' ? 'general' : data?.groups.find((g) => g.id === groupId)?.name ?? 'Grupo'
+    selectedGroupId === 'all' ? 'general' : data?.groups.find((g) => g.id === selectedGroupId)?.name ?? 'Grupo'
+
+  const matrixGroup = useMemo(() => {
+    if (!data?.groups.length) return null
+    if (selectedGroupId !== 'all') return data.groups.find((g) => g.id === selectedGroupId) ?? null
+    return data.groups[0] ?? null
+  }, [data?.groups, selectedGroupId])
+
+  const matrixData = useMemo(() => {
+    if (!data || !matrixGroup) return null
+    const players = data.groupPlayers
+      .filter((p) => p.group_id === matrixGroup.id)
+      .sort((a, b) => a.seed_order - b.seed_order || a.display_name.localeCompare(b.display_name, 'es'))
+    const matches = data.matches.filter((m) => m.group_id === matrixGroup.id)
+    const ranking = computeGroupRanking(players, matches, data.rules)
+    return {
+      players: groupPlayersToSimPlayers(players, matrixGroup.id),
+      matches: matchRowsToSimMatches(matches, matrixGroup.id),
+      standings: rankingRowsToGroupStandings(players, ranking),
+    }
+  }, [data, matrixGroup])
 
   const clearDashboardFilters = () => {
     setGroupCategoryId('all')
@@ -157,7 +213,7 @@ export function TournamentDashboardPage() {
     dq.fetchStatus === 'fetching' && dq.status === 'success' && Boolean(dq.data)
 
   return (
-    <div className="space-y-5 pb-6 sm:space-y-6 sm:pb-8">
+    <div className="tdash-root space-y-5 pb-6 sm:space-y-6 sm:pb-8">
       <TournamentDashboardHeaderCompact tournament={data.tournament} />
 
       <TournamentFiltersBar
@@ -166,15 +222,33 @@ export function TournamentDashboardPage() {
         groupCategories={groupCategories}
         groupCategoryId={groupCategoryId}
         groups={data.groups}
-        groupId={groupId}
+        groupId={selectedGroupId}
+        defaultGroupId={data.groups[0]?.id ?? 'all'}
         isFetching={filtersBarShowRefreshing}
-        onTournamentChange={(id) => setTournamentId(id)}
-        onGroupCategoryChange={(id) => setGroupCategoryId(id)}
+        onTournamentChange={(id) => {
+          setSelectedTournamentId(id)
+          setGroupCategoryId('all')
+          setGroupId('all')
+        }}
+        onGroupCategoryChange={(id) => {
+          setGroupCategoryId(id)
+          setGroupId('all')
+        }}
         onGroupChange={(id) => setGroupId(id)}
         onClearFilters={clearDashboardFilters}
       />
 
       <TournamentPerformanceOverview metrics={data.metrics} />
+
+      {matrixGroup && matrixData ? (
+        <ResultsMatrixCard
+          playerCount={matrixData.players.length}
+          matchCount={matrixData.matches.length}
+          players={matrixData.players}
+          matches={matrixData.matches}
+          standings={matrixData.standings}
+        />
+      ) : null}
 
       {/* Una columna hasta lg: evita leaderboard + progreso demasiado estrechos en tablet */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-5 xl:gap-6">

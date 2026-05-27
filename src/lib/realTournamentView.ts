@@ -21,6 +21,18 @@ function matrixScoreForMatch(m: MatchRow): ScoreSet[] | undefined {
 /** Convierte filas Supabase a celdas de matriz demo (incluye pendientes sin ganador). */
 export function matchRowsToSimMatches(matches: MatchRow[], groupId: string): SimMatch[] {
   return matches.map((m) => {
+    if (m.status === 'score_disputed') {
+      return {
+        id: m.id,
+        groupId,
+        playerAId: m.player_a_id,
+        playerBId: m.player_b_id,
+        resultType: 'normal',
+        score: matrixScoreForMatch(m),
+        winnerId: m.winner_id,
+        status: 'score_disputed',
+      } satisfies SimMatch
+    }
     if (!m.winner_id) {
       if (
         (m.status === 'closed' || m.status === 'validated') &&
@@ -34,7 +46,7 @@ export function matchRowsToSimMatches(matches: MatchRow[], groupId: string): Sim
           resultType: 'normal',
           score: matrixScoreForMatch(m),
           winnerId: null,
-          status: 'closed',
+          status: m.status,
         } satisfies SimMatch
       }
       return {
@@ -44,7 +56,7 @@ export function matchRowsToSimMatches(matches: MatchRow[], groupId: string): Sim
         playerBId: m.player_b_id,
         resultType: 'normal',
         winnerId: null,
-        status: 'pending_score',
+        status: m.status,
       } satisfies SimMatch
     }
     const isDef =
@@ -70,7 +82,7 @@ export function matchRowsToSimMatches(matches: MatchRow[], groupId: string): Sim
                 : 'b'
               : undefined,
       winnerId: m.winner_id,
-      status: 'closed',
+      status: m.status,
     } satisfies SimMatch
   })
 }

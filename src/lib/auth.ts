@@ -2,6 +2,7 @@ import type { AuthError } from '@supabase/supabase-js'
 
 import { supabase } from '@/lib/supabase'
 import { isAdminRole } from '@/lib/permissions'
+import { formatAuthPasswordError } from '@/lib/passwordPolicy'
 import { invokeResolveAuthEmailByPhone } from '@/services/authEdge'
 import type { Profile } from '@/types/database'
 
@@ -19,6 +20,13 @@ export async function fetchProfile(userId: string): Promise<Profile | null> {
 
 function mapAuthPasswordError(error: AuthError): Error {
   const m = (error.message ?? '').toLowerCase()
+  if (
+    error.code === 'weak_password' ||
+    m.includes('password should be') ||
+    m.includes('too short')
+  ) {
+    return new Error(formatAuthPasswordError(error.message))
+  }
   if (
     m.includes('invalid login credentials') ||
     m.includes('invalid credentials') ||
@@ -70,12 +78,12 @@ export async function signUpWithEmail(
     password,
     options: { data: { full_name: fullName } },
   })
-  if (error) throw error
+  if (error) throw mapAuthPasswordError(error)
   return data
 }
 
 export async function signOut() {
-  const { error } = await supabase.auth.signOut()
+  const { error } = await supabase.auth.signOut({ scope: 'local' })
   if (error) throw error
 }
 
@@ -97,5 +105,5 @@ export async function requestPasswordReset(email: string) {
 
 export async function updatePassword(newPassword: string) {
   const { error } = await supabase.auth.updateUser({ password: newPassword })
-  if (error) throw error
+  if (error) throw mapAuthPasswordError(error)
 }

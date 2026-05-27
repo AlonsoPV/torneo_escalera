@@ -8,7 +8,9 @@ export function normalizeImportLabel(raw: string): string {
     .join(' ')
 }
 
-/** Contraseña en carga masiva: exactamente 8 dígitos (0-9). */
-export function isValidImportNumericPassword(s: string): boolean {
-  return /^\d{8}$/.test(String(s ?? '').trim())
+import { isPasswordLongEnough, MIN_PASSWORD_LENGTH } from '@/lib/passwordPolicy'
+
+/** Contraseña en carga masiva: mínimo {@link MIN_PASSWORD_LENGTH} caracteres. */
+export function isValidImportPassword(s: string): boolean {
+  return isPasswordLongEnough(s)
 }

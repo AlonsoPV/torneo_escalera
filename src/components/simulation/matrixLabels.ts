@@ -11,6 +11,13 @@ export function getCellLabelAndTitle(rowId: string, match: SimMatch | undefined)
     return { label: '—', title: 'Sin resultado' }
   }
 
+  if (match.status === 'score_disputed') {
+    return {
+      label: 'REF',
+      title: 'Marcador refutado · activo para revisión administrativa',
+    }
+  }
+
   if (match.winnerId == null) {
     return { label: '—', title: 'Por jugar' }
   }

@@ -1,7 +1,8 @@
 import type { UserRole } from '@/types/database'
 
 import { normalizePhone } from '@/lib/phone'
-import { isValidImportNumericPassword, normalizeImportLabel } from '@/lib/userImportTemplate'
+import { isValidImportPassword, normalizeImportLabel } from '@/lib/userImportTemplate'
+import { MIN_PASSWORD_LENGTH } from '@/lib/passwordPolicy'
 
 export type BulkImportParsedRow = {
   rowNumber: number
@@ -9,6 +10,7 @@ export type BulkImportParsedRow = {
   phone: string
   fullName: string
   role: string
+  tournamentName: string
   categoryName: string
   password: string
   groupName: string
@@ -134,8 +136,6 @@ export function buildBulkImportPreview(
       messages.push('No puedes asignar super_admin desde la importación (requiere super admin).')
     }
 
-    if (!ext) messages.push('ID obligatorio.')
-
     if (!phoneRaw) {
       messages.push('Celular obligatorio.')
     } else if (!phoneNorm.ok) {
@@ -147,14 +147,22 @@ export function buildBulkImportPreview(
     const idExists = ext ? context.externalIdsInUse.has(ext.toLowerCase()) : false
     const phoneExists = phoneDigits ? context.phonesInUse.has(phoneDigits) : false
 
+    if (!ext) {
+      if (phoneExists) {
+        messages.push('Sin ID en archivo: se actualizará por celular y se conservará el ID actual.')
+      } else {
+        messages.push('ID obligatorio para altas nuevas.')
+      }
+    }
+
     if (!pwd) {
       if (!idExists && !phoneExists) {
-        messages.push('Contraseña obligatoria (8 dígitos numéricos) para altas nuevas.')
+        messages.push(`Contraseña obligatoria (mínimo ${MIN_PASSWORD_LENGTH} caracteres) para altas nuevas.`)
       } else {
         messages.push('Sin contraseña en archivo: se conservará la contraseña actual del usuario.')
       }
-    } else if (!isValidImportNumericPassword(pwd)) {
-      messages.push('Contraseña: debe ser exactamente 8 dígitos (solo números).')
+    } else if (!isValidImportPassword(pwd)) {
+      messages.push(`Contraseña: mínimo ${MIN_PASSWORD_LENGTH} caracteres.`)
     } else {
       const n = (passwordCounts.get(pwd) ?? 0) + 1
       passwordCounts.set(pwd, n)
@@ -241,7 +249,7 @@ export function buildBulkImportPreview(
     let state: 'ready' | 'warning' | 'error' = 'ready'
     const hard = [
       'obligatorio',
-      '8 dígitos',
+      'caracteres',
       'duplicado en el archivo',
       'no existe (activa',
       'super_admin',
@@ -249,7 +257,6 @@ export function buildBulkImportPreview(
       'no hay grupos',
       'no existe en el torneo',
       'está lleno',
-      'superaría el cupo',
       'no puede tener más',
       'debe tener al menos',
       'no válido',

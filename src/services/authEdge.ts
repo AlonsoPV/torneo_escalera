@@ -21,6 +21,45 @@ async function readFunctionsErrorBody(error: unknown): Promise<{ error?: string;
   }
 }
 
+const EDGE_FUNCTION_TIMEOUT_MS = 30_000
+
+async function invokeAuthedEdgeFunction<T>(
+  name: string,
+  body: Record<string, unknown>,
+): Promise<T | null> {
+  const anonKey = requireAnonKey()
+  const { data: sessionData } = await supabase.auth.getSession()
+  const token = sessionData.session?.access_token
+  if (!token) throw new Error('Inicia sesión para continuar.')
+
+  const ac = new AbortController()
+  const timeout = window.setTimeout(() => ac.abort(), EDGE_FUNCTION_TIMEOUT_MS)
+
+  try {
+    const { data, error } = await supabase.functions.invoke<T>(name, {
+      body,
+      headers: { Authorization: `Bearer ${token}`, apikey: anonKey },
+      signal: ac.signal,
+    })
+
+    if (error) {
+      if (error.name === 'AbortError') {
+        throw new Error('La solicitud tardó demasiado. Intenta de nuevo.')
+      }
+      const parsed = await readFunctionsErrorBody(error)
+      throw new Error(parsed?.error ?? error.message)
+    }
+
+    if (data && typeof data === 'object' && 'error' in data && (data as { error?: string }).error) {
+      throw new Error(String((data as { error?: string }).error))
+    }
+
+    return data ?? null
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
 const GENERIC_PHONE_NOT_FOUND = 'No encontramos una cuenta con ese número.'
 
 export async function invokeResolveAuthEmailByPhone(phone: string): Promise<string> {
@@ -109,6 +148,15 @@ export async function invokeUpdateUserRecoveryEmail(email: string): Promise<void
   }
 }
 
+export async function invokeUpdateUserAccount(input: {
+  fullName?: string
+  phone?: string
+  recoveryEmail?: string | null
+  newPassword?: string
+}): Promise<void> {
+  await invokeAuthedEdgeFunction('update-user-account', input as Record<string, unknown>)
+}
+
 export async function invokeAdminCreateUser(input: {
   fullName: string
   phone: string
@@ -122,7 +170,7 @@ export async function invokeAdminCreateUser(input: {
   const { data: sessionData } = await supabase.auth.getSession()
   const token = sessionData.session?.access_token
   if (!token) throw new Error('Inicia sesión como administrador.')
-  const { data, error } = await supabase.functions.invoke<{ error?: string }>('admin-create-user', {
+  const { data, error } = await supabase.functions.invoke<{ error?: string; externalId?: string | null }>('admin-create-user', {
     body: {
       fullName: input.fullName,
       phone: input.phone,
@@ -224,6 +272,30 @@ export async function invokeAdminChangeUserPassword(input: { userId: string; new
   if (!token) throw new Error('Inicia sesión como administrador.')
   const { data, error } = await supabase.functions.invoke<{ error?: string }>('admin-change-user-password', {
     body: { userId: input.userId, newPassword: input.newPassword },
+    headers: { Authorization: `Bearer ${token}`, apikey: anonKey },
+  })
+  if (error) throw new Error(error.message)
+  if (data && typeof data === 'object' && 'error' in data && data.error) {
+    throw new Error(String(data.error))
+  }
+}
+
+/** Admin: celular (sincroniza email técnico en Auth) y correo de recuperación en `profiles.email`. */
+export async function invokeAdminUpdateUserContact(input: {
+  userId: string
+  phone: string
+  recoveryEmail: string | null
+}): Promise<void> {
+  const anonKey = requireAnonKey()
+  const { data: sessionData } = await supabase.auth.getSession()
+  const token = sessionData.session?.access_token
+  if (!token) throw new Error('Inicia sesión como administrador.')
+  const { data, error } = await supabase.functions.invoke<{ error?: string }>('admin-update-user-contact', {
+    body: {
+      userId: input.userId,
+      phone: input.phone,
+      recoveryEmail: input.recoveryEmail,
+    },
     headers: { Authorization: `Bearer ${token}`, apikey: anonKey },
   })
   if (error) throw new Error(error.message)

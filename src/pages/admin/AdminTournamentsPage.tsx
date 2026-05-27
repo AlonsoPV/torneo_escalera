@@ -1,18 +1,4 @@
-import {
-  AlertTriangle,
-  ArrowRightLeft,
-  CalendarClock,
-  CalendarDays,
-  CheckCircle2,
-  ChevronDown,
-  Eye,
-  Flag,
-  Grid3x3,
-  Lock,
-  Pencil,
-  Trophy,
-  Users,
-} from 'lucide-react'
+import { ArrowRightLeft, CheckCircle2, Eye, Grid3x3, Lock, Pencil, Trophy } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -36,7 +22,7 @@ import {
   grantAdminNextTournamentRouteAccess,
 } from '@/lib/adminNextTournamentRouteGate'
 import { cn } from '@/lib/utils'
-import { computeAdminMatchBreakdown, getAdminMatches, getAdminOverviewData } from '@/services/admin'
+import { getAdminOverviewData } from '@/services/admin'
 import { listTournaments, updateTournament } from '@/services/tournaments'
 import { useAuthStore } from '@/stores/authStore'
 import type { Tournament } from '@/types/database'
@@ -55,10 +41,6 @@ function RenameTournamentModal({
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(tournament.name)
 
-  useEffect(() => {
-    if (open) setName(tournament.name)
-  }, [open, tournament.id, tournament.name])
-
   const compact = density === 'compact'
 
   return (
@@ -75,6 +57,7 @@ function RenameTournamentModal({
           disabled={saving}
           title="Renombrar torneo"
           aria-label="Renombrar torneo"
+          onClick={() => setName(tournament.name)}
         >
           <Pencil className="size-3.5" />
           {!compact ? <span>Renombrar</span> : null}
@@ -124,17 +107,22 @@ function RenameTournamentModal({
 function TournamentActionsToolbar({
   tournament,
   renameSaving,
+  activateSaving,
   onRenameSave,
+  onActivate,
   closedBy,
   layout,
 }: {
   tournament: Tournament
   renameSaving: boolean
+  activateSaving: boolean
   onRenameSave: (name: string) => Promise<void>
+  onActivate: () => Promise<void>
   closedBy: string | undefined
   layout: 'table' | 'card'
 }) {
   const finished = tournament.status === 'finished'
+  const canActivate = tournament.status === 'draft'
 
   if (layout === 'table') {
     return (
@@ -154,13 +142,29 @@ function TournamentActionsToolbar({
         <Link
           id={`admin-tournament-link-dashboard-${tournament.id}`}
           data-name={`viewDashboard-${tournament.id}`}
-          to="/dashboard"
-          title="Ver en inicio"
-          aria-label="Ver en inicio"
+          to={`/dashboard?tournament=${encodeURIComponent(tournament.id)}`}
+          title="Abrir torneo"
+          aria-label="Abrir torneo"
           className={buttonVariants({ variant: 'ghost', size: 'icon-sm', className: 'shrink-0 text-slate-600' })}
         >
           <Eye className="size-3.5" />
         </Link>
+        {canActivate ? (
+          <Button
+            id={`admin-tournament-btn-activate-${tournament.id}`}
+            name={`activateTournament-${tournament.id}`}
+            variant="outline"
+            size="icon-sm"
+            type="button"
+            disabled={activateSaving}
+            title="Activar torneo"
+            aria-label="Activar torneo"
+            className="shrink-0 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+            onClick={() => void onActivate()}
+          >
+            <CheckCircle2 className="size-3.5" />
+          </Button>
+        ) : null}
         <span className="mx-0.5 hidden h-5 w-px shrink-0 bg-slate-200 sm:inline-block" aria-hidden />
         <CloseTournamentDialog
           tournamentId={tournament.id}
@@ -217,11 +221,26 @@ function TournamentActionsToolbar({
           size: 'sm',
           className: 'inline-flex h-9 w-full justify-center gap-2 text-slate-700',
         })}
-        to="/dashboard"
+        to={`/dashboard?tournament=${encodeURIComponent(tournament.id)}`}
       >
         <Eye className="size-3.5 shrink-0" />
-        Ver en inicio
+        Abrir torneo
       </Link>
+      {canActivate ? (
+        <Button
+          id={`admin-tournament-mobile-btn-activate-${tournament.id}`}
+          name={`activateTournamentMobile-${tournament.id}`}
+          variant="outline"
+          size="sm"
+          type="button"
+          className="h-9 w-full gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+          disabled={activateSaving}
+          onClick={() => void onActivate()}
+        >
+          <CheckCircle2 className="size-3.5 shrink-0" />
+          Activar torneo
+        </Button>
+      ) : null}
       <CloseTournamentDialog
         tournamentId={tournament.id}
         tournamentName={tournament.name}
@@ -249,11 +268,11 @@ function TournamentActionsToolbar({
 export function AdminTournamentsPage() {
   const qc = useQueryClient()
   const userId = useAuthStore((s) => s.user?.id)
-  const [pendingMetricsOpen, setPendingMetricsOpen] = useState(false)
   const tournamentsQ = useQuery({ queryKey: ['admin-tournaments'], queryFn: listTournaments })
-  const overviewQ = useQuery({ queryKey: ['admin-overview'], queryFn: getAdminOverviewData })
-  const matchesQ = useQuery({ queryKey: ['admin-matches'], queryFn: () => getAdminMatches() })
-  const breakdown = useMemo(() => computeAdminMatchBreakdown(matchesQ.data ?? []), [matchesQ.data])
+  const overviewQ = useQuery({
+    queryKey: ['admin-overview'],
+    queryFn: () => getAdminOverviewData(),
+  })
 
   /** Torneo «abierto»: borrador o activo (no cuenta finalizados ni archivados). */
   const blockingTournament = useMemo(() => {
@@ -261,6 +280,11 @@ export function AdminTournamentsPage() {
     const active = open.find((t) => t.status === 'active')
     return active ?? open[0] ?? null
   }, [tournamentsQ.data])
+
+  const activeTournament = useMemo(
+    () => (tournamentsQ.data ?? []).find((t) => t.status === 'active') ?? null,
+    [tournamentsQ.data],
+  )
 
   const hasOpenTournament = Boolean(blockingTournament)
 
@@ -286,6 +310,30 @@ export function AdminTournamentsPage() {
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Error al renombrar'),
   })
 
+  const activateMut = useMutation({
+    mutationFn: async (tournament: Tournament) => {
+      const otherOpen = (tournamentsQ.data ?? []).find(
+        (t) => t.id !== tournament.id && (t.status === 'draft' || t.status === 'active'),
+      )
+      if (otherOpen) {
+        throw new Error(`Antes de activar este torneo, cierra ${otherOpen.name}.`)
+      }
+      await updateTournament(tournament.id, { status: 'active' })
+    },
+    onSuccess: async (_, tournament) => {
+      toast.success('Torneo activado')
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['admin-tournaments'] }),
+        qc.invalidateQueries({ queryKey: ['tournaments'] }),
+        qc.invalidateQueries({ queryKey: ['admin-overview'] }),
+        qc.invalidateQueries({ queryKey: ['tournament', tournament.id] }),
+        qc.invalidateQueries({ queryKey: ['tournament-dashboard-options'] }),
+        qc.invalidateQueries({ queryKey: ['tournament-dashboard'] }),
+      ])
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Error al activar torneo'),
+  })
+
   const columns: AdminDataTableColumn<Tournament>[] = [
     {
       key: 'name',
@@ -307,15 +355,6 @@ export function AdminTournamentsPage() {
       ),
     },
     {
-      key: 'season',
-      header: 'Temporada',
-      render: (tournament) => (
-        <span id={`admin-tournament-cell-season-${tournament.id}`} data-name="tournament-season-cell">
-          {tournament.season ?? '-'}
-        </span>
-      ),
-    },
-    {
       key: 'created',
       header: 'Creado',
       render: (tournament) => (
@@ -333,7 +372,9 @@ export function AdminTournamentsPage() {
           <TournamentActionsToolbar
             tournament={tournament}
             renameSaving={renameMut.isPending}
+            activateSaving={activateMut.isPending}
             onRenameSave={(name) => renameMut.mutateAsync({ id: tournament.id, name })}
+            onActivate={() => activateMut.mutateAsync(tournament)}
             closedBy={userId}
             layout="table"
           />
@@ -436,11 +477,11 @@ export function AdminTournamentsPage() {
         ) : null}
       </section>
 
-      {overviewQ.isLoading || matchesQ.isLoading ? (
+      {overviewQ.isLoading ? (
         <div id="admin-tournaments-loading" className="space-y-5 sm:space-y-8">
           <Skeleton className="h-8 max-w-sm rounded-lg" />
           <div className={ADMIN_METRIC_GRID_4}>
-            {Array.from({ length: 8 }).map((_, i) => (
+            {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-[5.5rem] rounded-2xl sm:h-24" />
             ))}
           </div>
@@ -450,129 +491,39 @@ export function AdminTournamentsPage() {
           <section id="section-admin-tournaments-metrics-op" className="space-y-3 sm:space-y-4" aria-labelledby="tournaments-metrics-op">
             <AdminSectionTitle
               id="tournaments-metrics-op"
-              title="Operación general"
-              description="Capacidad actual del sistema y torneos en curso."
+              title="Operacion general"
+              description="Lectura rapida del torneo activo y su avance operativo."
             />
             <div id="admin-tournaments-metrics-operation" className={ADMIN_METRIC_GRID_4}>
               <AdminMetricCard
                 id="admin-tournaments-metric-active-tournaments"
-                label="Torneos activos"
-                value={overview.activeTournaments}
-                icon={Trophy}
+                label="Torneo activo"
+                value={activeTournament?.name ?? 'Sin torneo activo'}
                 tone="success"
-                descriptionMode="info"
-                description={`De ${overview.totalTournaments} torneo(s) en total`}
+                description="Torneo actualmente en operacion"
               />
               <AdminMetricCard
                 id="admin-tournaments-metric-total-players"
-                label="Total jugadores"
+                label="Jugadores"
                 value={overview.totalPlayers}
-                icon={Users}
                 tone="neutral"
-                descriptionMode="info"
-                description="Rol jugador en perfiles"
+                description="Inscritos dentro del alcance activo"
+              />
+              <AdminMetricCard
+                id="admin-tournaments-metric-matches-progress"
+                label="Partidos por jugar"
+                value={`${overview.matchesWithoutDate}/${overview.totalMatches}`}
+                tone={overview.matchesWithoutDate > 0 ? 'warning' : 'success'}
+                description="Pendientes de marcador vs partidos totales"
               />
               <AdminMetricCard
                 id="admin-tournaments-metric-total-groups"
-                label="Total grupos"
+                label="Grupos"
                 value={overview.totalGroups}
-                icon={Flag}
                 tone="info"
-                descriptionMode="info"
-                description="Grupos creados"
-              />
-              <AdminMetricCard
-                id="admin-tournaments-metric-incomplete-groups"
-                label="Grupos incompletos"
-                value={overview.incompleteGroups}
-                icon={AlertTriangle}
-                tone={overview.incompleteGroups > 0 ? 'warning' : 'neutral'}
-                descriptionMode="info"
-                description="Por debajo del cupo del grupo"
+                description="Grupos creados en el torneo activo"
               />
             </div>
-          </section>
-
-          <section
-            id="section-admin-tournaments-metrics-pending"
-            className="rounded-xl border border-amber-200/70 bg-gradient-to-b from-amber-50/35 to-white p-3 shadow-sm ring-1 ring-amber-900/[0.04] sm:rounded-2xl sm:p-4 sm:ring-amber-900/[0.03]"
-            aria-label="Marcadores y pendientes"
-          >
-            <details
-              id="admin-tournaments-details-pending-metrics"
-              data-name="pending-metrics-details"
-              onToggle={(event) => setPendingMetricsOpen(event.currentTarget.open)}
-            >
-              <summary
-                id="admin-tournaments-summary-pending-metrics"
-                data-name="pending-metrics-summary"
-                className="flex cursor-pointer list-none items-start justify-between gap-3 rounded-lg py-0.5 text-left outline-none [&::-webkit-details-marker]:hidden focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-              >
-                <div className="min-w-0 flex-1 pr-1">
-                  <h3 id="tournaments-metrics-pending" className="text-sm font-semibold leading-snug tracking-tight text-slate-900 sm:text-[0.9375rem]">
-                    Marcadores y pendientes
-                  </h3>
-                  <p className="mt-0.5 text-[11px] leading-snug text-slate-500 sm:text-xs">
-                    <span className="max-sm:inline sm:hidden">Toca para ver marcadores pendientes y revisiones.</span>
-                    <span className="hidden sm:inline">Cruces pendientes y cola de revisión de marcadores.</span>
-                  </p>
-                </div>
-                <ChevronDown
-                  className={cn(
-                    'mt-0.5 size-5 shrink-0 text-amber-800/70 transition-transform duration-200',
-                    pendingMetricsOpen && 'rotate-180',
-                  )}
-                  aria-hidden
-                />
-              </summary>
-
-              <div className="mt-3 border-t border-amber-200/60 pt-3 sm:mt-3 sm:pt-3">
-                <p className="mb-3 hidden text-xs leading-relaxed text-slate-500 sm:block">
-                  Cruces pendientes y cola de revisión de marcadores.
-                </p>
-                <div
-                  id="admin-tournaments-metrics-pending"
-                  className={cn('max-sm:flex max-sm:flex-col max-sm:gap-2', 'sm:grid sm:grid-cols-2 sm:gap-4 xl:grid-cols-4 xl:gap-5')}
-                >
-                  <AdminMetricCard
-                    id="admin-tournaments-pending-metric-score-pending"
-                    label="Pendientes de marcador"
-                    value={breakdown.pendingScore}
-                    icon={CalendarDays}
-                    tone="info"
-                    descriptionMode="info"
-                    description="Disponibles para captura"
-                  />
-                  <AdminMetricCard
-                    id="admin-tournaments-pending-metric-no-date"
-                    label="Cruces sin marcador"
-                    value={overview.matchesWithoutDate}
-                    icon={CalendarClock}
-                    tone={overview.matchesWithoutDate > 0 ? 'warning' : 'neutral'}
-                    descriptionMode="info"
-                    description="Aún sin captura"
-                  />
-                  <AdminMetricCard
-                    id="admin-tournaments-pending-metric-results-queue"
-                    label="Resultados pendientes"
-                    value={overview.pendingResults}
-                    icon={AlertTriangle}
-                    tone={overview.pendingResults > 0 ? 'warning' : 'neutral'}
-                    descriptionMode="info"
-                    description="Resultado provisional (jugadores)"
-                  />
-                  <AdminMetricCard
-                    id="admin-tournaments-pending-metric-confirmed"
-                    label="Resultados confirmados"
-                    value={overview.confirmedResults}
-                    icon={CheckCircle2}
-                    tone="success"
-                    descriptionMode="info"
-                    description="Cerrados por administración"
-                  />
-                </div>
-              </div>
-            </details>
           </section>
         </>
       ) : null}
@@ -583,10 +534,42 @@ export function AdminTournamentsPage() {
           title="Torneos registrados"
           description={
             hasOpenTournament
-              ? 'Con un torneo en borrador o activo no se puede crear otro hasta finalizarlo.'
-              : 'Puedes crear un torneo nuevo o usar el asistente «Siguiente torneo» cuando el anterior esté finalizado.'
+              ? 'Administra el ciclo del torneo abierto: preparar, activar, operar y cerrar con reglas claras.'
+              : 'El historial queda cerrado; puedes activar un borrador o iniciar el siguiente torneo.'
           }
         />
+        <div
+          id="admin-tournaments-lifecycle-story"
+          className="grid gap-3 rounded-2xl border border-slate-200/70 bg-white p-3 shadow-sm sm:grid-cols-3 sm:p-4"
+        >
+          <div className="flex gap-3 rounded-xl bg-slate-50/80 p-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-800">
+              <Pencil className="size-4" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-950">Preparar</p>
+              <p className="mt-0.5 text-xs leading-snug text-slate-600">Borrador, grupos, reglas y cruces listos.</p>
+            </div>
+          </div>
+          <div className="flex gap-3 rounded-xl bg-emerald-50/70 p-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-800">
+              <CheckCircle2 className="size-4" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-950">Activar</p>
+              <p className="mt-0.5 text-xs leading-snug text-slate-600">El torneo entra en operacion y se abre en dashboard.</p>
+            </div>
+          </div>
+          <div className="flex gap-3 rounded-xl bg-amber-50/70 p-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-900">
+              <Lock className="size-4" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-950">Cerrar</p>
+              <p className="mt-0.5 text-xs leading-snug text-slate-600">Guarda ranking final; si falta marcador, aplica regla de cierre.</p>
+            </div>
+          </div>
+        </div>
       {tournamentsQ.isLoading ? (
         <Skeleton className="h-72 rounded-2xl" />
       ) : (tournamentsQ.data ?? []).length === 0 ? (
@@ -627,19 +610,29 @@ export function AdminTournamentsPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div>
-                      <p className="text-xs text-[#64748B]">Temporada</p>
-                      <p className="font-medium text-[#102A43]">{tournament.season ?? '—'}</p>
-                    </div>
-                    <div>
                       <p className="text-xs text-[#64748B]">Creado</p>
                       <p className="font-medium text-[#102A43]">{tournament.created_at.slice(0, 10)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#64748B]">Flujo</p>
+                      <p className="font-medium text-[#102A43]">
+                        {tournament.status === 'active'
+                          ? 'En juego'
+                          : tournament.status === 'draft'
+                            ? 'Preparacion'
+                            : tournament.status === 'finished'
+                              ? 'Cerrado'
+                              : 'Archivado'}
+                      </p>
                     </div>
                   </div>
                   <div className="border-t border-[#E2E8F0] pt-3">
                     <TournamentActionsToolbar
                       tournament={tournament}
                       renameSaving={renameMut.isPending}
+                      activateSaving={activateMut.isPending}
                       onRenameSave={(name) => renameMut.mutateAsync({ id: tournament.id, name })}
+                      onActivate={() => activateMut.mutateAsync(tournament)}
                       closedBy={userId}
                       layout="card"
                     />

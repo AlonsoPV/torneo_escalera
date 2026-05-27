@@ -1,4 +1,6 @@
 import type { AdminGroupRecord, AdminMatchRecord } from '@/services/admin'
+import { matchStatusLabels, PLAYER_SCORE_STATUSES } from '@/lib/matchStatus'
+import type { MatchStatus } from '@/types/database'
 
 /** `groupId` puede ser `all`, un uuid o varios uuids de grupo separados por `|` (misma etiqueta en el combobox). */
 export type AdminMatchScopeFilters = {
@@ -65,6 +67,14 @@ export function playerOptionsFromMatches(matches: AdminMatchRecord[]): Array<{ i
     .sort((a, b) => a.label.localeCompare(b.label, 'es'))
 }
 
+export function statusFilterOptionsFromMatches(matches: AdminMatchRecord[]): Array<{ value: MatchStatus; label: string }> {
+  const seen = new Set(matches.map((m) => m.status))
+  return PLAYER_SCORE_STATUSES.filter((status) => seen.has(status)).map((status) => ({
+    value: status,
+    label: matchStatusLabels[status] ?? status,
+  }))
+}
+
 export function normalizeAdminFilterLabel(label: string): string {
   return label.trim().toLowerCase().replace(/\s+/g, ' ')
 }
@@ -73,6 +83,8 @@ export function normalizeAdminFilterLabel(label: string): string {
 export function groupFilterOptionsFromRecords(groups: AdminGroupRecord[]): Array<{ value: string; label: string }> {
   const normToIds = new Map<string, string[]>()
   const normToBestLabel = new Map<string, string>()
+  const groupById = new Map(groups.map((g) => [g.id, g]))
+
   for (const g of groups) {
     const rawName = g.name ?? ''
     const norm = normalizeAdminFilterLabel(rawName) || '\u0000'
@@ -83,16 +95,42 @@ export function groupFilterOptionsFromRecords(groups: AdminGroupRecord[]): Array
     const prev = normToBestLabel.get(norm) ?? ''
     if (trimmed.length > prev.length) normToBestLabel.set(norm, trimmed)
   }
-  return [...normToIds.entries()]
-    .map(([norm, ids]) => {
-      const best = (normToBestLabel.get(norm) ?? '').trim()
-      const label = best.length > 0 ? best : norm === '\u0000' ? 'Sin nombre' : norm
-      return {
-        value: [...ids].sort().join('|'),
-        label,
-      }
-    })
-    .sort((a, b) => a.label.localeCompare(b.label, 'es'))
+
+  const collator = new Intl.Collator('es', { numeric: true, sensitivity: 'base' })
+
+  type Row = { value: string; label: string; sortTournament: string; sortOrderMin: number }
+  const rows: Row[] = [...normToIds.entries()].map(([norm, ids]): Row => {
+    const best = (normToBestLabel.get(norm) ?? '').trim()
+    const label = best.length > 0 ? best : norm === '\u0000' ? 'Sin nombre' : norm
+
+    const tnames = [
+      ...new Set(
+        ids.map((id) => groupById.get(id)?.tournament?.name?.trim()).filter((n): n is string => Boolean(n)),
+      ),
+    ].sort(collator.compare)
+    const sortTournament = tnames[0] ?? '\uffff'
+
+    const sortOrderMin = Math.min(
+      ...ids.map((id) => groupById.get(id)?.order_index ?? 0),
+      Number.POSITIVE_INFINITY,
+    )
+
+    return {
+      value: [...ids].sort().join('|'),
+      label,
+      sortTournament,
+      sortOrderMin,
+    }
+  })
+
+  rows.sort((a, b) => {
+    const byTournament = collator.compare(a.sortTournament, b.sortTournament)
+    if (byTournament !== 0) return byTournament
+    if (a.sortOrderMin !== b.sortOrderMin) return a.sortOrderMin - b.sortOrderMin
+    return collator.compare(a.label, b.label)
+  })
+
+  return rows.map(({ value, label }) => ({ value, label }))
 }
 
 /** Una entrada por persona (`user_id`); si falta usuario en `group_players`, usa `gp:<group_player_id>`. */
@@ -155,16 +193,10 @@ export function matchesForAdminPlayerKey(matches: AdminMatchRecord[], playerKey:
 }
 
 export function matchesInFullScope(matches: AdminMatchRecord[], scope: AdminMatchScopeFilters): AdminMatchRecord[] {
-  return matches.filter((m) => {
+  const scoped = matches.filter((m) => {
     if (scope.tournamentId !== 'all' && m.tournament_id !== scope.tournamentId) return false
     if (!matchInScopedGroups(m.group_id, scope.groupId)) return false
-    if (
-      scope.playerGroupPlayerId !== 'all' &&
-      m.player_a_id !== scope.playerGroupPlayerId &&
-      m.player_b_id !== scope.playerGroupPlayerId
-    ) {
-      return false
-    }
     return true
   })
+  return matchesForAdminPlayerKey(scoped, scope.playerGroupPlayerId)
 }

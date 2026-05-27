@@ -46,8 +46,8 @@ function filterUpcomingForPlayer(
   const mine = getPlayerMatches(membershipId, matches)
   return mine.filter((m) => {
     if (m.status === 'cancelled') return false
+    if (m.status === 'score_disputed') return true
     if (allowPlayerScoreEntry && canSubmitScore(m, userId)) return true
-    if (m.status === 'score_disputed') return false
     if (m.status === 'validated') return false
     if (m.status === 'closed') return false
     if (m.status === 'player_confirmed') return false
@@ -65,9 +65,7 @@ export function buildPlayerViewModel(data: PlayerDashboardData, userId: string):
 
   const roundRobin = players.length >= 2 ? players.length - 1 : 0
   const played = my?.played ?? 0
-  const pendingCount = mine.filter((m) =>
-    Boolean(data.rules.allow_player_score_entry && canSubmitScore(m, userId)),
-  ).length
+  const pendingCount = Math.max(0, roundRobin - Math.min(played, roundRobin))
   const games = calculateGamesForAndAgainst(membership.id, mine, data.rules)
 
   return {

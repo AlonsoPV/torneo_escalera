@@ -39,6 +39,14 @@ function getPasswordCell(row: Record<string, unknown>, candidates: string[]): st
   return ''
 }
 
+function normalizePasswordImportValue(raw: string): string {
+  const s = raw.trim()
+  const n = normKey(s)
+  if (!s || s === '—' || s === '-') return ''
+  if (n === 'no disponible' || n === 'sin cambio' || n === '(sin cambio)') return ''
+  return s
+}
+
 function detectLegacyPjPtsColumnNames(headers: string[]): boolean {
   for (const h of headers) {
     const n = normKey(h)
@@ -70,8 +78,9 @@ function mapSheetRow(row: Record<string, unknown>, rowNumber: number): BulkImpor
     ]),
     fullName: getCell(row, ['nombre', 'Nombre', 'name', 'Full name']),
     role: getCell(row, ['rol', 'Rol', 'role', 'Role']),
+    tournamentName: getCell(row, ['torneo', 'Torneo', 'tournament', 'Tournament']),
     categoryName: getCell(row, ['categoria', 'Categoría', 'Categoria', 'category', 'Category']),
-    password: getPasswordCell(row, [
+    password: normalizePasswordImportValue(getPasswordCell(row, [
       'contraseña',
       'Contrasena',
       'contrasena',
@@ -79,7 +88,7 @@ function mapSheetRow(row: Record<string, unknown>, rowNumber: number): BulkImpor
       'Password',
       'clave',
       'Clave',
-    ]),
+    ])),
     groupName: getCell(row, ['grupo', 'Grupo', 'group', 'Group name']),
     recoveryEmail: getCell(row, [
       'correo_recuperacion',
@@ -239,6 +248,7 @@ export async function invokeBulkCreateUsers(input: {
   createMissingCategories?: boolean
   rows: BulkImportInvokeRow[]
   signal?: AbortSignal
+  timeoutMs?: number
 }): Promise<BulkImportResponse> {
   const { data: sessionData, error: sessionErr } = await supabase.auth.getSession()
   if (sessionErr) {
@@ -254,20 +264,45 @@ export async function invokeBulkCreateUsers(input: {
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
   if (!anonKey) throw new Error('Falta VITE_SUPABASE_ANON_KEY')
 
-  const { data, error } = await supabase.functions.invoke<BulkImportResponse>('admin-bulk-create-users', {
-    body: {
-      tournamentId: input.tournamentId ?? null,
-      fileName: input.fileName,
-      createMissingCategories: input.createMissingCategories,
-      rows: input.rows,
-    },
-    signal: input.signal,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      apikey: anonKey,
-    },
-  })
+  const ac = new AbortController()
+  let timedOut = false
+  const onAbort = () => ac.abort()
+  if (input.signal?.aborted) throw new DOMException('Importación cancelada', 'AbortError')
+  input.signal?.addEventListener('abort', onAbort, { once: true })
+  const timeout = window.setTimeout(() => {
+    timedOut = true
+    ac.abort()
+  }, input.timeoutMs ?? 60_000)
+
+  let data: BulkImportResponse | null = null
+  let error: Error | null = null
+  try {
+    const res = await supabase.functions.invoke<BulkImportResponse>('admin-bulk-create-users', {
+      body: {
+        tournamentId: input.tournamentId ?? null,
+        fileName: input.fileName,
+        createMissingCategories: input.createMissingCategories,
+        rows: input.rows,
+      },
+      signal: ac.signal,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        apikey: anonKey,
+      },
+    })
+    data = res.data ?? null
+    error = res.error as Error | null
+  } catch (e) {
+    error = e instanceof Error ? e : new Error('No se pudo completar el lote de importación')
+  } finally {
+    window.clearTimeout(timeout)
+    input.signal?.removeEventListener('abort', onAbort)
+  }
   if (error) {
+    if (timedOut) {
+      throw new Error('La importación tardó demasiado en responder. Se canceló este lote; intenta de nuevo con menos filas o revisa la función en Supabase.')
+    }
+    if (error.name === 'AbortError') throw error
     if (await recoverFromAuthError(error)) {
       throw new Error('Sesión no válida. Redirigiendo al login…')
     }
@@ -284,10 +319,11 @@ export async function invokeBulkCreateUsers(input: {
   return payload as unknown as BulkImportResponse
 }
 
-const DEFAULT_IMPORT_CHUNK = 40
+const DEFAULT_IMPORT_CHUNK = 5
+const DEFAULT_IMPORT_CHUNK_TIMEOUT_MS = 45_000
 
 /**
- * Envía filas en varias peticiones (tamaño máx. servidor 200) para mostrar progreso real en la UI.
+ * Envía filas en varias peticiones pequeñas para mostrar progreso real en la UI.
  * Entre lotes el servidor ya persistió categorías/grupos; los siguientes lotes reutilizan el mismo estado.
  */
 export async function invokeBulkCreateUsersChunked(
@@ -346,6 +382,7 @@ export async function invokeBulkCreateUsersChunked(
           ? rest.fileName
           : `${rest.fileName ?? 'importacion'} — parte ${i + 1}/${chunks.length}`,
       signal,
+      timeoutMs: DEFAULT_IMPORT_CHUNK_TIMEOUT_MS,
     })
 
     batchIds.push(part.batchId)

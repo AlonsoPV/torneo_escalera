@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
@@ -19,6 +20,12 @@ export type AdminDataTableColumn<T> = {
   headerTitle?: string
   render: (row: T) => ReactNode
   className?: string
+  sortable?: boolean
+}
+
+export type AdminDataTableSort = {
+  key: string
+  direction: 'asc' | 'desc'
 }
 
 /** Clase compartida para checkboxes de selección de filas (p. ej. vista móvil). */
@@ -41,6 +48,8 @@ export function AdminDataTable<T>({
   tableId,
   footer,
   rowSelection,
+  sort,
+  onSortChange,
 }: {
   rows: T[]
   columns: AdminDataTableColumn<T>[]
@@ -55,6 +64,8 @@ export function AdminDataTable<T>({
   footer?: ReactNode
   /** Columna inicial con checkboxes y selección de la página visible. */
   rowSelection?: AdminDataTableRowSelection
+  sort?: AdminDataTableSort | null
+  onSortChange?: (next: AdminDataTableSort) => void
 }) {
   const visibleKeys = rows.map(getRowKey)
   const allVisibleSelected =
@@ -69,7 +80,7 @@ export function AdminDataTable<T>({
       id={tableId}
       className="min-w-0 overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white shadow-sm"
     >
-      <Table className="min-w-[32rem] sm:min-w-[36rem]">
+      <Table className="min-w-[36rem] sm:min-w-[42rem]">
         <TableHeader>
           <TableRow className="border-b border-border/70 bg-muted/35 hover:bg-muted/35">
             {rowSelection ? (
@@ -88,7 +99,39 @@ export function AdminDataTable<T>({
             ) : null}
             {columns.map((column) => (
               <TableHead key={column.key} className={column.className} title={column.headerTitle}>
-                {column.header}
+                {column.sortable && onSortChange ? (
+                  <button
+                    type="button"
+                    id={tableId ? `${tableId}-sort-${column.key}` : undefined}
+                    data-name={`table-sort-${column.key}`}
+                    onClick={() =>
+                      onSortChange({
+                        key: column.key,
+                        direction:
+                          sort?.key === column.key && sort.direction === 'asc' ? 'desc' : 'asc',
+                      })
+                    }
+                    className={cn(
+                      '-mx-1 inline-flex max-w-full items-center gap-1 rounded-md px-1 py-0.5 text-left text-xs font-semibold uppercase tracking-wide',
+                      'text-slate-700 hover:bg-slate-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1F5A4C]/30',
+                      sort?.key === column.key && 'text-[#1F5A4C]',
+                    )}
+                    aria-label={`Ordenar por ${column.header}`}
+                  >
+                    <span className="truncate">{column.header}</span>
+                    {sort?.key === column.key ? (
+                      sort.direction === 'asc' ? (
+                        <ArrowUp className="size-3.5 shrink-0" aria-hidden />
+                      ) : (
+                        <ArrowDown className="size-3.5 shrink-0" aria-hidden />
+                      )
+                    ) : (
+                      <ArrowUpDown className="size-3.5 shrink-0 opacity-45" aria-hidden />
+                    )}
+                  </button>
+                ) : (
+                  column.header
+                )}
               </TableHead>
             ))}
           </TableRow>

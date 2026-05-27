@@ -22,6 +22,8 @@ export function AdminFormModal({
   open,
   onOpenChange,
   contentClassName,
+  contentId,
+  contentDataName,
 }: {
   trigger?: TriggerElement
   title: string
@@ -31,6 +33,8 @@ export function AdminFormModal({
   open?: boolean
   onOpenChange?: (open: boolean) => void
   contentClassName?: string
+  contentId?: string
+  contentDataName?: string
 }) {
   const [internalOpen, setInternalOpen] = useState(false)
   const isControlled = open !== undefined
@@ -50,11 +54,18 @@ export function AdminFormModal({
             },
           })
         : null}
-      <DialogContent className={cn('sm:max-w-lg gap-6 p-6 sm:p-7', contentClassName)}>
+      <DialogContent
+        id={contentId}
+        data-name={contentDataName}
+        className={cn('sm:max-w-lg gap-6 p-6 sm:p-7', contentClassName)}
+      >
         <DialogHeader className="shrink-0 gap-1.5 space-y-0">
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle id={contentId ? `${contentId}-title` : undefined}>{title}</DialogTitle>
           {description ? (
-            <DialogDescription className={cn('mt-0 text-muted-foreground', descriptionClassName)}>
+            <DialogDescription
+              id={contentId ? `${contentId}-description` : undefined}
+              className={cn('mt-0 text-muted-foreground', descriptionClassName)}
+            >
               {description}
             </DialogDescription>
           ) : null}

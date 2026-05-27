@@ -84,7 +84,7 @@ export function getMatchStatusColor(status: NormalizedAdminMatchStatus): string 
     case 'pending_review':
       return 'border-amber-200 bg-amber-50 text-amber-950'
     case 'disputed':
-      return 'border-orange-300 bg-orange-50 text-orange-950'
+      return 'border-rose-300 bg-rose-50 text-rose-950'
     case 'official':
       return 'border-emerald-200 bg-emerald-50 text-emerald-900'
     case 'cancelled':
@@ -102,8 +102,8 @@ export function isPendingReview(match: Pick<MatchRow, 'status'>): boolean {
   return match.status === 'player_confirmed'
 }
 
-export function isDisputedMatch(match: Pick<MatchRow, 'status'>): boolean {
-  return match.status === 'score_disputed'
+export function isDisputedMatch(match: Pick<MatchRow, 'status' | 'disputed_by'>): boolean {
+  return match.status === 'score_disputed' || (match.status === 'pending_score' && Boolean(match.disputed_by))
 }
 
 const ADMIN_SCORE_EDIT_STATUSES: MatchStatus[] = [
@@ -121,15 +121,18 @@ export function canAdminEditMatch(match: Pick<MatchRow, 'status'>): boolean {
   return ADMIN_SCORE_EDIT_STATUSES.includes(match.status)
 }
 
-export function filterMatchesByAdminTab<T extends Pick<MatchRow, 'status'>>(
+export function filterMatchesByAdminTab<T extends Pick<MatchRow, 'status' | 'disputed_by'>>(
   rows: T[],
   tab: MatchesAdminTabId,
 ): T[] {
   if (tab === 'all') return rows
+  if (tab === 'disputed') return rows.filter(isDisputedMatch)
   return rows.filter((m) => normalizeMatchStatus(m.status) === tab)
 }
 
-export function matchesAdminTabCounts<T extends Pick<MatchRow, 'status'>>(rows: T[]): Record<MatchesAdminTabId, number> {
+export function matchesAdminTabCounts<T extends Pick<MatchRow, 'status' | 'disputed_by'>>(
+  rows: T[],
+): Record<MatchesAdminTabId, number> {
   const base: Record<MatchesAdminTabId, number> = {
     all: rows.length,
     scheduled: 0,
@@ -139,11 +142,13 @@ export function matchesAdminTabCounts<T extends Pick<MatchRow, 'status'>>(rows: 
     official: 0,
   }
   for (const m of rows) {
+    if (isDisputedMatch(m)) {
+      base.disputed += 1
+    }
     const n = normalizeMatchStatus(m.status)
     if (n === 'scheduled') base.scheduled += 1
     else if (n === 'registered') base.registered += 1
     else if (n === 'pending_review') base.pending_review += 1
-    else if (n === 'disputed') base.disputed += 1
     else if (n === 'official') base.official += 1
   }
   return base

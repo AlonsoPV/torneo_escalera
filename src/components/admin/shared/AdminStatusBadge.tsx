@@ -20,7 +20,7 @@ const labels: Record<string, string> = {
   ...USER_ROLE_LABEL_ES,
   draft: 'Borrador',
   active: 'Activo',
-  finished: 'Finalizado',
+  finished: 'Cerrado',
   archived: 'Archivado',
   inactive: 'Inactivo',
   complete: 'Completo',
@@ -32,6 +32,7 @@ const labels: Record<string, string> = {
 
 const tones: Record<string, string> = {
   ...matchStatusToneClasses,
+  draft: 'border-sky-200 bg-sky-50 text-sky-800',
   active: 'border-emerald-200 bg-emerald-50 text-emerald-700',
   finished: 'border-slate-200 bg-slate-50 text-slate-700',
   archived: 'border-slate-200 bg-slate-50 text-slate-600',

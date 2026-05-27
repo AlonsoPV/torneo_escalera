@@ -51,6 +51,7 @@ import {
   filterPreviewRows,
   type PreviewFilter,
 } from '@/lib/bulkImportWizardUtils'
+import { MIN_PASSWORD_LENGTH } from '@/lib/passwordPolicy'
 import { isAdminRole, userRoleLabelEs } from '@/lib/permissions'
 import { cn } from '@/lib/utils'
 import {
@@ -89,6 +90,10 @@ function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
   return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function normTournamentName(s: string): string {
+  return s.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ')
 }
 
 function downloadImportReportCsv(result: BulkImportMergedResponse, fileLabel: string) {
@@ -364,6 +369,18 @@ export function BulkImportWizard() {
         )
       }
       setParsedRows(rows)
+      if (!auditTournamentId.trim() && tournamentsQ.data?.length) {
+        const names = [
+          ...new Set(rows.map((r) => r.tournamentName.trim()).filter(Boolean).map(normTournamentName)),
+        ]
+        if (names.length === 1) {
+          const match = tournamentsQ.data.find((t) => normTournamentName(t.name) === names[0])
+          if (match) {
+            setAuditTournamentId(match.id)
+            toast.info(`Torneo detectado en el archivo: ${match.name}`)
+          }
+        }
+      }
       setFileMeta({ name: f.name, size: f.size })
       bumpReachable(1)
       toast.success(`Archivo listo: ${rows.length} filas detectadas`)
@@ -374,7 +391,7 @@ export function BulkImportWizard() {
       setParsedRows(null)
       setFileMeta(null)
     }
-  }, [bumpReachable])
+  }, [auditTournamentId, bumpReachable, tournamentsQ.data])
 
   const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onPickFile(e.target.files?.[0] ?? null)
@@ -495,9 +512,9 @@ export function BulkImportWizard() {
               </span>
             </summary>
             <ul className="mt-2 list-inside list-disc space-y-1.5 text-xs leading-relaxed text-slate-600">
-              <li>Si el ID coincide con un usuario existente, la fila actualiza datos; la contraseña solo cambia si incluyes 8 dígitos válidos.</li>
+              <li>Si el ID coincide con un usuario existente, la fila actualiza datos; la contraseña solo cambia si incluyes una válida (mínimo {MIN_PASSWORD_LENGTH} caracteres).</li>
               <li>Con torneo seleccionado, los grupos del archivo se validan y pueden crearse automáticamente.</li>
-              <li>La importación grande se divide en lotes: verás el progreso fila a fila agregada por lote.</li>
+              <li>La importación grande se divide en lotes pequeños para que veas avance frecuente durante el proceso.</li>
             </ul>
           </details>
         </div>
@@ -834,7 +851,7 @@ export function BulkImportWizard() {
             <div className="rounded-xl border border-amber-200/80 bg-amber-50/40 p-4 text-sm text-amber-950">
               <p className="font-semibold">Revisa antes de ejecutar</p>
               <p className="mt-1 text-xs leading-relaxed opacity-90">
-                Se enviarán <strong>{summary?.importableRows ?? 0}</strong> filas al servidor en uno o varios lotes. Las operaciones modifican perfiles reales; las contraseñas nuevas sustituyen las anteriores cuando indiques 8 dígitos.
+                Se enviarán <strong>{summary?.importableRows ?? 0}</strong> filas al servidor en uno o varios lotes. Las operaciones modifican perfiles reales; las contraseñas nuevas sustituyen las anteriores cuando indiques al menos {MIN_PASSWORD_LENGTH} caracteres.
               </p>
             </div>
 
@@ -858,7 +875,7 @@ export function BulkImportWizard() {
               <li className="flex justify-between gap-4">
                 <span className="text-slate-500">Lotes estimados</span>
                 <span className="font-medium text-slate-900">
-                  {summary ? Math.ceil(summary.importableRows / 40) : '—'} (máx. 40 filas por petición)
+                  {summary ? Math.ceil(summary.importableRows / 5) : '—'} (5 filas por petición)
                 </span>
               </li>
             </ul>

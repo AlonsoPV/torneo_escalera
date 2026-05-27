@@ -32,6 +32,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { downloadMatchResultsImportTemplate, MATCH_RESULTS_IMPORT_COLUMN_GUIDE } from '@/lib/matchResultsImportSpec'
+import { downloadMatchResultsExportCsv } from '@/lib/matchResultsExport'
 import { isAdminRole } from '@/lib/permissions'
 import { cn } from '@/lib/utils'
 import { getAdminGroups, getAdminMatches } from '@/services/admin'
@@ -42,7 +43,10 @@ import {
   type ApplyMatchResultsImportResult,
   type MatchResultsImportPreviewRow,
 } from '@/services/bulkMatchResultsImport'
-import { prepareMatchResultsImport } from '@/services/matchResultsImportPrepare'
+import {
+  prepareMatchResultsImport,
+  type PrepareMatchResultsImportResult,
+} from '@/services/matchResultsImportPrepare'
 
 /** Resultado de la mutación de importación (aplica + metadatos de preparación). */
 type MatchResultsImportOutcome = ApplyMatchResultsImportResult & {
@@ -235,10 +239,24 @@ export function MatchResultsImportWizard() {
     readyWithNotes: number
     totalFileRows: number
   } | null>(null)
+  const preparedRef = useRef<{
+    key: string
+    result: PrepareMatchResultsImportResult
+  } | null>(null)
 
   const groupsQ = useQuery({ queryKey: ['admin-groups'], queryFn: () => getAdminGroups() })
   const matchesQ = useQuery({ queryKey: ['admin-matches'], queryFn: () => getAdminMatches() })
   const loadingContext = groupsQ.isLoading || matchesQ.isLoading
+
+  const handleExportCurrentMatches = useCallback(() => {
+    const matches = matchesQ.data ?? []
+    if (!matches.length) {
+      toast.error('No hay partidos disponibles para exportar.')
+      return
+    }
+    downloadMatchResultsExportCsv(matches, 'partidos-resultados')
+    toast.success(`${matches.length} partido(s) exportado(s) con la misma estructura de la plantilla.`)
+  }, [matchesQ.data])
 
   const bumpReachable = useCallback((n: number) => {
     setMaxReachableStep((prev) => Math.max(prev, n))
@@ -294,6 +312,46 @@ export function MatchResultsImportWizard() {
     }
   }, [preview])
 
+  const parsedRowsShape = useMemo(() => {
+    const groups = new Map<string, number>()
+    for (const row of parsedRows) {
+      const key = [
+        String(row.tournament_name ?? '').trim().toLowerCase(),
+        String(row.category_name ?? '').trim().toLowerCase(),
+        String(row.group_name ?? '').trim().toLowerCase(),
+      ].join('|')
+      if (!key.endsWith('|') && String(row.group_name ?? '').trim()) {
+        groups.set(key, (groups.get(key) ?? 0) + 1)
+      }
+    }
+    const groupCount = groups.size
+    return {
+      groupCount,
+      expectedRoundRobinRows: groupCount * 10,
+      completeFivePlayerGroups: [...groups.values()].filter((count) => count === 10).length,
+    }
+  }, [parsedRows])
+
+  const fileLooksLikeEmptyResultsTemplate = useMemo(() => {
+    if (parsedRows.length === 0) return false
+    return parsedRows.every((row) => {
+      const hasWinner = String(row.winner_id ?? '').trim().length > 0
+      const hasAnySet = [1, 2, 3].some((i) => {
+        const a = String(row[`set_${i}_a`] ?? '').trim()
+        const b = String(row[`set_${i}_b`] ?? '').trim()
+        return a.length > 0 || b.length > 0
+      })
+      const status = String(row.status ?? '').trim().toLowerCase()
+      const resultType = String(row.result_type ?? '').trim().toLowerCase()
+      return !hasWinner && !hasAnySet && status === 'pending_score' && resultType === 'pending_score'
+    })
+  }, [parsedRows])
+
+  const prepareKey = useMemo(() => {
+    if (!fileMeta || !parsedRows.length || !userId) return ''
+    return `${fileMeta.name}|${fileMeta.size}|${parsedRows.length}|${userId}`
+  }, [fileMeta, parsedRows.length, userId])
+
   const filteredPreview = useMemo(() => {
     if (previewFilter === 'ready') return preview.filter((r) => r.state === 'ready')
     if (previewFilter === 'error') return preview.filter((r) => r.state === 'error')
@@ -322,6 +380,7 @@ export function MatchResultsImportWizard() {
     setImportProgress(null)
     setIsDraggingFile(false)
     importSnapshotRef.current = null
+    preparedRef.current = null
     if (fileInputRef.current) fileInputRef.current.value = ''
   }, [])
 
@@ -329,6 +388,7 @@ export function MatchResultsImportWizard() {
     (file: File | null) => {
       setResult(null)
       if (!file) return
+      preparedRef.current = null
       const lower = file.name.toLowerCase()
       if (!lower.endsWith('.csv') && file.type !== 'text/csv') {
         toast.error('Usa un archivo .csv (UTF-8)')
@@ -373,7 +433,9 @@ export function MatchResultsImportWizard() {
     mutationFn: async (): Promise<MatchResultsImportOutcome> => {
       if (!userId) throw new Error('No autenticado')
       setImportProgress(null)
-      const prep = await prepareMatchResultsImport(parsedRows, userId)
+      const cachedPrep = preparedRef.current?.key === prepareKey ? preparedRef.current.result : null
+      const prep = cachedPrep ?? await prepareMatchResultsImport(parsedRows, userId)
+      if (!cachedPrep && prepareKey) preparedRef.current = { key: prepareKey, result: prep }
       const groups = await getAdminGroups()
       const matches = await getAdminMatches()
       const freshPreview = await buildMatchResultsImportPreview(parsedRows, groups, matches, {
@@ -428,6 +490,7 @@ export function MatchResultsImportWizard() {
     setStructureSyncing(true)
     try {
       const prep = await prepareMatchResultsImport(parsedRows, userId)
+      if (prepareKey) preparedRef.current = { key: prepareKey, result: prep }
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['admin-groups'] }),
         qc.invalidateQueries({ queryKey: ['admin-matches'] }),
@@ -460,6 +523,9 @@ export function MatchResultsImportWizard() {
       }
       if (prep.enrollment.rosterLabelsUpdated > 0) {
         summaryBits.push(`${prep.enrollment.rosterLabelsUpdated} nombre(s) en roster actualizados`)
+      }
+      if (prep.enrollment.rosterPlayersRemoved > 0) {
+        summaryBits.push(`${prep.enrollment.rosterPlayersRemoved} cupo(s) liberado(s)`)
       }
       const warnings = [
         ...prep.structure.messages,
@@ -532,6 +598,17 @@ export function MatchResultsImportWizard() {
               <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => downloadMatchResultsImportTemplate()}>
                 <Download className="size-4" />
                 Plantilla CSV
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                disabled={matchesQ.isLoading || !(matchesQ.data?.length)}
+                onClick={handleExportCurrentMatches}
+              >
+                <Download className="size-4" />
+                Exportar partidos
               </Button>
               <Link
                 to="/admin/matches"
@@ -693,11 +770,17 @@ export function MatchResultsImportWizard() {
               </div>
             </div>
 
-            {parsedRows.length > 0 && parsedRows.length !== 180 ? (
+            {parsedRows.length > 0 && parsedRowsShape.groupCount > 0 && parsedRows.length === parsedRowsShape.expectedRoundRobinRows ? (
+              <p className="rounded-lg border border-emerald-200 bg-emerald-50/50 px-3 py-2 text-xs text-emerald-950">
+                Detectadas <strong>{parsedRows.length} filas</strong>: {parsedRowsShape.groupCount} grupo(s) con 10 cruces
+                cada uno. La estructura del archivo es coherente para grupos de 5 jugadores.
+              </p>
+            ) : parsedRows.length > 0 && parsedRows.length !== 180 ? (
               <p className="rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2 text-xs text-sky-950">
-                Tip: un torneo con <strong>18 grupos de 5 jugadores</strong> tiene típicamente{' '}
-                <strong>18 × 10 = 180</strong> cruces round-robin. Tu archivo tiene <strong>{parsedRows.length}</strong>{' '}
-                filas — comprueba que coincida con lo esperado.
+                Tip: un torneo con <strong>18 grupos de 5 jugadores</strong> tiene tipicamente{' '}
+                <strong>18 x 10 = 180</strong> cruces round-robin. Tu archivo tiene <strong>{parsedRows.length}</strong>{' '}
+                filas en <strong>{parsedRowsShape.groupCount}</strong> grupo(s). Si esperabas 20 grupos, el archivo esta
+                bien; si esperabas 18, revisa grupos extra como Grupo 19 o Grupo MB.
               </p>
             ) : parsedRows.length === 180 ? (
               <p className="rounded-lg border border-emerald-200 bg-emerald-50/50 px-3 py-2 text-xs text-emerald-950">
@@ -709,6 +792,20 @@ export function MatchResultsImportWizard() {
               <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-4 text-sm text-slate-700">
                 <Loader2 className="size-5 animate-spin text-[#1F5A4C]" />
                 Cargando grupos y partidos del sistema para validar filas…
+              </div>
+            ) : null}
+
+            {fileLooksLikeEmptyResultsTemplate ? (
+              <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-950">
+                <AlertTriangle className="mt-0.5 size-5 shrink-0" />
+                <div>
+                  <p className="font-semibold">El archivo parece una plantilla sin marcadores capturados.</p>
+                  <p className="mt-1 text-xs leading-relaxed">
+                    Todas las filas vienen como pending_score, sin sets y sin winner_id. Se importaran como partidos
+                    abiertos para captura posterior. Si tu objetivo es importar resultados reales, llena sets/ganador o
+                    cambia result_type/status.
+                  </p>
+                </div>
               </div>
             ) : null}
 

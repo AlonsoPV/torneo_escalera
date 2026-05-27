@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { Inbox, type LucideIcon } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
@@ -24,9 +25,21 @@ export const STATUS_FILTER_ITEMS: { value: MatchStatus | 'all'; label: string }[
   { value: 'cancelled', label: 'Cancelado' },
 ]
 
-export function CompactEmpty({ title }: { title: string }) {
+export function CompactEmpty({
+  title,
+  id,
+  dataName,
+}: {
+  title: string
+  id?: string
+  dataName?: string
+}) {
   return (
-    <div className="flex max-h-[120px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200/90 bg-white/90 px-4 py-5 text-center shadow-sm">
+    <div
+      id={id}
+      data-name={dataName}
+      className="flex max-h-[120px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200/90 bg-white/90 px-4 py-5 text-center shadow-sm"
+    >
       <Inbox className="size-7 text-slate-300" aria-hidden />
       <p className="text-sm font-medium text-slate-700">{title}</p>
     </div>
@@ -63,7 +76,7 @@ export function tabFilterRows(rows: AdminMatchRecord[], tab: ReviewTabId): Admin
     case 'pendientes':
       return rows.filter((m) => m.status === 'player_confirmed')
     case 'disputed':
-      return rows.filter((m) => m.status === 'score_disputed')
+      return rows.filter((m) => m.status === 'score_disputed' || (m.status === 'pending_score' && Boolean(m.disputed_by)))
     case 'waiting':
       return rows.filter((m) => m.status === 'score_submitted')
     case 'official':

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import type { LucideIcon } from 'lucide-react'
-import { AlertCircle, Check, CheckCircle2, Flame, Layers, Timer } from 'lucide-react'
+import { AlertCircle, Check, CheckCircle2, Flame, Info, Layers, Timer } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -23,7 +24,8 @@ import {
   shouldShowThirdSet,
   validateBestOf3Score,
   validateLongSetScore,
-  validateSuddenDeathScore,
+  validateSuddenDeathThirdSet,
+  getSetWinner,
 } from '@/utils/score'
 
 const gameTypeOptions: Array<{
@@ -41,7 +43,7 @@ const gameTypeOptions: Array<{
   {
     value: 'sudden_death',
     label: 'Muerte súbita',
-    description: 'Dos sets a games y un tercero registrado como 1-0 (mini tie-break).',
+    description: 'Mini tie-break: marca quién ganó el set decisivo (1-0).',
     icon: Flame,
   },
   {
@@ -63,6 +65,151 @@ function normalizeSet(set: ScoreSet): ScoreSet {
   return { a: Math.max(0, Number(set.a) || 0), b: Math.max(0, Number(set.b) || 0) }
 }
 
+const INFO_HINT_VIEWPORT_MARGIN = 10
+const INFO_HINT_GAP = 8
+const INFO_HINT_MAX_WIDTH = 240
+
+function InfoHint({
+  label,
+  children,
+  align = 'end',
+}: {
+  label: string
+  children: ReactNode
+  align?: 'start' | 'end'
+}) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const tooltipRef = useRef<HTMLDivElement>(null)
+  const [tooltipStyle, setTooltipStyle] = useState<CSSProperties | null>(null)
+  const canHover = useMemo(
+    () => typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches,
+    [],
+  )
+
+  const updatePosition = useCallback(() => {
+    const trigger = triggerRef.current
+    const tooltip = tooltipRef.current
+    if (!trigger || !tooltip) return
+
+    const rect = trigger.getBoundingClientRect()
+    const { height: tipH } = tooltip.getBoundingClientRect()
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const maxWidth = Math.min(INFO_HINT_MAX_WIDTH, vw - INFO_HINT_VIEWPORT_MARGIN * 2)
+
+    let top = rect.bottom + INFO_HINT_GAP
+    let left = align === 'end' ? rect.right - maxWidth : rect.left
+    left = Math.max(INFO_HINT_VIEWPORT_MARGIN, Math.min(left, vw - maxWidth - INFO_HINT_VIEWPORT_MARGIN))
+
+    if (top + tipH > vh - INFO_HINT_VIEWPORT_MARGIN) {
+      top = rect.top - INFO_HINT_GAP - tipH
+    }
+    top = Math.max(INFO_HINT_VIEWPORT_MARGIN, Math.min(top, vh - tipH - INFO_HINT_VIEWPORT_MARGIN))
+
+    setTooltipStyle({
+      position: 'fixed',
+      top,
+      left,
+      width: maxWidth,
+      zIndex: 120,
+    })
+  }, [align])
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setTooltipStyle(null)
+      return
+    }
+    updatePosition()
+  }, [open, children, updatePosition])
+
+  useEffect(() => {
+    if (!open) return
+    const onScrollOrResize = () => updatePosition()
+    window.addEventListener('scroll', onScrollOrResize, true)
+    window.addEventListener('resize', onScrollOrResize)
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize, true)
+      window.removeEventListener('resize', onScrollOrResize)
+    }
+  }, [open, updatePosition])
+
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (triggerRef.current?.contains(target) || tooltipRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    document.addEventListener('click', onDocClick)
+    return () => document.removeEventListener('click', onDocClick)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open])
+
+  const tooltip =
+    open && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            ref={tooltipRef}
+            role="tooltip"
+            style={
+              tooltipStyle ?? {
+                position: 'fixed',
+                top: -9999,
+                left: -9999,
+                width: INFO_HINT_MAX_WIDTH,
+                visibility: 'hidden',
+                zIndex: 120,
+              }
+            }
+            className={cn(
+              'rounded-lg border border-border/80 bg-popover px-2.5 py-2 text-[11px] leading-snug text-popover-foreground shadow-lg',
+              tooltipStyle ? 'visible' : 'invisible',
+            )}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            {children}
+          </div>,
+          document.body,
+        )
+      : null
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label={label}
+        aria-expanded={open}
+        className="inline-flex size-6 shrink-0 touch-manipulation items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1F5A4C]/25"
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation()
+          setOpen((value) => !value)
+        }}
+        onMouseEnter={() => {
+          if (canHover) setOpen(true)
+        }}
+        onMouseLeave={() => {
+          if (canHover) setOpen(false)
+        }}
+      >
+        <Info className="size-3.5" aria-hidden />
+      </button>
+      {tooltip}
+    </>
+  )
+}
+
 function GameTypeSelector({
   value,
   onChange,
@@ -71,15 +218,15 @@ function GameTypeSelector({
   onChange: (value: MatchGameType) => void
 }) {
   return (
-    <section className="space-y-3">
-      <div>
+    <section className="space-y-2.5 overflow-visible">
+      <div className="flex items-center gap-1.5">
         <p className="text-sm font-semibold text-foreground">Tipo de juego</p>
-        <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground sm:text-xs">
+        <InfoHint label="Información sobre el tipo de juego">
           Elige el formato del partido; debe coincidir con lo acordado en pista.
-        </p>
+        </InfoHint>
       </div>
       <div
-        className="grid grid-cols-1 gap-2.5 sm:grid-cols-3 sm:gap-2"
+        className="grid grid-cols-1 gap-2 sm:grid-cols-3"
         role="radiogroup"
         aria-label="Tipo de juego del partido"
       >
@@ -93,42 +240,40 @@ function GameTypeSelector({
               role="radio"
               aria-checked={selected}
               className={cn(
-                'group relative min-h-[4.5rem] touch-manipulation rounded-2xl border-2 p-3 text-left transition active:scale-[0.99] sm:min-h-[5.25rem] sm:p-3.5',
+                'group relative min-h-[3.25rem] touch-manipulation overflow-visible rounded-xl border-2 px-2.5 py-2 text-left transition active:scale-[0.99] sm:min-h-[3.5rem] sm:px-3',
                 selected
-                  ? 'border-[#1F5A4C] bg-[#1F5A4C]/[0.09] shadow-md ring-2 ring-[#1F5A4C]/15'
+                  ? 'border-[#1F5A4C] bg-[#1F5A4C]/[0.09] shadow-sm ring-2 ring-[#1F5A4C]/15'
                   : 'border-border/60 bg-gradient-to-b from-white to-muted/30 hover:border-[#1F5A4C]/45 hover:bg-muted/40',
               )}
               onClick={() => onChange(option.value)}
             >
-              <span className="flex items-start gap-2.5">
+              <span className="flex items-center gap-2">
                 <span
                   className={cn(
-                    'flex size-10 shrink-0 items-center justify-center rounded-xl border shadow-sm transition-colors sm:size-11',
+                    'flex size-9 shrink-0 items-center justify-center rounded-lg border shadow-sm transition-colors sm:size-10',
                     selected
                       ? 'border-[#1F5A4C]/40 bg-[#1F5A4C] text-white'
                       : 'border-border/50 bg-white text-[#1F5A4C]/80 group-hover:border-[#1F5A4C]/35',
                   )}
                 >
-                  <Icon className="size-[1.15rem] sm:size-5" aria-hidden />
+                  <Icon className="size-4 sm:size-[1.1rem]" aria-hidden />
                 </span>
-                <span className="min-w-0 flex-1 pt-0.5">
-                  <span className="flex items-start justify-between gap-2">
-                    <span className="text-sm font-bold leading-tight text-foreground sm:text-[0.9375rem]">{option.label}</span>
-                    <span
-                      className={cn(
-                        'flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
-                        selected
-                          ? 'border-[#1F5A4C] bg-[#1F5A4C] text-white'
-                          : 'border-muted-foreground/35 bg-white',
-                      )}
-                      aria-hidden
-                    >
-                      {selected ? <Check className="size-3" strokeWidth={2.8} /> : null}
-                    </span>
-                  </span>
-                  <span className="mt-1 block text-pretty text-[11px] leading-relaxed text-muted-foreground sm:text-xs">
-                    {option.description}
-                  </span>
+                <span className="min-w-0 flex-1 text-sm font-bold leading-tight text-foreground sm:text-[0.9375rem]">
+                  {option.label}
+                </span>
+                <InfoHint label={`Información: ${option.label}`} align="end">
+                  {option.description}
+                </InfoHint>
+                <span
+                  className={cn(
+                    'flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+                    selected
+                      ? 'border-[#1F5A4C] bg-[#1F5A4C] text-white'
+                      : 'border-muted-foreground/35 bg-white',
+                  )}
+                  aria-hidden
+                >
+                  {selected ? <Check className="size-3" strokeWidth={2.8} /> : null}
                 </span>
               </span>
             </button>
@@ -196,6 +341,79 @@ function ColumnFieldLegend({
   )
 }
 
+function SuddenDeathThirdSetPicker({
+  leftHint,
+  rightHint,
+  set,
+  viewerCanonicalSide,
+  onPick,
+}: {
+  leftHint: { perspective: string; playerName: string }
+  rightHint: { perspective: string; playerName: string }
+  set: ScoreSet
+  viewerCanonicalSide: 'a' | 'b'
+  onPick: (viewerWins: boolean) => void
+}) {
+  const viewerWins =
+    viewerCanonicalSide === 'a' ? set.a === 1 && set.b === 0 : set.b === 1 && set.a === 0
+  const rivalWins =
+    viewerCanonicalSide === 'a' ? set.a === 0 && set.b === 1 : set.b === 0 && set.a === 1
+
+  const pickButtonClass = (selected: boolean) =>
+    cn(
+      'flex min-h-[4.25rem] w-full touch-manipulation flex-col items-center justify-center gap-1 rounded-xl border-2 px-2 py-2 transition active:scale-[0.99] sm:min-h-16',
+      selected
+        ? 'border-[#1F5A4C] bg-[#1F5A4C]/10 text-[#1F5A4C] shadow-sm ring-2 ring-[#1F5A4C]/15'
+        : 'border-border/60 bg-background hover:border-[#1F5A4C]/40 hover:bg-muted/30',
+    )
+
+  return (
+    <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-2 sm:gap-3">
+      <button
+        type="button"
+        className={pickButtonClass(viewerWins)}
+        aria-pressed={viewerWins}
+        aria-label={`Ganó el mini tie-break: ${leftHint.playerName}`}
+        onClick={() => onPick(true)}
+      >
+        <span className="flex items-center gap-1.5">
+          {viewerWins ? (
+            <CheckCircle2 className="size-5 shrink-0" aria-hidden />
+          ) : (
+            <span className="size-5 shrink-0 rounded-full border-2 border-muted-foreground/35" aria-hidden />
+          )}
+          <span className="text-xs font-bold uppercase">{leftHint.perspective}</span>
+        </span>
+        <span className="line-clamp-2 text-center text-[11px] font-medium leading-snug text-muted-foreground">
+          {leftHint.playerName}
+        </span>
+      </button>
+      <span className="flex items-center justify-center px-0.5 text-xs font-bold uppercase text-muted-foreground">
+        vs
+      </span>
+      <button
+        type="button"
+        className={pickButtonClass(rivalWins)}
+        aria-pressed={rivalWins}
+        aria-label={`Ganó el mini tie-break: ${rightHint.playerName}`}
+        onClick={() => onPick(false)}
+      >
+        <span className="flex items-center gap-1.5">
+          {rivalWins ? (
+            <CheckCircle2 className="size-5 shrink-0" aria-hidden />
+          ) : (
+            <span className="size-5 shrink-0 rounded-full border-2 border-muted-foreground/35" aria-hidden />
+          )}
+          <span className="text-xs font-bold uppercase">{rightHint.perspective}</span>
+        </span>
+        <span className="line-clamp-2 text-center text-[11px] font-medium leading-snug text-muted-foreground">
+          {rightHint.playerName}
+        </span>
+      </button>
+    </div>
+  )
+}
+
 function ScoreInputs({
   gameType,
   sets,
@@ -203,21 +421,48 @@ function ScoreInputs({
   /** Lado canónico (A o B en el cruce) del jugador que envía el marcador; siempre columna izquierda. */
   viewerCanonicalSide,
   onSetValue,
+  onPickSuddenDeathThirdSetWinner,
 }: {
   gameType: MatchGameType
   sets: ScoreSet[]
   columnHints: { a: { perspective: string; playerName: string }; b: { perspective: string; playerName: string } }
   viewerCanonicalSide: 'a' | 'b'
   onSetValue: (index: number, side: keyof ScoreSet, value: string) => void
+  onPickSuddenDeathThirdSetWinner: (viewerWins: boolean) => void
 }) {
   const leftSide = viewerCanonicalSide
   const rightSide: 'a' | 'b' = viewerCanonicalSide === 'a' ? 'b' : 'a'
-  const visibleSets =
-    gameType === 'long_set'
-      ? sets.slice(0, 1)
-      : gameType === 'sudden_death'
-        ? sets.slice(0, 3)
-        : sets
+
+  if (gameType === 'sudden_death') {
+    const set = sets[0] ?? { a: 0, b: 0 }
+    return (
+      <section className="space-y-2.5 sm:space-y-3">
+        <p className="rounded-xl border border-border/60 bg-muted/25 p-2.5 text-[11px] leading-relaxed text-muted-foreground sm:p-3 sm:text-xs">
+          Marca con <Check className="inline size-3.5 align-[-2px]" aria-hidden /> quién ganó el mini tie-break.
+          No hace falta capturar los sets anteriores.
+        </p>
+        <div className="space-y-3 overflow-hidden rounded-2xl border border-border/60 bg-card p-3 shadow-sm sm:space-y-3.5 sm:p-4">
+          <div className="space-y-1">
+            <p className="text-sm font-bold leading-snug text-foreground sm:text-base">Muerte súbita</p>
+            <p className="text-pretty text-[11px] leading-relaxed text-muted-foreground sm:text-xs">
+              Se registrará como 1-0 a favor del ganador del mini tie-break.
+            </p>
+          </div>
+          <div className="rounded-xl border border-border/50 bg-muted/20 p-2 sm:p-3">
+            <SuddenDeathThirdSetPicker
+              leftHint={columnHints[leftSide]}
+              rightHint={columnHints[rightSide]}
+              set={set}
+              viewerCanonicalSide={viewerCanonicalSide}
+              onPick={onPickSuddenDeathThirdSetWinner}
+            />
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  const visibleSets = gameType === 'long_set' ? sets.slice(0, 1) : sets
 
   return (
     <section className="space-y-2.5 sm:space-y-3">
@@ -226,41 +471,18 @@ function ScoreInputs({
           Set largo: introduce el marcador completo del set (sin empates). No hay límite máximo de juegos en la captura.
         </p>
       ) : null}
-      {gameType === 'sudden_death' ? (
-        <p className="rounded-xl border border-border/60 bg-muted/25 p-2.5 text-[11px] leading-relaxed text-muted-foreground sm:p-3 sm:text-xs">
-          Captura el marcador completo. El <span className="font-semibold text-foreground">tercer set</span> define al
-          ganador del partido. No uses empates en ningún set.
-        </p>
-      ) : null}
       {visibleSets.map((set, index) => {
-        const isSdThird = gameType === 'sudden_death' && index === 2
-        const setTitle =
-          gameType === 'long_set'
-            ? 'Set largo'
-            : gameType === 'sudden_death' && index === 2
-              ? 'Set 3 · Muerte súbita (1-0)'
-              : `Set ${index + 1}`
+        const setTitle = gameType === 'long_set' ? 'Set largo' : `Set ${index + 1}`
         return (
         <div key={index} className="space-y-3 overflow-hidden rounded-2xl border border-border/60 bg-card p-3 shadow-sm sm:space-y-3.5 sm:p-4">
           <div className="space-y-1">
             <p className="text-sm font-bold leading-snug text-foreground sm:text-base">{setTitle}</p>
             <p className="text-pretty text-[11px] leading-relaxed text-muted-foreground sm:text-xs">
-              {isSdThird ? (
-                <>
-                  Introduce <span className="font-medium text-foreground">1-0</span> o{' '}
-                  <span className="font-medium text-foreground">0-1</span> según quién ganó el mini tie-break (columna
-                  izquierda = tú).
-                </>
-              ) : (
-                <>
-                  Cada casilla indica si eres <span className="font-medium text-foreground">Tú</span> o{' '}
-                  <span className="font-medium text-foreground">Rival</span> y el nombre en el torneo (jugador A/B del cruce).
-                </>
-              )}
+              Cada casilla indica si eres <span className="font-medium text-foreground">Tú</span> o{' '}
+              <span className="font-medium text-foreground">Rival</span> y el nombre en el torneo (jugador A/B del cruce).
             </p>
           </div>
           <div className="rounded-xl border border-border/50 bg-muted/20 p-2 sm:p-3">
-          {/* Fila de etiquetas y fila de inputs alineadas (mejor en móvil que un solo grid) */}
           <div className="space-y-2 sm:space-y-2.5">
             <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-1.5 sm:gap-2">
               <ColumnFieldLegend
@@ -346,7 +568,13 @@ export function ScoreSubmissionModal({
     setGameType(nextType)
     if (nextType === 'sudden_death') {
       const raw = match.score_raw
-      setSets(raw?.length === 3 ? raw.map(normalizeSet) : [{ a: 0, b: 0 }, { a: 0, b: 0 }, { a: 0, b: 0 }])
+      const decisive =
+        raw?.length === 3
+          ? normalizeSet(raw[2])
+          : raw?.length === 1
+            ? normalizeSet(raw[0])
+            : { a: 0, b: 0 }
+      setSets([decisive])
     } else {
       setSets(match.score_raw?.length ? match.score_raw.map(normalizeSet) : [{ a: 0, b: 0 }, { a: 0, b: 0 }])
     }
@@ -366,7 +594,7 @@ export function ScoreSubmissionModal({
   const bestOf3Sets = shouldShowThirdSet(normalizedSets.slice(0, 2))
     ? normalizedSets.slice(0, 3)
     : normalizedSets.slice(0, 2)
-  const suddenThreeSets = gameType === 'sudden_death' ? normalizedSets.slice(0, 3) : null
+  const suddenDecisiveSet = gameType === 'sudden_death' ? normalizedSets[0] : null
   const validation = (() => {
     if (gameType === 'best_of_3')
       return validateBestOf3Score(bestOf3Sets, {
@@ -374,22 +602,28 @@ export function ScoreSubmissionModal({
         gamesPerSet: rules?.games_per_set ?? rules?.set_points ?? 6,
       })
     if (gameType === 'long_set') return validateLongSetScore(normalizedSets[0])
-    if (!rules) return { ok: false, errors: ['Sin reglas del torneo.'], winner: null as ScoreWinnerSide | null }
-    return validateSuddenDeathScore({
-      game_type: 'sudden_death',
-      score_json: suddenThreeSets,
-      winner: null,
-      rules,
-    })
+    if (gameType === 'sudden_death') {
+      if (!suddenDecisiveSet) {
+        return { ok: false, errors: ['Marca quién ganó el mini tie-break.'], winner: null as ScoreWinnerSide | null }
+      }
+      const thirdErr = validateSuddenDeathThirdSet(suddenDecisiveSet)
+      const sdWinner = thirdErr ? null : getSetWinner(suddenDecisiveSet)
+      return {
+        ok: !thirdErr && sdWinner != null,
+        errors: thirdErr ? [thirdErr] : sdWinner ? [] : ['Marca quién ganó el mini tie-break.'],
+        winner: sdWinner,
+      }
+    }
+    return { ok: false, errors: ['Sin reglas del torneo.'], winner: null as ScoreWinnerSide | null }
   })()
   const winner = validation.winner
   const scoreForPayload =
-    gameType === 'best_of_3' ? bestOf3Sets : gameType === 'sudden_death' ? suddenThreeSets ?? [] : [normalizedSets[0]]
+    gameType === 'best_of_3' ? bestOf3Sets : gameType === 'sudden_death' ? [] : [normalizedSets[0]]
   const scoreLabel =
     gameType === 'sudden_death'
-      ? suddenThreeSets?.length === 3
-        ? formatScoreCompact(suddenThreeSets)
-        : 'muerte súbita (3 sets)'
+      ? suddenDecisiveSet && validation.winner
+        ? formatScoreCompact([suddenDecisiveSet])
+        : 'muerte súbita'
       : formatScoreCompact(scoreForPayload)
   const decidedInTwo = gameType === 'best_of_3' && bestOf3Sets.length === 2 && validation.ok
 
@@ -402,10 +636,10 @@ export function ScoreSubmissionModal({
   /** Sets en orden «tú primero» para el resumen legible. */
   const viewerSetsForSummary =
     gameType === 'sudden_death'
-      ? suddenThreeSets && suddenThreeSets.length === 3
+      ? suddenDecisiveSet && validation.winner
         ? isYouA
-          ? suddenThreeSets
-          : invertScoreSets(suddenThreeSets)
+          ? [suddenDecisiveSet]
+          : invertScoreSets([suddenDecisiveSet])
         : null
       : isYouA
         ? scoreForPayload
@@ -438,13 +672,24 @@ export function ScoreSubmissionModal({
 
   const setValue = (index: number, side: keyof ScoreSet, value: string) => {
     const next = [...sets]
-    let num = Math.max(0, Number(value) || 0)
-    if (gameType === 'sudden_death' && index === 2) num = Math.min(1, Math.max(0, num))
+    const num = Math.max(0, Number(value) || 0)
     next[index] = { ...(next[index] ?? { a: 0, b: 0 }), [side]: num }
     if (gameType === 'best_of_3' && index === 1 && !shouldShowThirdSet(next.slice(0, 2))) {
       next.splice(2)
     }
     setSets(next)
+  }
+
+  const pickSuddenDeathThirdSetWinner = (viewerWins: boolean) => {
+    const row = { ...(sets[0] ?? { a: 0, b: 0 }) }
+    if (viewerCanonicalSide === 'a') {
+      row.a = viewerWins ? 1 : 0
+      row.b = viewerWins ? 0 : 1
+    } else {
+      row.b = viewerWins ? 1 : 0
+      row.a = viewerWins ? 0 : 1
+    }
+    setSets([row])
   }
 
   const changeGameType = (nextType: MatchGameType) => {
@@ -455,11 +700,7 @@ export function ScoreSubmissionModal({
       nextType === 'long_set'
         ? [{ a: 0, b: 0 }]
         : nextType === 'sudden_death'
-          ? [
-              { a: 0, b: 0 },
-              { a: 0, b: 0 },
-              { a: 0, b: 0 },
-            ]
+          ? [{ a: 0, b: 0 }]
           : [{ a: 0, b: 0 }, { a: 0, b: 0 }],
     )
   }
@@ -473,7 +714,7 @@ export function ScoreSubmissionModal({
       gameType === 'sudden_death'
         ? {
             game_type: 'sudden_death',
-            score_json: suddenThreeSets ?? [],
+            score_json: null,
             winner,
           }
         : gameType === 'long_set'
@@ -528,7 +769,7 @@ export function ScoreSubmissionModal({
             gameType={gameType}
             sets={
               gameType === 'sudden_death'
-                ? sets.slice(0, 3)
+                ? sets.slice(0, 1)
                 : gameType === 'best_of_3' && shouldShowThirdSet(normalizedSets.slice(0, 2)) && sets.length < 3
                   ? [...sets, { a: 0, b: 0 }]
                   : sets
@@ -536,6 +777,7 @@ export function ScoreSubmissionModal({
             columnHints={columnHints}
             viewerCanonicalSide={viewerCanonicalSide}
             onSetValue={setValue}
+            onPickSuddenDeathThirdSetWinner={pickSuddenDeathThirdSetWinner}
           />
           </div>
 
@@ -588,7 +830,7 @@ export function ScoreSubmissionModal({
                   {youWon ? 'Victoria para ti' : `Victoria para ${rivalName}`}
                   <span className="mt-1 block text-xs font-normal leading-relaxed text-muted-foreground">
                     {gameType === 'sudden_death'
-                      ? `Marcador en torneo (jug. A vs B): ${scoreLabel}. En muerte súbita cuenta solo el set 3.`
+                      ? `Resultado: ${scoreLabel} (mini tie-break).`
                       : `Marcador en torneo (jug. A vs B): ${scoreLabel}`}
                   </span>
                 </p>

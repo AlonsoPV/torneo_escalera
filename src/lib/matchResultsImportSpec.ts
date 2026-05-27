@@ -55,7 +55,10 @@ export const MATCH_RESULTS_IMPORT_COLUMN_GUIDE: { field: MatchResultsImportHeade
   { field: 'set_3_b', hint: '' },
   { field: 'winner_id', hint: 'Mismo criterio que IDs de jugador; debe ser A o B.' },
   { field: 'result_type', hint: 'normal, wo, def, nr, ret, pending_score, double_penalty, not_reported…' },
-  { field: 'status', hint: 'pending, closed, cancelled… (ver documentación MVP).' },
+  {
+    field: 'status',
+    hint: 'pending / pending_score / scheduled (alias) = abierto sin cierre; closed = cerrado; cancelled = cancelado.',
+  },
 ]
 
 /** Encabezados alternativos (p. ej. plantilla corta en inglés) → canónico. */
@@ -103,6 +106,9 @@ export function normalizeMatchResultsHeader(h: string): string {
 export const CSV_STATUS_TO_MATCH_STATUS: Record<string, string> = {
   pending: 'pending_score',
   pending_score: 'pending_score',
+  /** Alias habitual en planillas («partido aún no con marcador oficial»); en BD es `pending_score`. */
+  scheduled: 'pending_score',
+  programado: 'pending_score',
   marcador_enviado: 'score_submitted',
   score_submitted: 'score_submitted',
   en_disputa: 'score_disputed',

@@ -1,8 +1,8 @@
 import type { GroupPlayer, MatchRow, MatchStatus, UserRole } from '@/types/database'
 
 /**
- * Ciclo: jugador registra solo desde pendiente → `closed`; rival refuta → `score_disputed`;
- * administración cierra → `validated`. Estados legacy pueden existir en datos antiguos.
+ * Ciclo: jugador registra solo desde pendiente -> `closed`; rival refuta -> vuelve a `pending_score`;
+ * administracion cierra -> `validated`. `score_disputed` queda como estado legacy/importacion.
  */
 export const PLAYER_SCORE_STATUSES = [
   'pending_score',
@@ -115,7 +115,7 @@ export function canAdminCorrectScore(userRole: UserRole | null | undefined, matc
 }
 
 /**
- * Participante: solo captura con marcador pendiente (tras disputa, solo administración).
+ * Participante: captura cuando el partido esta pendiente; una refutacion vuelve a este estado.
  */
 export function canPlayerACaptureScore(params: {
   match: MatchRow

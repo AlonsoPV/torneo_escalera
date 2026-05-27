@@ -2,7 +2,7 @@ import { invokeAdminChangeUserPassword, invokeAdminCreateUser } from '@/services
 import { isMissingPostgrestRelationError } from '@/lib/postgrestErrors'
 import { supabase } from '@/lib/supabase'
 import { addGroupPlayer, removeGroupPlayer as removeGroupMembership } from '@/services/groups'
-import { correctAdminScore, saveMatchScore } from '@/services/matches'
+import { adminCorrectDisputedMatch, correctAdminScore, saveMatchScore } from '@/services/matches'
 import type {
   Group,
   GroupCategory,
@@ -12,6 +12,8 @@ import type {
   Profile,
   ScoreSet,
   Tournament,
+  TournamentRules,
+  TournamentStatus,
   UserRole,
 } from '@/types/database'
 
@@ -28,9 +30,12 @@ export type AdminGroupRecord = Group & {
 
 export type AdminMatchRecord = MatchRow & {
   tournamentName: string
+  categoryName: string
   groupName: string
   playerAName: string
   playerBName: string
+  playerAExternalId: string | null
+  playerBExternalId: string | null
   playerAUserId: string | null
   playerBUserId: string | null
   /** Nombre legible del perfil que envió el marcador (evita mostrar UUID). */
@@ -45,6 +50,12 @@ export type AdminMatchRecord = MatchRow & {
 export type AdminUserRecord = Profile & {
   group: Group | null
   groupPlayer: GroupPlayer | null
+}
+
+export type AdminOverviewPendingAction = {
+  message: string
+  /** Ruta en administración para revisión o detalle; `null` si no aplica enlace útil. */
+  href: string | null
 }
 
 export type AdminOverviewData = {
@@ -62,7 +73,14 @@ export type AdminOverviewData = {
   activeTournaments: number
   totalTournaments: number
   recentMatches: AdminMatchRecord[]
-  pendingActions: string[]
+  pendingActions: AdminOverviewPendingAction[]
+  /** `all_active`: métricas de todos los torneos con estado activo (legado). `single`: un torneo elegido. */
+  scopeMode: 'all_active' | 'single'
+  scopedTournamentId: string | null
+  scopedTournamentName: string | null
+  scopedTournamentStatus: TournamentStatus | null
+  /** Torneos «abiertos» (borrador o activo) para texto de ayuda en la UI. */
+  openTournamentsDetail: { id: string; name: string; status: TournamentStatus }[]
 }
 
 export type CreateUserInput = {
@@ -80,13 +98,16 @@ export type ChangePasswordInput = {
   newPassword: string
 }
 
+/** PostgREST devuelve como máx. ~1000 filas si no se pagina; disputas deben consultarse filtradas en servidor. */
+const ADMIN_DISPUTED_MATCHES_LIMIT = 500
+
 async function listAllAdminData() {
   const [tournaments, groups, groupCategories, groupPlayers, matches, profiles] = await Promise.all([
     supabase.from('tournaments').select('*').order('created_at', { ascending: false }),
     supabase.from('groups').select('*').order('order_index', { ascending: true }),
     supabase.from('group_categories').select('*').order('order_index', { ascending: true }),
     supabase.from('group_players').select('*').order('seed_order', { ascending: true }),
-    supabase.from('matches').select('*').order('created_at', { ascending: false }),
+    supabase.from('matches').select('*').order('created_at', { ascending: false }).limit(5000),
     supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(4000),
   ])
 
@@ -123,30 +144,66 @@ function profileDisplayLabel(profileById: Map<string, Profile>, userId: string |
   return `Usuario (${userId.slice(0, 8)}…)`
 }
 
+function groupPlayerDisplayLabel(
+  player: GroupPlayer | null | undefined,
+  profile: Profile | null | undefined,
+): string | null {
+  const displayName = player?.display_name?.trim()
+  if (displayName) return displayName
+  const fullName = profile?.full_name?.trim()
+  if (fullName) return fullName
+  const email = profile?.email?.trim()
+  if (email) return email
+  const phone = profile?.phone?.trim()
+  if (phone) return phone
+  return null
+}
+
 function buildMatchRecords(input: {
   matches: MatchRow[]
   tournaments: Tournament[]
   groups: Group[]
+  groupCategories: GroupCategory[]
   groupPlayers: GroupPlayer[]
   profiles: Profile[]
 }): AdminMatchRecord[] {
   const tournamentById = new Map(input.tournaments.map((t) => [t.id, t]))
   const groupById = new Map(input.groups.map((g) => [g.id, g]))
+  const categoryById = new Map(input.groupCategories.map((c) => [c.id, c]))
   const groupPlayerById = new Map(input.groupPlayers.map((p) => [p.id, p]))
   const profileById = new Map(input.profiles.map((p) => [p.id, p]))
 
   return input.matches.map((match) => {
+    const group = groupById.get(match.group_id)
     const playerA = groupPlayerById.get(match.player_a_id)
     const playerB = groupPlayerById.get(match.player_b_id)
     const profileA = playerA ? profileById.get(playerA.user_id) : null
     const profileB = playerB ? profileById.get(playerB.user_id) : null
+    const playerALabel = groupPlayerDisplayLabel(playerA, profileA) ?? 'Jugador sin perfil'
+    const playerBLabel = groupPlayerDisplayLabel(playerB, profileB) ?? 'Jugador sin perfil'
+
+    const disputedByLabel = (() => {
+      const profileLabel = profileDisplayLabel(profileById, match.disputed_by)
+      if (profileLabel && !profileLabel.startsWith('Usuario (')) return profileLabel
+      if (match.disputed_by === playerA?.user_id) return playerALabel
+      if (match.disputed_by === playerB?.user_id) return playerBLabel
+      if (match.updated_by === playerA?.user_id) return playerALabel
+      if (match.updated_by === playerB?.user_id) return playerBLabel
+      if (!match.disputed_by && match.score_submitted_by === playerA?.user_id) return playerBLabel
+      if (!match.disputed_by && match.score_submitted_by === playerB?.user_id) return playerALabel
+      if (!match.disputed_by && !match.score_submitted_by) return playerBLabel
+      return profileLabel
+    })()
 
     return {
       ...match,
       tournamentName: tournamentById.get(match.tournament_id)?.name ?? 'No disponible',
-      groupName: groupById.get(match.group_id)?.name ?? 'No disponible',
-      playerAName: playerA?.display_name ?? profileA?.full_name ?? profileA?.email ?? 'Jugador sin perfil',
-      playerBName: playerB?.display_name ?? profileB?.full_name ?? profileB?.email ?? 'Jugador sin perfil',
+      categoryName: group?.group_category_id ? categoryById.get(group.group_category_id)?.name ?? '' : '',
+      groupName: group?.name ?? 'No disponible',
+      playerAName: playerALabel,
+      playerBName: playerBLabel,
+      playerAExternalId: profileA?.external_id?.trim() || null,
+      playerBExternalId: profileB?.external_id?.trim() || null,
       playerAUserId: playerA?.user_id ?? null,
       playerBUserId: playerB?.user_id ?? null,
       scoreSubmittedByLabel: profileDisplayLabel(profileById, match.score_submitted_by),
@@ -155,17 +212,71 @@ function buildMatchRecords(input: {
         match.status === 'closed' || match.status === 'validated'
           ? profileDisplayLabel(profileById, match.admin_validated_by ?? match.updated_by)
           : null,
-      disputedByLabel: profileDisplayLabel(profileById, match.disputed_by),
+      disputedByLabel,
     }
   })
 }
 
-export async function getAdminOverviewData(): Promise<AdminOverviewData> {
-  const data = await listAllAdminData()
-  const activeTournamentsList = data.tournaments.filter((t) => t.status === 'active')
-  const activeIds = new Set(activeTournamentsList.map((t) => t.id))
+function openTournamentsFromData(tournaments: Tournament[]): { id: string; name: string; status: TournamentStatus }[] {
+  return tournaments
+    .filter((t) => t.status === 'draft' || t.status === 'active')
+    .map((t) => ({ id: t.id, name: t.name, status: t.status }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }))
+}
 
-  if (activeIds.size === 0) {
+function adminGroupsHref(tournamentIdForScope: string | null): string {
+  if (!tournamentIdForScope) return '/admin/groups'
+  return `/admin/groups?${new URLSearchParams({ tournament: tournamentIdForScope }).toString()}`
+}
+
+function adminMatchesHref(tournamentIdForScope: string | null): string {
+  if (!tournamentIdForScope) return '/admin/matches'
+  return `/admin/matches?${new URLSearchParams({ tournament: tournamentIdForScope }).toString()}`
+}
+
+/** Torneo único para construir enlaces cuando el alcance es inequívoco. */
+function scopeTournamentIdForAdminLinks(
+  scopedTournamentId: string | null,
+  options: { scopeMode: 'all_active' | 'single'; activeTournamentsList: Tournament[] },
+): string | null {
+  if (scopedTournamentId) return scopedTournamentId
+  if (options.scopeMode === 'all_active' && options.activeTournamentsList.length === 1) {
+    return options.activeTournamentsList[0].id
+  }
+  return null
+}
+
+function buildAdminOverviewScoped(
+  data: Awaited<ReturnType<typeof listAllAdminData>>,
+  scopeIds: Set<string>,
+  options: {
+    scopeMode: 'all_active' | 'single'
+    /** Para copy de pendientes en modo all_active. */
+    activeTournamentsList: Tournament[]
+    /** Torneo único en modo single (validado). */
+    singleTournament: Tournament | null
+  },
+): AdminOverviewData {
+  const openDetail = openTournamentsFromData(data.tournaments)
+  const activeCount = data.tournaments.filter((t) => t.status === 'active').length
+
+  if (scopeIds.size === 0) {
+    const pending: AdminOverviewPendingAction[] =
+      options.scopeMode === 'single' && options.singleTournament
+        ? [
+            {
+              message: `No hay datos operativos para «${options.singleTournament.name}» (sin grupos/partidos o torneo inexistente en el alcance).`,
+              href: '/admin/tournaments',
+            },
+          ]
+        : [
+            {
+              message:
+                'No hay ningún torneo activo. Activa un torneo en Administración → Torneos para ver métricas del torneo en curso.',
+              href: '/admin/tournaments',
+            },
+          ]
+
     return {
       totalPlayers: 0,
       totalGroups: 0,
@@ -175,18 +286,21 @@ export async function getAdminOverviewData(): Promise<AdminOverviewData> {
       pendingResults: 0,
       confirmedResults: 0,
       incompleteGroups: 0,
-      activeTournaments: 0,
+      activeTournaments: activeCount,
       totalTournaments: data.tournaments.length,
       recentMatches: [],
-      pendingActions: [
-        'No hay ningún torneo activo. Activa un torneo en Administración → Torneos para ver métricas del torneo en curso.',
-      ],
+      pendingActions: pending,
+      scopeMode: options.scopeMode,
+      scopedTournamentId: options.singleTournament?.id ?? null,
+      scopedTournamentName: options.singleTournament?.name ?? null,
+      scopedTournamentStatus: options.singleTournament?.status ?? null,
+      openTournamentsDetail: openDetail,
     }
   }
 
-  const scopedGroups = data.groups.filter((g) => activeIds.has(g.tournament_id))
+  const scopedGroups = data.groups.filter((g) => scopeIds.has(g.tournament_id))
   const scopedGroupIds = new Set(scopedGroups.map((g) => g.id))
-  const scopedMatches = data.matches.filter((m) => activeIds.has(m.tournament_id))
+  const scopedMatches = data.matches.filter((m) => scopeIds.has(m.tournament_id))
 
   const playerCounts = new Map<string, number>()
   for (const player of data.groupPlayers) {
@@ -194,15 +308,16 @@ export async function getAdminOverviewData(): Promise<AdminOverviewData> {
     playerCounts.set(player.group_id, (playerCounts.get(player.group_id) ?? 0) + 1)
   }
 
-  const distinctPlayersInActive = new Set<string>()
+  const distinctPlayers = new Set<string>()
   for (const player of data.groupPlayers) {
-    if (scopedGroupIds.has(player.group_id)) distinctPlayersInActive.add(player.user_id)
+    if (scopedGroupIds.has(player.group_id)) distinctPlayers.add(player.user_id)
   }
 
   const matchRecords = buildMatchRecords({
     matches: scopedMatches,
     tournaments: data.tournaments,
     groups: data.groups,
+    groupCategories: data.groupCategories,
     groupPlayers: data.groupPlayers,
     profiles: data.profiles,
   })
@@ -211,20 +326,42 @@ export async function getAdminOverviewData(): Promise<AdminOverviewData> {
     ['player_confirmed', 'score_disputed'].includes(m.status),
   ).length
   const totalMatches = scopedMatches.length
-  const matchesWithoutDate = scopedMatches.filter((m) => m.status === 'pending_score').length
+  const matchesWithoutDate = scopedMatches.filter((m) =>
+    m.status === 'pending_score' || m.status === 'score_disputed'
+  ).length
   const incompleteGroups = scopedGroups.filter((g) => (playerCounts.get(g.id) ?? 0) < g.max_players).length
 
-  const pendingActions: string[] = []
-  if (activeTournamentsList.length > 1) {
-    pendingActions.push(
-      `Hay ${activeTournamentsList.length} torneos activos; estas métricas suman todos ellos. Deja solo uno en «activo» si quieres una vista de un único torneo.`,
-    )
+  const scopedTournamentId = options.singleTournament?.id ?? null
+  const linkTournamentId = scopeTournamentIdForAdminLinks(scopedTournamentId, {
+    scopeMode: options.scopeMode,
+    activeTournamentsList: options.activeTournamentsList,
+  })
+
+  const pendingActions: AdminOverviewPendingAction[] = []
+  if (options.scopeMode === 'all_active' && options.activeTournamentsList.length > 1) {
+    pendingActions.push({
+      message: `Hay ${options.activeTournamentsList.length} torneos activos; estas métricas suman todos ellos. Usa Vista general para filtrar un torneo.`,
+      href: '/admin/overview',
+    })
   }
-  if (incompleteGroups > 0) pendingActions.push(`${incompleteGroups} grupos requieren jugadores`)
-  if (pendingResults > 0) pendingActions.push(`${pendingResults} resultados esperan revisión`)
+  if (incompleteGroups > 0) {
+    pendingActions.push({
+      message: `${incompleteGroups} grupos requieren jugadores`,
+      href: adminGroupsHref(linkTournamentId),
+    })
+  }
+  if (pendingResults > 0) {
+    pendingActions.push({
+      message: `${pendingResults} resultados esperan revisión`,
+      href: adminMatchesHref(linkTournamentId),
+    })
+  }
+
+  const scopedTournamentName = options.singleTournament?.name ?? null
+  const scopedTournamentStatus = options.singleTournament?.status ?? null
 
   return {
-    totalPlayers: distinctPlayersInActive.size,
+    totalPlayers: distinctPlayers.size,
     totalGroups: scopedGroups.length,
     totalMatches,
     matchesWithoutDate,
@@ -234,11 +371,43 @@ export async function getAdminOverviewData(): Promise<AdminOverviewData> {
     pendingResults,
     confirmedResults: scopedMatches.filter((m) => m.status === 'closed' || m.status === 'validated').length,
     incompleteGroups,
-    activeTournaments: activeTournamentsList.length,
+    activeTournaments: activeCount,
     totalTournaments: data.tournaments.length,
     recentMatches: matchRecords.filter((m) => m.score_raw || m.status !== 'pending_score').slice(0, 5),
     pendingActions,
+    scopeMode: options.scopeMode,
+    scopedTournamentId,
+    scopedTournamentName,
+    scopedTournamentStatus,
+    openTournamentsDetail: openDetail,
   }
+}
+
+export async function getAdminOverviewData(tournamentId?: string | null): Promise<AdminOverviewData> {
+  const data = await listAllAdminData()
+  const tid = tournamentId?.trim() || ''
+
+  if (tid) {
+    const tournament = data.tournaments.find((t) => t.id === tid)
+    if (!tournament) {
+      throw new Error('Torneo no encontrado.')
+    }
+    const scopeIds = new Set<string>([tournament.id])
+    return buildAdminOverviewScoped(data, scopeIds, {
+      scopeMode: 'single',
+      activeTournamentsList: [],
+      singleTournament: tournament,
+    })
+  }
+
+  const activeTournamentsList = data.tournaments.filter((t) => t.status === 'active')
+  const activeIds = new Set(activeTournamentsList.map((t) => t.id))
+
+  return buildAdminOverviewScoped(data, activeIds, {
+    scopeMode: 'all_active',
+    activeTournamentsList,
+    singleTournament: null,
+  })
 }
 
 /** Conteos por estado de partido para dashboards admin (matches / results / tournaments). */
@@ -263,10 +432,13 @@ export function computeAdminMatchBreakdown(matches: MatchRow[]): AdminMatchBreak
   const needsAdminAttention = matches.filter((m) =>
     ['player_confirmed', 'score_disputed'].includes(m.status),
   ).length
+  const pendingOperational = matches.filter((m) =>
+    m.status === 'pending_score' || m.status === 'score_disputed'
+  ).length
   return {
     total: matches.length,
-    pendingScore: matches.filter((m) => m.status === 'pending_score').length,
-    withoutDate: matches.filter((m) => m.status === 'pending_score').length,
+    pendingScore: pendingOperational,
+    withoutDate: pendingOperational,
     scoreSubmitted: matches.filter((m) => m.status === 'score_submitted').length,
     scoreDisputed: matches.filter((m) => m.status === 'score_disputed').length,
     playerConfirmed: matches.filter((m) => m.status === 'player_confirmed').length,
@@ -432,6 +604,82 @@ export async function getAdminResults(): Promise<AdminMatchRecord[]> {
   return getAdminMatches()
 }
 
+async function fetchAdminContextForMatches(matchRows: MatchRow[]) {
+  if (matchRows.length === 0) {
+    return {
+      tournaments: [] as Tournament[],
+      groups: [] as Group[],
+      groupCategories: [] as GroupCategory[],
+      groupPlayers: [] as GroupPlayer[],
+      profiles: [] as Profile[],
+    }
+  }
+
+  const tournamentIds = [...new Set(matchRows.map((m) => m.tournament_id))]
+  const groupIds = [...new Set(matchRows.map((m) => m.group_id))]
+  const groupPlayerIds = [...new Set(matchRows.flatMap((m) => [m.player_a_id, m.player_b_id]))]
+  const profileIds = new Set<string>()
+  for (const match of matchRows) {
+    if (match.score_submitted_by) profileIds.add(match.score_submitted_by)
+    if (match.disputed_by) profileIds.add(match.disputed_by)
+    if (match.opponent_confirmed_by) profileIds.add(match.opponent_confirmed_by)
+    if (match.admin_validated_by) profileIds.add(match.admin_validated_by)
+    if (match.updated_by) profileIds.add(match.updated_by)
+  }
+
+  const [tournaments, groups, groupCategories, groupPlayers] = await Promise.all([
+    supabase.from('tournaments').select('*').in('id', tournamentIds),
+    supabase.from('groups').select('*').in('id', groupIds),
+    supabase.from('group_categories').select('*').in('tournament_id', tournamentIds).order('order_index', { ascending: true }),
+    supabase.from('group_players').select('*').in('id', groupPlayerIds),
+  ])
+
+  const contextError =
+    tournaments.error || groups.error || groupPlayers.error
+  if (contextError) throw contextError
+  if (groupCategories.error && !isMissingPostgrestRelationError(groupCategories.error)) {
+    throw groupCategories.error
+  }
+
+  const groupPlayersRows = (groupPlayers.data ?? []) as GroupPlayer[]
+  for (const player of groupPlayersRows) {
+    profileIds.add(player.user_id)
+  }
+
+  const profileIdList = [...profileIds]
+  const profiles =
+    profileIdList.length > 0
+      ? await supabase.from('profiles').select('*').in('id', profileIdList)
+      : { data: [] as Profile[], error: null }
+  if (profiles.error) throw profiles.error
+
+  return {
+    tournaments: (tournaments.data ?? []) as Tournament[],
+    groups: (groups.data ?? []) as Group[],
+    groupCategories: !groupCategories.error
+      ? ((groupCategories.data ?? []) as GroupCategory[])
+      : ([] as GroupCategory[]),
+    groupPlayers: groupPlayersRows,
+    profiles: (profiles.data ?? []) as Profile[],
+  }
+}
+
+/** Bandeja de disputas: consulta server-side para no perder refutaciones tras el límite global de partidos. */
+export async function getAdminDisputedResults(): Promise<AdminMatchRecord[]> {
+  const { data, error } = await supabase
+    .from('matches')
+    .select('*')
+    .eq('status', 'score_disputed')
+    .order('disputed_at', { ascending: false, nullsFirst: false })
+    .order('updated_at', { ascending: false })
+    .limit(ADMIN_DISPUTED_MATCHES_LIMIT)
+  if (error) throw error
+
+  const matchRows = (data ?? []) as MatchRow[]
+  const context = await fetchAdminContextForMatches(matchRows)
+  return buildMatchRecords({ matches: matchRows, ...context })
+}
+
 export async function confirmResult(match: MatchRow, actorUserId: string): Promise<void> {
   if (match.status === 'closed' || match.status === 'validated') return
   if (match.status === 'cancelled') throw new Error('No se puede confirmar un partido cancelado.')
@@ -467,8 +715,16 @@ export async function correctResult(
   actorUserId: string,
   closeAfter = true,
   adminNote?: string,
+  rules?: TournamentRules | null,
 ): Promise<void> {
-  await correctAdminScore({ match, sets, actorUserId, closeAfter })
+  if (match.status === 'score_disputed') {
+    if (!closeAfter) {
+      throw new Error('En un partido refutado solo puedes validar o corregir y validar el marcador.')
+    }
+    await adminCorrectDisputedMatch({ match, sets, rules })
+  } else {
+    await correctAdminScore({ match, sets, actorUserId, closeAfter })
+  }
   const note = adminNote?.trim()
   if (note) {
     const { error } = await supabase

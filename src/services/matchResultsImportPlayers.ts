@@ -2,9 +2,9 @@ import { invokeAdminProvisionMatchResultsPlayer } from '@/services/authEdge'
 import { findGroupForMatchResultsImport, normImportPlayerName } from '@/services/bulkMatchResultsImport'
 import { supabase } from '@/lib/supabase'
 import { type AdminGroupRecord, getAdminGroups } from '@/services/admin'
-import { addGroupPlayer, listGroupPlayers, updateGroupPlayerDisplayName } from '@/services/groups'
+import { addGroupPlayer, listGroupPlayers, removeGroupPlayer, updateGroupPlayerDisplayName } from '@/services/groups'
 import { generateRoundRobinMatches, listMatchesForGroup } from '@/services/matches'
-import type { GroupPlayer, Profile } from '@/types/database'
+import type { Profile } from '@/types/database'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -212,7 +212,7 @@ export async function resolveProfilesForMatchSlots(
     }
 
     if (idT && !looksLikeUuid(idT)) {
-      let pr = byExtNorm.get(normKey(idT))
+      const pr = byExtNorm.get(normKey(idT))
       if (pr) return pr
     }
 
@@ -236,9 +236,17 @@ export type EnrollMatchResultsPlayersResult = {
   skippedAlreadyInGroup: number
   /** `display_name` en grupo alineado con el CSV cuando el jugador ya estaba inscrito. */
   rosterLabelsUpdated: number
+  /** Jugadores removidos de grupos llenos porque no venían en el roster esperado del CSV. */
+  rosterPlayersRemoved: number
   /** Cuentas auth + perfil creadas en esta pasada (importación de resultados). */
   profilesAutoCreated: number
   messages: string[]
+}
+
+type ResolvedMatchResultsPlayerSlot = {
+  slot: MatchResultsPlayerSlot
+  group: AdminGroupRecord
+  profile: Profile
 }
 
 /**
@@ -254,6 +262,7 @@ async function enrollWithResolvedProfiles(
   let enrolled = 0
   let skippedAlreadyInGroup = 0
   let rosterLabelsUpdated = 0
+  let rosterPlayersRemoved = 0
   let profilesAutoCreated = 0
 
   const uidByGroup = new Map<string, Set<string>>()
@@ -263,14 +272,17 @@ async function enrollWithResolvedProfiles(
   }
 
   /** Roster local tras altas en esta pasada (evita listGroupPlayers por fila). */
-  const rosterByGroup = new Map<string, GroupPlayer[]>()
+  const rosterByGroup = new Map<string, AdminGroupRecord['players']>()
 
-  function rosterSnapshot(groupId: string, seed: AdminGroupRecord['players']): GroupPlayer[] {
+  function rosterSnapshot(groupId: string, seed: AdminGroupRecord['players']): AdminGroupRecord['players'] {
     if (!rosterByGroup.has(groupId)) rosterByGroup.set(groupId, [...seed])
     return rosterByGroup.get(groupId)!
   }
 
   const touchedGroups = new Set<string>()
+  const rosterChangedGroups = new Set<string>()
+  const resolvedSlots: ResolvedMatchResultsPlayerSlot[] = []
+  const expectedUidsByGroup = new Map<string, Set<string>>()
 
   for (const slot of slots) {
     const group = findGroupForMatchResultsImport(
@@ -318,10 +330,60 @@ async function enrollWithResolvedProfiles(
       continue
     }
 
+    const expected = expectedUidsByGroup.get(group.id) ?? new Set<string>()
+    expected.add(profile.id)
+    expectedUidsByGroup.set(group.id, expected)
+    resolvedSlots.push({ slot, group, profile })
+  }
+
+  for (const [groupId, expectedUids] of expectedUidsByGroup) {
+    const group = groups.find((g) => g.id === groupId)
+    if (!group) continue
+
+    const cap = group.max_players ?? 5
+    if (expectedUids.size > cap) {
+      messages.push(
+        `«${group.name}»: la plantilla trae ${expectedUids.size} jugadores, pero el grupo permite ${cap}. Revisa duplicados o el máximo del grupo.`,
+      )
+      continue
+    }
+
+    const roster = rosterSnapshot(group.id, group.players)
+    const extras = roster.filter((p) => !expectedUids.has(p.user_id))
+    if (extras.length === 0) continue
+
+    for (const extra of extras) {
+      try {
+        await removeGroupPlayer(extra.id)
+        rosterPlayersRemoved += 1
+      } catch (e) {
+        messages.push(
+          `«${group.name}»: no se pudo liberar el cupo de ${extra.display_name}: ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+        )
+      }
+    }
+
+    const nextRoster = roster.filter((p) => expectedUids.has(p.user_id))
+    rosterByGroup.set(group.id, nextRoster)
+    uidByGroup.set(group.id, new Set(nextRoster.map((p) => p.user_id)))
+    group.players = nextRoster
+    touchedGroups.add(group.id)
+    rosterChangedGroups.add(group.id)
+    messages.push(
+      `«${group.name}»: roster alineado con la plantilla; ${extras.length} jugador(es) fuera del CSV fueron removidos del grupo.`,
+    )
+  }
+
+  for (const { slot, group, profile } of resolvedSlots) {
+    const expected = expectedUidsByGroup.get(group.id)
+    if (expected && expected.size > (group.max_players ?? 5)) continue
+
     const members = memberUids(group.id, group.players)
     if (members.has(profile.id)) {
       const hint = slot.nameHint.trim()
-      const gpRow = group.players.find((p) => p.user_id === profile.id)
+      const gpRow = rosterSnapshot(group.id, group.players).find((p) => p.user_id === profile.id)
       if (hint && gpRow && normImportPlayerName(gpRow.display_name) !== normImportPlayerName(hint)) {
         try {
           await updateGroupPlayerDisplayName(gpRow.id, hint)
@@ -353,9 +415,11 @@ async function enrollWithResolvedProfiles(
         seedOrder: nextSeed,
       })
       members.add(profile.id)
-      roster.push(gp)
+      roster.push({ ...gp, profile })
+      group.players = roster
       enrolled += 1
       touchedGroups.add(group.id)
+      rosterChangedGroups.add(group.id)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Error al inscribir'
       messages.push(`${profile.full_name ?? profile.id}: ${msg}`)
@@ -370,7 +434,7 @@ async function enrollWithResolvedProfiles(
 
       const players = await listGroupPlayers(gid)
       const existingMatches = await listMatchesForGroup(gid)
-      if (players.length >= 2 && existingMatches.length === 0) {
+      if (players.length >= 2 && (rosterChangedGroups.has(gid) || existingMatches.length === 0)) {
         try {
           await generateRoundRobinMatches({
             tournamentId,
@@ -388,7 +452,14 @@ async function enrollWithResolvedProfiles(
     }),
   )
 
-  return { enrolled, skippedAlreadyInGroup, rosterLabelsUpdated, profilesAutoCreated, messages }
+  return {
+    enrolled,
+    skippedAlreadyInGroup,
+    rosterLabelsUpdated,
+    rosterPlayersRemoved,
+    profilesAutoCreated,
+    messages,
+  }
 }
 
 export async function enrollPlayersForMatchResultsImport(
@@ -397,7 +468,14 @@ export async function enrollPlayersForMatchResultsImport(
 ): Promise<EnrollMatchResultsPlayersResult> {
   const slots = collectMatchResultsPlayerSlots(rows)
   if (slots.length === 0) {
-    return { enrolled: 0, skippedAlreadyInGroup: 0, rosterLabelsUpdated: 0, profilesAutoCreated: 0, messages: [] }
+    return {
+      enrolled: 0,
+      skippedAlreadyInGroup: 0,
+      rosterLabelsUpdated: 0,
+      rosterPlayersRemoved: 0,
+      profilesAutoCreated: 0,
+      messages: [],
+    }
   }
 
   const [groups, profilesBySlot] = await Promise.all([
