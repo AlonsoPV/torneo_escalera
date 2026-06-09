@@ -73,6 +73,19 @@ describe('authStore loading state', () => {
     expect(useAuthStore.getState().profileLoading).toBe(false)
   })
 
+  it('keeps the loaded profile visible when the same session is refreshed', () => {
+    const profile = profileFor('u1', 'admin')
+
+    useAuthStore.getState().setSession(sessionFor('u1'))
+    useAuthStore.getState().setProfile(profile)
+    useAuthStore.setState({ profileLoading: false })
+
+    useAuthStore.getState().setSession(sessionFor('u1'))
+
+    expect(useAuthStore.getState().profile).toBe(profile)
+    expect(useAuthStore.getState().profileLoading).toBe(false)
+  })
+
   it('clears session, user, profile and loading state on local logout', () => {
     const profile = profileFor('u1')
 

@@ -6,14 +6,16 @@ import { useAuthStore } from '@/stores/authStore'
 
 export function RequireAdmin() {
   const initialized = useAuthStore((s) => s.initialized)
+  const session = useAuthStore((s) => s.session)
   const profile = useAuthStore((s) => s.profile)
   const profileLoading = useAuthStore((s) => s.profileLoading)
+  const hasAdminProfile = isAdminRole(profile?.role)
 
-  if (!initialized || profileLoading) {
+  if (!initialized || (session && !profile && profileLoading)) {
     return <RouteLoadingFallback />
   }
 
-  if (!isAdminRole(profile?.role)) {
+  if (!hasAdminProfile) {
     return <Navigate to="/dashboard" replace />
   }
 

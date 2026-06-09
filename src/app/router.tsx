@@ -79,6 +79,7 @@ export const router = createBrowserRouter([
                   { path: 'notifications', element: <AdminNotificationsPage /> },
                   { path: 'exports', element: <AdminExportsPage /> },
                   { path: 'settings', element: <AdminSettingsPage /> },
+                  { path: '*', element: <Navigate to="/admin/overview" replace /> },
                 ],
               },
             ],
