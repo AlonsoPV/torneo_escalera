@@ -1,5 +1,6 @@
 import { Outlet, useLocation } from 'react-router-dom'
 
+import { AppErrorBoundary } from '@/components/layout/AppErrorBoundary'
 import { AppHeader } from '@/components/layout/AppHeader'
 import { cn } from '@/lib/utils'
 
@@ -23,7 +24,9 @@ export function AppShell() {
           !player && !dashboard && 'px-3 py-3 sm:px-4 sm:py-4 md:px-6',
         )}
       >
-        <Outlet />
+        <AppErrorBoundary key={pathname}>
+          <Outlet />
+        </AppErrorBoundary>
       </main>
     </div>
   )

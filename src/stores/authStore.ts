@@ -10,6 +10,7 @@ type AuthState = {
   session: Session | null
   user: User | null
   profile: Profile | null
+  profileLoading: boolean
   initialized: boolean
   setSession: (session: Session | null) => void
   setProfile: (profile: Profile | null) => void
@@ -21,32 +22,41 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   session: null,
   user: null,
   profile: null,
+  profileLoading: false,
   initialized: false,
-  setSession: (session) =>
+  setSession: (session) => {
+    const previousUserId = get().user?.id ?? null
+    const nextUserId = session?.user?.id ?? null
     set({
       session,
       user: session?.user ?? null,
-    }),
+      profile: nextUserId && previousUserId === nextUserId ? get().profile : null,
+      profileLoading: Boolean(nextUserId),
+    })
+  },
   setProfile: (profile) => set({ profile }),
   setInitialized: (initialized) => set({ initialized }),
   refreshProfile: async () => {
     const uid = get().user?.id
     if (!uid) {
-      set({ profile: null })
+      set({ profile: null, profileLoading: false })
       return
     }
+    set({ profileLoading: true })
     try {
       const profile = await fetchProfile(uid)
       // Evita aplicar un perfil obsoleto si hubo cierre de sesión durante el fetch
       if (get().user?.id !== uid) return
       if (profile?.status === 'inactive') {
         await supabase.auth.signOut()
-        set({ session: null, user: null, profile: null })
+        set({ session: null, user: null, profile: null, profileLoading: false })
         return
       }
       set({ profile })
     } catch {
       if (get().user?.id === uid) set({ profile: null })
+    } finally {
+      if (get().user?.id === uid) set({ profileLoading: false })
     }
   },
 }))

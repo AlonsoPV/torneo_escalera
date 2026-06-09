@@ -10,6 +10,7 @@ export function IndexRedirect() {
   const initialized = useAuthStore((s) => s.initialized)
   const session = useAuthStore((s) => s.session)
   const profile = useAuthStore((s) => s.profile)
+  const profileLoading = useAuthStore((s) => s.profileLoading)
 
   if (!isSupabaseConfigured) {
     return <Navigate to="/login" replace />
@@ -20,6 +21,9 @@ export function IndexRedirect() {
   }
 
   if (session) {
+    if (profileLoading) {
+      return <RouteLoadingFallback />
+    }
     if (profile && isAdminRole(profile.role)) {
       return <Navigate to="/admin" replace />
     }

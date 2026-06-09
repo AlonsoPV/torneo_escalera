@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import { AuthPageShell } from '@/pages/auth/AuthPageShell'
+import { RouteLoadingFallback } from '@/components/layout/RouteLoadingFallback'
 
 const schema = z.object({
   phone: z.string().min(1, 'Introduce tu número de celular'),
@@ -28,12 +29,17 @@ type Form = z.infer<typeof schema>
 export function LoginPage() {
   const session = useAuthStore((s) => s.session)
   const profile = useAuthStore((s) => s.profile)
+  const profileLoading = useAuthStore((s) => s.profileLoading)
   const initialized = useAuthStore((s) => s.initialized)
   const location = useLocation()
   const navigate = useNavigate()
   const from = (location.state as { from?: string } | null)?.from ?? '/'
 
   const form = useForm<Form>({ resolver: zodResolver(schema), defaultValues: { phone: '', password: '' } })
+
+  if (initialized && session && profileLoading) {
+    return <RouteLoadingFallback />
+  }
 
   if (initialized && session) {
     return <Navigate to={resolvePostLoginPath(profile, from)} replace />

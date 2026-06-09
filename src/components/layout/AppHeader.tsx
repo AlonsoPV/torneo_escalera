@@ -69,6 +69,8 @@ export function AppHeader() {
     try {
       queryClient.clear()
       await signOut()
+      useAuthStore.getState().setSession(null)
+      useAuthStore.getState().setProfile(null)
       navigate('/login', { replace: true })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo cerrar sesión')
