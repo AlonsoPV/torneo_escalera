@@ -17,6 +17,9 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         defaultOptions: {
           queries: {
             staleTime: 30_000,
+            refetchOnMount: 'always',
+            refetchOnReconnect: 'always',
+            refetchOnWindowFocus: true,
             retry: queryRetry,
           },
           mutations: {

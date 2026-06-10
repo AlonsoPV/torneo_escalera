@@ -211,7 +211,7 @@ export function AdminUsersPage() {
       playersPct: total > 0 ? Math.round((jugadores / total) * 100) : 0,
       otrosRoles: total - jugadores,
     }
-  }, [stats.total, stats.jugadores])
+  }, [stats])
 
   const filteredUsers = useMemo(() => {
     const normalizedSearch = deferredSearch.trim().toLowerCase()
@@ -649,6 +649,12 @@ export function AdminUsersPage() {
 
         {usersQ.isLoading ? (
           <Skeleton className="h-72 rounded-2xl" />
+        ) : usersQ.isError ? (
+          <AdminEmptyState
+            title="No se pudo cargar el directorio de usuarios."
+            description={usersQ.error instanceof Error ? usersQ.error.message : 'Revisa permisos o conexión con Supabase.'}
+            icon={Users}
+          />
         ) : sortedFilteredUsers.length === 0 ? (
           <AdminEmptyState
             title="No encontramos usuarios con esos filtros."

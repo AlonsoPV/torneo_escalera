@@ -100,8 +100,21 @@ export type ChangePasswordInput = {
 
 /** PostgREST devuelve como máx. ~1000 filas si no se pagina; disputas deben consultarse filtradas en servidor. */
 const ADMIN_DISPUTED_MATCHES_LIMIT = 500
+const ADMIN_DATA_DEDUPE_MS = 2_000
 
-async function listAllAdminData() {
+type AdminDataBundle = {
+  tournaments: Tournament[]
+  groups: Group[]
+  groupCategories: GroupCategory[]
+  groupPlayers: GroupPlayer[]
+  matches: MatchRow[]
+  profiles: Profile[]
+}
+
+let adminDataInflight: Promise<AdminDataBundle> | null = null
+let adminDataInflightStartedAt = 0
+
+async function fetchAllAdminData(): Promise<AdminDataBundle> {
   const [tournaments, groups, groupCategories, groupPlayers, matches, profiles] = await Promise.all([
     supabase.from('tournaments').select('*').order('created_at', { ascending: false }),
     supabase.from('groups').select('*').order('order_index', { ascending: true }),
@@ -111,7 +124,7 @@ async function listAllAdminData() {
     supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(4000),
   ])
 
-  const error = tournaments.error || groups.error || groupPlayers.error || matches.error
+  const error = tournaments.error || groups.error || groupPlayers.error || matches.error || profiles.error
   if (error) throw error
 
   if (groupCategories.error && !isMissingPostgrestRelationError(groupCategories.error)) {
@@ -127,8 +140,21 @@ async function listAllAdminData() {
     groupCategories: groupCategoriesRows,
     groupPlayers: (groupPlayers.data ?? []) as GroupPlayer[],
     matches: (matches.data ?? []) as MatchRow[],
-    profiles: profiles.error ? [] : ((profiles.data ?? []) as Profile[]),
+    profiles: (profiles.data ?? []) as Profile[],
   }
+}
+
+async function listAllAdminData(): Promise<AdminDataBundle> {
+  const now = Date.now()
+  if (adminDataInflight && now - adminDataInflightStartedAt < ADMIN_DATA_DEDUPE_MS) {
+    return adminDataInflight
+  }
+
+  adminDataInflightStartedAt = now
+  adminDataInflight = fetchAllAdminData().finally(() => {
+    adminDataInflight = null
+  })
+  return adminDataInflight
 }
 
 function profileDisplayLabel(profileById: Map<string, Profile>, userId: string | null | undefined): string | null {

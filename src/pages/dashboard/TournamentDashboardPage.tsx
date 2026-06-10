@@ -120,7 +120,7 @@ export function TournamentDashboardPage() {
     if (!data?.groups.length) return 'all'
     if (!requestedGroupId || !data.groups.some((g) => g.id === requestedGroupId)) return data.groups[0]?.id ?? 'all'
     return requestedGroupId
-  }, [data?.groups, groupId, searchParams])
+  }, [data, groupId, searchParams])
 
   const leaderboardGroupTitle =
     selectedGroupId === 'all' ? 'general' : data?.groups.find((g) => g.id === selectedGroupId)?.name ?? 'Grupo'
@@ -129,7 +129,7 @@ export function TournamentDashboardPage() {
     if (!data?.groups.length) return null
     if (selectedGroupId !== 'all') return data.groups.find((g) => g.id === selectedGroupId) ?? null
     return data.groups[0] ?? null
-  }, [data?.groups, selectedGroupId])
+  }, [data, selectedGroupId])
 
   const matrixData = useMemo(() => {
     if (!data || !matrixGroup) return null
@@ -229,12 +229,48 @@ export function TournamentDashboardPage() {
           setSelectedTournamentId(id)
           setGroupCategoryId('all')
           setGroupId('all')
+          setSearchParams(
+            (prev) => {
+              const n = new URLSearchParams(prev)
+              n.set('tournament', id)
+              n.delete('torneo')
+              n.delete('group')
+              n.delete('grupo')
+              return n
+            },
+            { replace: true },
+          )
         }}
         onGroupCategoryChange={(id) => {
           setGroupCategoryId(id)
           setGroupId('all')
+          setSearchParams(
+            (prev) => {
+              const n = new URLSearchParams(prev)
+              n.delete('group')
+              n.delete('grupo')
+              return n
+            },
+            { replace: true },
+          )
         }}
-        onGroupChange={(id) => setGroupId(id)}
+        onGroupChange={(id) => {
+          setGroupId(id)
+          setSearchParams(
+            (prev) => {
+              const n = new URLSearchParams(prev)
+              if (id === 'all') {
+                n.delete('group')
+                n.delete('grupo')
+              } else {
+                n.set('group', id)
+                n.delete('grupo')
+              }
+              return n
+            },
+            { replace: true },
+          )
+        }}
         onClearFilters={clearDashboardFilters}
       />
 
