@@ -33,6 +33,7 @@ export type MatchResultType =
   | 'def'
   | 'not_reported'
   | 'retired'
+  | 'retired_draw'
   | 'pending_score'
   | 'double_penalty'
 
@@ -51,24 +52,28 @@ export type ScoreWinnerSide = 'a' | 'b'
 export type ScorePayload =
   | {
       game_type: 'best_of_3'
-      score_json: ScoreSet[]
-      winner: ScoreWinnerSide
+      score_json: ScoreSet[] | null
+      winner: ScoreWinnerSide | null
+      result_type?: MatchResultType
     }
   | {
       /** Tres sets obligatorios para resultado normal; `null` solo legado / W.O. sin marcador. */
       game_type: 'sudden_death'
       score_json: ScoreSet[] | null
       winner: ScoreWinnerSide
+      result_type?: MatchResultType
     }
   | {
       game_type: 'long_set'
       score_json: [ScoreSet]
       winner: ScoreWinnerSide
+      result_type?: MatchResultType
     }
   | {
       game_type: 'best_of_3_short_tiebreak'
       score_json: ScoreSet[]
       winner: ScoreWinnerSide
+      result_type?: MatchResultType
     }
 
 export interface Database {

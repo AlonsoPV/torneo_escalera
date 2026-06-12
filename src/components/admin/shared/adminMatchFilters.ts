@@ -1,6 +1,11 @@
 import type { AdminGroupRecord, AdminMatchRecord } from '@/services/admin'
 import { matchStatusLabels, PLAYER_SCORE_STATUSES } from '@/lib/matchStatus'
 import type { MatchStatus } from '@/types/database'
+import {
+  compareGroupsForPromotionTier,
+  isMbBottomTierGroupName,
+  parseGroupNameTierNumber,
+} from '@/utils/nextTournamentPromotion'
 
 /** `groupId` puede ser `all`, un uuid o varios uuids de grupo separados por `|` (misma etiqueta en el combobox). */
 export type AdminMatchScopeFilters = {
@@ -34,7 +39,12 @@ export function activeTournamentIdFromGroups(groups: AdminGroupRecord[]): string
 
 export function groupsForTournamentSelect(groups: AdminGroupRecord[], tournamentId: string): AdminGroupRecord[] {
   const list = tournamentId === 'all' ? groups : groups.filter((g) => g.tournament_id === tournamentId)
-  return [...list].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0) || a.name.localeCompare(b.name, 'es'))
+  return [...list].sort((a, b) =>
+    compareGroupsForPromotionTier(
+      { id: a.id, name: a.name, order_index: a.order_index ?? 0, players: a.players },
+      { id: b.id, name: b.name, order_index: b.order_index ?? 0, players: b.players },
+    ),
+  )
 }
 
 /** Solo torneo + grupo (para poblar el desplegable de jugadores). */
@@ -79,8 +89,19 @@ export function normalizeAdminFilterLabel(label: string): string {
   return label.trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
+/** Orden lógico del nombre visible: GRUPO 1 → 1, GRUPO 15 → 15, MB al final. */
+function groupLabelSortTier(label: string): number {
+  if (isMbBottomTierGroupName(label)) return Number.MAX_SAFE_INTEGER - 1
+  const parsed = parseGroupNameTierNumber(label)
+  if (parsed != null) return parsed
+  return Number.MAX_SAFE_INTEGER
+}
+
 /** Una entrada por nombre de grupo normalizado en el alcance dado; `value` = ids `groups.id` unidos con '|'. */
-export function groupFilterOptionsFromRecords(groups: AdminGroupRecord[]): Array<{ value: string; label: string }> {
+export function groupFilterOptionsFromRecords(
+  groups: AdminGroupRecord[],
+  options?: { primarySort?: 'tournament' | 'order_index' | 'group_number' },
+): Array<{ value: string; label: string }> {
   const normToIds = new Map<string, string[]>()
   const normToBestLabel = new Map<string, string>()
   const groupById = new Map(groups.map((g) => [g.id, g]))
@@ -98,7 +119,7 @@ export function groupFilterOptionsFromRecords(groups: AdminGroupRecord[]): Array
 
   const collator = new Intl.Collator('es', { numeric: true, sensitivity: 'base' })
 
-  type Row = { value: string; label: string; sortTournament: string; sortOrderMin: number }
+  type Row = { value: string; label: string; sortTournament: string; sortOrderMin: number; sortTierRank: number }
   const rows: Row[] = [...normToIds.entries()].map(([norm, ids]): Row => {
     const best = (normToBestLabel.get(norm) ?? '').trim()
     const label = best.length > 0 ? best : norm === '\u0000' ? 'Sin nombre' : norm
@@ -120,10 +141,23 @@ export function groupFilterOptionsFromRecords(groups: AdminGroupRecord[]): Array
       label,
       sortTournament,
       sortOrderMin,
+      sortTierRank: groupLabelSortTier(label),
     }
   })
 
   rows.sort((a, b) => {
+    if (options?.primarySort === 'group_number') {
+      if (a.sortTierRank !== b.sortTierRank) return a.sortTierRank - b.sortTierRank
+      const byTournament = collator.compare(a.sortTournament, b.sortTournament)
+      if (byTournament !== 0) return byTournament
+      return collator.compare(a.label, b.label)
+    }
+    if (options?.primarySort === 'order_index') {
+      if (a.sortOrderMin !== b.sortOrderMin) return a.sortOrderMin - b.sortOrderMin
+      const byTournament = collator.compare(a.sortTournament, b.sortTournament)
+      if (byTournament !== 0) return byTournament
+      return collator.compare(a.label, b.label)
+    }
     const byTournament = collator.compare(a.sortTournament, b.sortTournament)
     if (byTournament !== 0) return byTournament
     if (a.sortOrderMin !== b.sortOrderMin) return a.sortOrderMin - b.sortOrderMin

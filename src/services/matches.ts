@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { IMPORT_ADMIN_PENALTY_SCORE } from '@/lib/matchResultSemantics'
 import { isPlayerSubmitPerfEnabled } from '@/lib/playerSubmitPerf'
 import type {
   Database,
@@ -17,6 +18,7 @@ import {
   computeWinnerGroupPlayerId,
   getSuddenDeathWinnerSide,
   scorePayloadToSets,
+  validateIncompleteBestOf3Score,
   validateBestOf3Score,
   validateLongSetScore,
   validateScoreWithRules,
@@ -42,9 +44,10 @@ function mapPostgresError(e: { message: string; code?: string; details?: string 
 }
 
 export type PreparedPlayerScoreSubmission = {
-  winnerId: string
+  winnerId: string | null
   payload: ScorePayload
   pScoreJson: Json
+  resultType: NonNullable<ScorePayload['result_type']>
 }
 
 /**
@@ -105,13 +108,39 @@ export function preparePlayerScoreSubmissionSync(input: {
 
   const scoreSets = scorePayloadToSets(payload)
   let winnerId: string | null = null
+  const resultType = payload.result_type ?? 'normal'
+
+  if (resultType !== 'normal') {
+    if (payload.game_type !== 'best_of_3') {
+      throw new Error('El retiro solo aplica para partidos 2 de 3 sets.')
+    }
+    if (resultType === 'not_reported') {
+      return { winnerId: null, payload, pScoreJson: IMPORT_ADMIN_PENALTY_SCORE as unknown as Json, resultType }
+    }
+    const validation = validateIncompleteBestOf3Score(payload.score_json ?? [])
+    if (!validation.ok) throw new Error(validation.errors.join(' '))
+    if (resultType === 'retired') {
+      if (!validation.winnerByGames) {
+        throw new Error('El marcador esta empatado en games. Usa la opcion de empate por retiro.')
+      }
+      winnerId = winnerSideToGroupPlayerId(validation.winnerByGames, match)
+      return { winnerId, payload, pScoreJson: scoreSets as unknown as Json, resultType }
+    }
+    if (resultType === 'retired_draw') {
+      if (validation.games.a !== validation.games.b) {
+        throw new Error('Para empate por retiro, ambos jugadores deben tener la misma cantidad de games.')
+      }
+      return { winnerId: null, payload, pScoreJson: scoreSets as unknown as Json, resultType }
+    }
+    throw new Error('Tipo de resultado no soportado para envio de jugador.')
+  }
 
   if (payload.game_type === 'best_of_3') {
-    const validation = validateBestOf3Score(payload.score_json, {
+    const validation = validateBestOf3Score(payload.score_json ?? [], {
       gamesPerSet: rules.games_per_set ?? rules.set_points ?? 6,
     })
     if (!validation.ok || !validation.winner) throw new Error(validation.errors.join(' '))
-    const rulesValidation = validateScoreWithRules(payload.score_json, rules)
+    const rulesValidation = validateScoreWithRules(payload.score_json ?? [], rules)
     if (!rulesValidation.ok) throw new Error(rulesValidation.errors.join(' '))
     winnerId = winnerSideToGroupPlayerId(validation.winner, match)
   } else if (payload.game_type === 'best_of_3_short_tiebreak') {
@@ -139,13 +168,11 @@ export function preparePlayerScoreSubmissionSync(input: {
     winnerId = winnerSideToGroupPlayerId(validation.winner, match)
   }
 
-  if (!winnerId) throw new Error('No se pudo determinar un ganador.')
-
   const pScore =
     payload.game_type === 'sudden_death' ? (scoreSets.length === 3 ? scoreSets : null) : scoreSets
   const pScoreJson = pScore as unknown as Json
 
-  return { winnerId, payload, pScoreJson }
+  return { winnerId, payload, pScoreJson, resultType }
 }
 
 function parseMatchRowFromRpc(data: unknown): MatchRow | undefined {
@@ -184,7 +211,7 @@ export async function saveMatchScore(input: {
     input.rules ?? (await getTournamentRules(input.match.tournament_id))
   if (!rules) throw new Error('No se encontraron reglas del torneo.')
 
-  const { winnerId, payload, pScoreJson } = preparePlayerScoreSubmissionSync({
+  const { winnerId, payload, pScoreJson, resultType } = preparePlayerScoreSubmissionSync({
     match: input.match,
     sets: input.sets,
     scorePayload: input.scorePayload,
@@ -198,7 +225,7 @@ export async function saveMatchScore(input: {
       p_score: pScoreJson,
       p_winner_id: winnerId,
       p_status: targetStatus,
-      p_result_type: 'normal',
+      p_result_type: resultType,
       p_game_type: payload.game_type,
     })
     if (error) throw new Error(mapPostgresError(error))
@@ -209,7 +236,7 @@ export async function saveMatchScore(input: {
   const { data, error } = await supabase.rpc('submit_player_match_result', {
     p_match_id: input.match.id,
     p_score: pScoreJson,
-    p_result_type: 'normal',
+    p_result_type: resultType,
     p_winner_group_player_id: winnerId,
     p_game_type: payload.game_type,
   })

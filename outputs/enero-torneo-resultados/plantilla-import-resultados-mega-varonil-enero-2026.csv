@@ -1,0 +1,181 @@
+﻿tournament_name,category_name,group_name,player_a_id,player_a_name,player_b_id,player_b_name,game_type,set_1_a,set_1_b,set_2_a,set_2_b,set_3_a,set_3_b,winner_id,result_type,status
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 1,6,DANIEL AGUILAR,3,ERNESTO RDZ,best_of_3,2,6,6,0,5,7,3,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 1,6,DANIEL AGUILAR,16,JORGE SM,best_of_3,6,1,6,3,,,6,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 1,6,DANIEL AGUILAR,4,CLAUDIO SERVIERE,best_of_3,7,6,3,6,6,4,6,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 1,6,DANIEL AGUILAR,1,PICO RAMOS,best_of_3,4,6,5,7,,,1,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 1,3,ERNESTO RDZ,16,JORGE SM,best_of_3,6,0,6,3,,,3,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 1,3,ERNESTO RDZ,4,CLAUDIO SERVIERE,best_of_3,6,7,5,7,,,4,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 1,3,ERNESTO RDZ,1,PICO RAMOS,best_of_3,1,6,2,6,,,1,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 1,16,JORGE SM,4,CLAUDIO SERVIERE,best_of_3,3,6,3,6,,,4,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 1,16,JORGE SM,1,PICO RAMOS,best_of_3_short_tiebreak,7,5,4,6,0,1,1,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 1,4,CLAUDIO SERVIERE,1,PICO RAMOS,best_of_3,4,6,5,7,,,1,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 2,7,ARAN CARMONA,5,JM SUÁREZ,best_of_3,4,6,6,7,,,5,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 2,7,ARAN CARMONA,22,FELIPE DV,best_of_3,5,7,3,6,,,22,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 2,7,ARAN CARMONA,21,JOSEMI,best_of_3,6,3,6,4,,,7,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 2,7,ARAN CARMONA,8,ALEX AGUILERA,best_of_3,6,3,7,5,,,7,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 2,5,JM SUÁREZ,22,FELIPE DV,best_of_3,6,4,6,0,,,5,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 2,5,JM SUÁREZ,21,JOSEMI,best_of_3,7,6,5,2,,,5,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 2,5,JM SUÁREZ,8,ALEX AGUILERA,best_of_3,2,6,6,3,1,4,8,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 2,22,FELIPE DV,21,JOSEMI,best_of_3,5,7,2,6,,,21,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 2,22,FELIPE DV,8,ALEX AGUILERA,best_of_3,3,6,3,6,,,8,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 2,21,JOSEMI,8,ALEX AGUILERA,best_of_3,6,4,7,6,,,21,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 3,12,ROD DLV,23,CRIS SÁNCHEZ,best_of_3,6,4,7,5,,,12,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 3,12,ROD DLV,2,ROCHA,best_of_3,4,6,3,6,,,2,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 3,12,ROD DLV,17,JC RAMÍREZ,best_of_3,1,6,3,6,,,17,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 3,12,ROD DLV,27,GUILLERMO GOVELA,sudden_death,,,,,,,12,wo,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 3,23,CRIS SÁNCHEZ,2,ROCHA,best_of_3,3,6,1,6,,,2,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 3,23,CRIS SÁNCHEZ,17,JC RAMÍREZ,best_of_3,4,6,1,6,,,17,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 3,23,CRIS SÁNCHEZ,27,GUILLERMO GOVELA,sudden_death,,,,,,,23,wo,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 3,2,ROCHA,17,JC RAMÍREZ,best_of_3,4,6,4,6,,,17,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 3,2,ROCHA,27,GUILLERMO GOVELA,sudden_death,,,,,,,2,wo,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 3,17,JC RAMÍREZ,27,GUILLERMO GOVELA,sudden_death,,,,,,,17,wo,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 4,10,FER FANGHANEL,11,ENRIQUE DDLV,best_of_3,5,7,6,3,6,2,10,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 4,10,FER FANGHANEL,20,MARKUS,sudden_death,,,,,,,10,wo,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 4,10,FER FANGHANEL,28,MANUEL BARTLETT,best_of_3,6,4,6,2,,,10,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 4,10,FER FANGHANEL,13,JORDI POUS,best_of_3,3,6,6,7,,,13,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 4,11,ENRIQUE DDLV,20,MARKUS,sudden_death,,,,,,,11,wo,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 4,11,ENRIQUE DDLV,28,MANUEL BARTLETT,best_of_3,2,6,6,0,7,5,11,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 4,11,ENRIQUE DDLV,13,JORDI POUS,best_of_3,6,1,6,3,,,11,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 4,20,MARKUS,28,MANUEL BARTLETT,sudden_death,,,,,,,28,wo,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 4,20,MARKUS,13,JORDI POUS,sudden_death,,,,,,,13,wo,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 4,28,MANUEL BARTLETT,13,JORDI POUS,best_of_3_short_tiebreak,6,1,2,6,0,1,13,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 5,31,CHEMA ARCE,25,GUILLE DP,best_of_3,4,6,6,3,6,1,31,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 5,31,CHEMA ARCE,33,ISAAC DC,best_of_3,7,6,7,6,,,31,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 5,31,CHEMA ARCE,15,MAU RAMIREZ,best_of_3,2,6,1,6,,,15,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 5,31,CHEMA ARCE,9,WATTY,best_of_3,2,6,0,6,,,9,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 5,25,GUILLE DP,33,ISAAC DC,best_of_3,3,6,2,6,,,33,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 5,25,GUILLE DP,15,MAU RAMIREZ,best_of_3,4,6,2,6,,,15,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 5,25,GUILLE DP,9,WATTY,best_of_3,2,6,1,6,,,9,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 5,33,ISAAC DC,15,MAU RAMIREZ,best_of_3,4,6,6,2,3,6,15,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 5,33,ISAAC DC,9,WATTY,best_of_3,3,6,5,7,,,9,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 5,15,MAU RAMIREZ,9,WATTY,best_of_3,1,6,2,6,,,9,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 6,18,RICARDO TINAJERO,36,ERIC ARBAIZA,sudden_death,,,,,,,18,wo,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 6,18,RICARDO TINAJERO,32,TOÑO ABRAZIAN,best_of_3,6,2,7,6,,,18,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 6,18,RICARDO TINAJERO,14,FERMIN,best_of_3,6,2,2,6,6,7,14,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 6,18,RICARDO TINAJERO,26,RICARDO ROMERO,best_of_3,6,4,0,1,,,18,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 6,36,ERIC ARBAIZA,32,TOÑO ABRAZIAN,best_of_3,6,3,1,6,4,6,32,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 6,36,ERIC ARBAIZA,14,FERMIN,best_of_3,4,6,3,6,,,14,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 6,36,ERIC ARBAIZA,26,RICARDO ROMERO,best_of_3,6,3,4,6,2,6,26,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 6,32,TOÑO ABRAZIAN,14,FERMIN,best_of_3,1,6,1,6,,,14,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 6,32,TOÑO ABRAZIAN,26,RICARDO ROMERO,best_of_3,2,6,3,6,,,26,normal,closed
+Mega Varonil Enero 2026,PRIMERA DIVISIÓN,GRUPO 6,14,FERMIN,26,RICARDO ROMERO,best_of_3,6,2,6,2,,,14,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 7,19,ÁLVARO PADILLA,41,ANDRÉS MTZ,best_of_3,6,0,6,1,,,19,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 7,19,ÁLVARO PADILLA,40,FER GAY,best_of_3,6,3,6,1,,,19,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 7,19,ÁLVARO PADILLA,29,DAVID YAO,best_of_3,6,1,6,1,,,19,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 7,19,ÁLVARO PADILLA,42,RODRIGO MEDRANO,long_set,9,2,,,,,19,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 7,41,ANDRÉS MTZ,40,FER GAY,best_of_3,6,2,1,2,,,41,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 7,41,ANDRÉS MTZ,29,DAVID YAO,best_of_3,5,7,3,6,,,29,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 7,41,ANDRÉS MTZ,42,RODRIGO MEDRANO,best_of_3,3,6,3,6,,,42,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 7,40,FER GAY,29,DAVID YAO,best_of_3_short_tiebreak,6,4,4,6,0,1,29,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 7,40,FER GAY,42,RODRIGO MEDRANO,best_of_3,4,6,4,6,,,42,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 7,29,DAVID YAO,42,RODRIGO MEDRANO,best_of_3_short_tiebreak,6,2,3,6,1,0,29,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 8,45,RAFA ESPINO,24,MAU MORA,best_of_3,0,6,0,6,,,24,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 8,45,RAFA ESPINO,39,ANDRÉS MARÍN,best_of_3,5,7,6,3,4,6,39,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 8,45,RAFA ESPINO,38,SAMUEL DDLV,best_of_3,6,2,5,7,4,6,38,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 8,45,RAFA ESPINO,46,DANIEL PARRA,best_of_3,7,6,7,6,,,45,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 8,24,MAU MORA,39,ANDRÉS MARÍN,best_of_3,6,0,6,1,,,24,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 8,24,MAU MORA,38,SAMUEL DDLV,best_of_3,6,2,6,2,,,24,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 8,24,MAU MORA,46,DANIEL PARRA,best_of_3,6,0,6,1,,,24,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 8,39,ANDRÉS MARÍN,38,SAMUEL DDLV,best_of_3,6,4,4,6,4,6,38,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 8,39,ANDRÉS MARÍN,46,DANIEL PARRA,best_of_3,6,4,2,6,6,2,39,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 8,38,SAMUEL DDLV,46,DANIEL PARRA,best_of_3,6,3,2,6,6,3,38,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 9,37,MANUEL DLR,30,DIEGO ORTIZ,best_of_3,1,6,2,5,,,30,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 9,37,MANUEL DLR,52,ANGEL MONDRAGÓN,best_of_3,6,1,3,6,6,0,37,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 9,37,MANUEL DLR,91,RICARDO CORTÉZ,long_set,8,5,,,,,37,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 9,37,MANUEL DLR,56,RAFA CASTRUITA,best_of_3,6,4,5,2,,,37,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 9,30,DIEGO ORTIZ,52,ANGEL MONDRAGÓN,best_of_3,6,3,3,2,,,30,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 9,30,DIEGO ORTIZ,91,RICARDO CORTÉZ,long_set,4,3,,,,,30,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 9,30,DIEGO ORTIZ,56,RAFA CASTRUITA,best_of_3,6,2,6,3,,,30,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 9,52,ANGEL MONDRAGÓN,91,RICARDO CORTÉZ,best_of_3,3,6,4,6,,,91,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 9,52,ANGEL MONDRAGÓN,56,RAFA CASTRUITA,best_of_3,7,5,6,2,,,52,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 9,91,RICARDO CORTÉZ,56,RAFA CASTRUITA,best_of_3,0,6,6,0,6,4,91,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 10,47,CARLOS DÍAZ,48,JAVI LLAMAS,best_of_3,6,3,6,0,,,47,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 10,47,CARLOS DÍAZ,34,VICTOR MORALES,best_of_3,6,1,3,6,1,6,34,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 10,47,CARLOS DÍAZ,61,SERGIO SÁNCHEZ,best_of_3,6,0,6,1,,,47,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 10,47,CARLOS DÍAZ,35,ERNESTO GUERECA,best_of_3,4,6,6,4,1,2,35,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 10,48,JAVI LLAMAS,34,VICTOR MORALES,best_of_3,0,6,1,6,,,34,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 10,48,JAVI LLAMAS,61,SERGIO SÁNCHEZ,best_of_3,6,4,6,3,,,48,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 10,48,JAVI LLAMAS,35,ERNESTO GUERECA,best_of_3,6,3,1,6,0,6,35,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 10,34,VICTOR MORALES,61,SERGIO SÁNCHEZ,sudden_death,,,,,,,34,wo,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 10,34,VICTOR MORALES,35,ERNESTO GUERECA,long_set,4,8,,,,,35,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 10,61,SERGIO SÁNCHEZ,35,ERNESTO GUERECA,sudden_death,,,,,,,35,wo,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 11,43,BENJA GRANADOS,63,MAU PAVÓN,sudden_death,,,,,,,43,wo,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 11,43,BENJA GRANADOS,50,RICKY TORRES,best_of_3,4,6,6,7,,,50,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 11,43,BENJA GRANADOS,55,EDGAR PEREZ,best_of_3_short_tiebreak,6,3,2,6,1,0,43,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 11,43,BENJA GRANADOS,57,FERNEL ARVIZU,sudden_death,,,,,,,43,wo,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 11,63,MAU PAVÓN,50,RICKY TORRES,sudden_death,,,,,,,50,wo,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 11,63,MAU PAVÓN,55,EDGAR PEREZ,sudden_death,,,,,,,55,wo,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 11,63,MAU PAVÓN,57,FERNEL ARVIZU,sudden_death,,,,,,,57,wo,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 11,50,RICKY TORRES,55,EDGAR PEREZ,best_of_3,6,3,3,6,6,2,50,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 11,50,RICKY TORRES,57,FERNEL ARVIZU,sudden_death,,,,,,,50,wo,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 11,55,EDGAR PEREZ,57,FERNEL ARVIZU,best_of_3,7,6,6,3,,,55,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 12,49,ALEX SURMAN,44,JUAN MORALES,best_of_3,1,6,0,6,,,44,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 12,49,ALEX SURMAN,62,JUANJO,best_of_3,4,6,6,2,6,1,49,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 12,49,ALEX SURMAN,60,VALENTIN HERNANDO,best_of_3,6,2,6,2,,,49,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 12,49,ALEX SURMAN,51,RENATO MTZ,best_of_3,6,3,2,6,4,6,51,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 12,44,JUAN MORALES,62,JUANJO,best_of_3,6,2,6,1,,,44,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 12,44,JUAN MORALES,60,VALENTIN HERNANDO,long_set,8,0,,,,,44,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 12,44,JUAN MORALES,51,RENATO MTZ,long_set,8,4,,,,,44,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 12,62,JUANJO,60,VALENTIN HERNANDO,long_set,5,6,,,,,60,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 12,62,JUANJO,51,RENATO MTZ,best_of_3,7,6,5,7,1,6,51,normal,closed
+Mega Varonil Enero 2026,LIGA DE ASCENSO,GRUPO 12,60,VALENTIN HERNANDO,51,RENATO MTZ,best_of_3,4,6,5,7,,,51,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 13,54,GERMÁN Q,72,LUIS LUNA,best_of_3,2,6,6,7,,,72,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 13,54,GERMÁN Q,58,JORGE AVALOS,best_of_3,6,2,7,5,,,54,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 13,54,GERMÁN Q,53,GUS ROSAS,best_of_3,4,6,6,3,,,54,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 13,54,GERMÁN Q,77,AGUSTIN Q,best_of_3,6,2,7,5,,,54,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 13,72,LUIS LUNA,58,JORGE AVALOS,best_of_3,2,6,0,6,,,58,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 13,72,LUIS LUNA,53,GUS ROSAS,best_of_3,5,7,4,6,,,53,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 13,72,LUIS LUNA,77,AGUSTIN Q,best_of_3,6,7,6,3,5,3,72,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 13,58,JORGE AVALOS,53,GUS ROSAS,best_of_3,2,6,7,6,6,7,53,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 13,58,JORGE AVALOS,77,AGUSTIN Q,best_of_3,6,4,3,6,6,2,58,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 13,53,GUS ROSAS,77,AGUSTIN Q,best_of_3,6,0,5,0,,,53,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 14,70,ANDRÉS E MTZ,66,CLAUDIO GANTOUS,best_of_3,6,4,6,4,,,70,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 14,70,ANDRÉS E MTZ,68,JUAN LUGO,best_of_3,4,6,4,6,,,68,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 14,70,ANDRÉS E MTZ,71,PEPO BOBADILLA,best_of_3,2,6,0,6,,,71,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 14,70,ANDRÉS E MTZ,67,BRAULIO DELGADO,long_set,10,5,,,,,70,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 14,66,CLAUDIO GANTOUS,68,JUAN LUGO,best_of_3,6,4,4,2,,,66,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 14,66,CLAUDIO GANTOUS,71,PEPO BOBADILLA,best_of_3_short_tiebreak,3,6,6,4,0,1,71,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 14,66,CLAUDIO GANTOUS,67,BRAULIO DELGADO,best_of_3,1,1,,,,,,retired_draw,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 14,68,JUAN LUGO,71,PEPO BOBADILLA,long_set,4,8,,,,,71,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 14,68,JUAN LUGO,67,BRAULIO DELGADO,long_set,1,8,,,,,67,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 14,71,PEPO BOBADILLA,67,BRAULIO DELGADO,best_of_3,5,7,4,6,,,67,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 15,64,ALVARO CANCINO,65,FER SPECIA,best_of_3,6,2,7,5,,,64,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 15,64,ALVARO CANCINO,59,NICO MOUREAU,best_of_3,7,5,2,6,2,6,59,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 15,64,ALVARO CANCINO,76,RODOLFO AMARO,best_of_3,3,6,7,5,6,1,64,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 15,64,ALVARO CANCINO,83,JM JUÁREZ,sudden_death,,,,,,,64,wo,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 15,65,FER SPECIA,59,NICO MOUREAU,best_of_3,3,6,1,6,,,59,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 15,65,FER SPECIA,76,RODOLFO AMARO,best_of_3,6,3,3,6,1,6,76,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 15,65,FER SPECIA,83,JM JUÁREZ,sudden_death,,,,,,,65,wo,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 15,59,NICO MOUREAU,76,RODOLFO AMARO,best_of_3,6,3,6,3,,,59,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 15,59,NICO MOUREAU,83,JM JUÁREZ,sudden_death,,,,,,,59,wo,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 15,76,RODOLFO AMARO,83,JM JUÁREZ,sudden_death,,,,,,,76,wo,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 16,75,RUBÉN SALAZAR,86,ANTONIO PUIG,best_of_3_short_tiebreak,7,5,1,6,1,0,75,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 16,75,RUBÉN SALAZAR,81,VICTOR OSNAYA,sudden_death,,,,,,,75,wo,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 16,75,RUBÉN SALAZAR,78,RAUL FOURNIER,best_of_3_short_tiebreak,6,3,5,7,0,1,78,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 16,75,RUBÉN SALAZAR,92,ANDRES GOMEZ,best_of_3,4,6,6,4,4,6,92,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 16,86,ANTONIO PUIG,81,VICTOR OSNAYA,best_of_3,2,6,2,6,,,81,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 16,86,ANTONIO PUIG,78,RAUL FOURNIER,best_of_3,4,6,4,6,,,78,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 16,86,ANTONIO PUIG,92,ANDRES GOMEZ,best_of_3_short_tiebreak,6,4,3,6,0,1,92,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 16,81,VICTOR OSNAYA,78,RAUL FOURNIER,long_set,9,6,,,,,81,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 16,81,VICTOR OSNAYA,92,ANDRES GOMEZ,best_of_3,6,1,6,1,,,81,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 16,78,RAUL FOURNIER,92,ANDRES GOMEZ,best_of_3,6,2,7,6,,,78,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 17,73,FER GONZÁLEZ,82,SERGIO GÓMEZ,long_set,6,2,,,,,73,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 17,73,FER GONZÁLEZ,89,MB,best_of_3,6,1,6,0,,,73,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 17,73,FER GONZÁLEZ,69,PIETRO,sudden_death,,,,,,,73,wo,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 17,73,FER GONZÁLEZ,88,NICOLAS RÁMIREZ,best_of_3,6,1,6,0,,,73,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 17,82,SERGIO GÓMEZ,89,MB,long_set,7,1,,,,,82,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 17,82,SERGIO GÓMEZ,69,PIETRO,long_set,0,9,,,,,69,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 17,82,SERGIO GÓMEZ,88,NICOLAS RÁMIREZ,long_set,8,3,,,,,82,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 17,89,MB,69,PIETRO,long_set,0,9,,,,,69,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 17,89,MB,88,NICOLAS RÁMIREZ,best_of_3,6,1,5,7,4,6,88,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO 17,69,PIETRO,88,NICOLAS RÁMIREZ,long_set,9,1,,,,,69,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO MB,80,CARLOS EGIDO,79,JULIANO CHACÓN,sudden_death,,,,,,,79,wo,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO MB,80,CARLOS EGIDO,84,ALEXIS LEVANTAL,sudden_death,,,,,,,84,wo,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO MB,80,CARLOS EGIDO,85,DAVID RAMIREZ,long_set,6,4,,,,,80,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO MB,80,CARLOS EGIDO,74,ROBERTO ORTIZ,sudden_death,,,,,,,74,wo,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO MB,79,JULIANO CHACÓN,84,ALEXIS LEVANTAL,best_of_3,6,0,6,0,,,79,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO MB,79,JULIANO CHACÓN,85,DAVID RAMIREZ,best_of_3,6,1,6,0,,,79,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO MB,79,JULIANO CHACÓN,74,ROBERTO ORTIZ,long_set,7,3,,,,,79,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO MB,84,ALEXIS LEVANTAL,85,DAVID RAMIREZ,best_of_3,6,3,6,1,,,84,normal,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO MB,84,ALEXIS LEVANTAL,74,ROBERTO ORTIZ,best_of_3,3,6,3,6,,,,not_reported,closed
+Mega Varonil Enero 2026,FUERZAS BÁSICAS,GRUPO MB,85,DAVID RAMIREZ,74,ROBERTO ORTIZ,best_of_3,2,6,5,7,,,74,normal,closed

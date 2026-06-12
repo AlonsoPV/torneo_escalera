@@ -3,6 +3,7 @@ import { History } from 'lucide-react'
 import { getOpponentInMatch, matchStatusLabels, matchStatusToneClasses } from '@/lib/matchStatus'
 import {
   importResultTypeBothPenalized,
+  importResultTypeIsRetiredDraw,
   importResultTypeUsesDefaultPoints,
 } from '@/lib/matchResultSemantics'
 import {
@@ -40,7 +41,8 @@ function outcomeText(
   if (importResultTypeBothPenalized(match.result_type)) {
     return 'No reportado · penalización'
   }
-  if (match.winner_id == null) return '—'
+  if (importResultTypeIsRetiredDraw(match.result_type)) return 'Empate por retiro'
+  if (match.winner_id == null) return '---'
   const walkoverLike = importResultTypeUsesDefaultPoints(resultType)
   const w = getMatchOutcome(match, myGroupPlayerId)
   if (walkoverLike) {
@@ -115,7 +117,9 @@ export function MatchHistoryCard({
     const label = getPlayerPerspectiveScore(m, myGroupPlayerId)
     const official =
       (m.status === 'closed' || m.status === 'validated') &&
-      (m.winner_id != null || importResultTypeBothPenalized(m.result_type))
+      (m.winner_id != null ||
+        importResultTypeBothPenalized(m.result_type) ||
+        importResultTypeIsRetiredDraw(m.result_type))
     const cancelled = m.status === 'cancelled'
     const pts = official ? getPointsForPlayerInMatch(m, myGroupPlayerId, rules) : null
     const gamesDiff = official ? calculateMatchGamesDifference(myGroupPlayerId, m) : null
@@ -220,3 +224,4 @@ export function MatchHistoryCard({
     </section>
   )
 }
+

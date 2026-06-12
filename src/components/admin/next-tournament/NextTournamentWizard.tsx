@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 
 import { tournamentMovementPreviewLabelEs } from '@/lib/tournamentMovementLabels'
 import { cn } from '@/lib/utils'
+import { getMaxPromotionTier, getPromotionTierRankForGroup, promotionTierLabel } from '@/utils/nextTournamentPromotion'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -251,16 +252,15 @@ export function NextTournamentWizard() {
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1], 'es'))
   }, [previewRows])
 
+  const tierEntries = previewQ.data?.promotionTierEntries ?? []
+  const tierCount = getMaxPromotionTier(tierEntries)
+
   const groupPlan = useMemo(
     () =>
-      previewRows.length && previewQ.data?.sortedDistinctGroupOrderIndices
-        ? buildNextTournamentGroupPreview(
-            previewRows,
-            GROUP_SIZE,
-            previewQ.data.sortedDistinctGroupOrderIndices,
-          )
+      previewRows.length && tierEntries.length
+        ? buildNextTournamentGroupPreview(previewRows, GROUP_SIZE, tierEntries)
         : [],
-    [previewRows, previewQ.data?.sortedDistinctGroupOrderIndices],
+    [previewRows, tierEntries],
   )
 
   const creationSummary = useMemo(
@@ -286,8 +286,13 @@ export function NextTournamentWizard() {
     }
     return [...m.entries()]
       .map(([id, v]) => ({ id, ...v }))
-      .sort((a, b) => a.orderIndex - b.orderIndex || a.name.localeCompare(b.name, 'es'))
-  }, [previewRows])
+      .sort((a, b) => {
+        const la = getPromotionTierRankForGroup(tierEntries, a.id)
+        const lb = getPromotionTierRankForGroup(tierEntries, b.id)
+        if (la !== lb) return la - lb
+        return a.name.localeCompare(b.name, 'es', { numeric: true, sensitivity: 'base' })
+      })
+  }, [previewRows, tierEntries])
 
   const groupSizeWarnings = useMemo(
     () => computeNextTournamentGroupSizeWarnings(groupPlan, GROUP_SIZE),
@@ -513,8 +518,8 @@ export function NextTournamentWizard() {
               1. Torneo base
             </CardTitle>
             <CardDescription className="text-pretty">
-              Solo se listan torneos en estado <span className="font-medium">finished</span>. La jerarquía usa{' '}
-              <span className="font-medium">order_index</span> del grupo (menor índice = grupo más alto).
+              Solo se listan torneos en estado <span className="font-medium">finished</span>. La cascada usa niveles
+              consecutivos (1 = más alto) según la clasificación final; Grupo MB siempre es el último nivel.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -765,8 +770,8 @@ export function NextTournamentWizard() {
               3. Rankings finales por grupo
             </CardTitle>
             <CardDescription className="text-pretty">
-              Orden: puntos, games a favor, diferencia de games (desempate estable por nombre). Sin usar categorías de
-              división.
+              Orden: puntos, games a favor, diferencia de games (desempate estable por nombre).{' '}
+              {tierCount > 0 ? `${tierCount} nivel(es) en cascada (1 = más alto).` : ''}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-8">
@@ -775,16 +780,16 @@ export function NextTournamentWizard() {
                 <p className="text-sm font-semibold text-[#102A43]">
                   {g.name}{' '}
                   <span className="font-normal text-slate-500">
-                    (order_index {g.orderIndex}
-                    {previewQ.data?.sortedDistinctGroupOrderIndices ? (
+                    {tierEntries.length > 0 ? (
                       (() => {
-                        const ix = previewQ.data.sortedDistinctGroupOrderIndices.indexOf(g.orderIndex)
-                        return ix >= 0 ? ` · Grupo ${ix + 1}` : ''
+                        const tierRank = getPromotionTierRankForGroup(tierEntries, g.id)
+                        return tierRank > 0
+                          ? ` · ${promotionTierLabel(tierRank, g.name, tierCount)}`
+                          : ''
                       })()
                     ) : (
                       ''
                     )}
-                    )
                   </span>
                 </p>
                 <ScrollArea className="max-h-64 rounded-xl border border-slate-200">
@@ -829,8 +834,8 @@ export function NextTournamentWizard() {
               4. Vista previa de movimientos
             </CardTitle>
             <CardDescription>
-              Posiciones 1–2 suben un nivel, 3 se queda, 4–5 bajan (con topes). Mostrando {filteredPreview.length} de{' '}
-              {previewRows.length} jugador(es)
+              Cascada por nivel: posiciones 1–2 suben un grupo, 3 se queda, 4–5 bajan (con topes). Grupo MB
+              cuenta como último nivel. Mostrando {filteredPreview.length} de {previewRows.length} jugador(es)
               {baseTournament ? ` · ${baseTournament.name}` : ''}.
             </CardDescription>
           </CardHeader>
@@ -898,10 +903,9 @@ export function NextTournamentWizard() {
                 </TableHeader>
                 <TableBody>
                   {filteredPreview.map((r) => {
-                    const distinct = previewQ.data?.sortedDistinctGroupOrderIndices ?? []
-                    const fromIx = distinct.indexOf(r.fromGroupOrderIndex)
+                    const fromTier = getPromotionTierRankForGroup(tierEntries, r.fromGroupId)
                     const fromLabel =
-                      fromIx >= 0 ? `Grupo ${fromIx + 1}` : `Ord.${r.fromGroupOrderIndex}`
+                      fromTier > 0 ? promotionTierLabel(fromTier, r.fromGroupName, tierCount) : r.fromGroupName
                     return (
                       <TableRow id={`admin-next-tournament-preview-row-${r.userId}-${r.fromGroupId}`} key={`${r.userId}-${r.fromGroupId}`}>
                         <TableCell className="whitespace-nowrap text-xs text-slate-700">

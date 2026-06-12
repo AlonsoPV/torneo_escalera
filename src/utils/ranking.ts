@@ -1,5 +1,6 @@
 import {
   importResultTypeBothPenalized,
+  importResultTypeIsRetiredDraw,
   importResultTypeUsesDefaultPoints,
   syntheticAdministrativeSetsForDefaultMatch,
 } from '@/lib/matchResultSemantics'
@@ -7,8 +8,15 @@ import type { GroupPlayer, MatchResultType, MatchRow, ScoreSet, TournamentRules 
 
 import { resolveRankingPointsRules } from '@/domain/tournamentRankingPoints'
 import { getOfficialWinnerGroupPlayerId } from '@/utils/matchOfficialWinner'
+import {
+  computeRankingGamesDifference,
+  resolveScoreSetsForRankingStats,
+  sumScoreSetGames,
+} from '@/utils/rankingGames'
 import { invertScoreSets, setsWonForA, setsWonForB } from '@/utils/score'
 import { idsEqual } from '@/utils/tournamentInvert'
+
+export { computeRankingGamesDifference, normalizeRankingGamesStats } from '@/utils/rankingGames'
 
 export type RankingRow = {
   groupPlayerId: string
@@ -45,8 +53,21 @@ function emptyStats(gp: GroupPlayer): MutableStats {
   }
 }
 
-function sumGames(sets: ScoreSet[], forA: boolean): number {
-  return sets.reduce((acc, s) => acc + (forA ? s.a : s.b), 0)
+function addScoreStats(statsA: MutableStats, statsB: MutableStats, sets: ScoreSet[]): void {
+  if (sets.length === 0) return
+  const aSets = setsWonForA(sets)
+  const bSets = setsWonForB(sets)
+  const aGames = sumScoreSetGames(sets, true)
+  const bGames = sumScoreSetGames(sets, false)
+
+  statsA.setsFor += aSets
+  statsA.setsAgainst += bSets
+  statsB.setsFor += bSets
+  statsB.setsAgainst += aSets
+  statsA.gamesFor += aGames
+  statsA.gamesAgainst += bGames
+  statsB.gamesFor += bGames
+  statsB.gamesAgainst += aGames
 }
 
 export type RulesPoints = Pick<
@@ -61,6 +82,9 @@ function isDefaultType(rt: MatchResultType | null | undefined): boolean {
 function matchCountsForGroupRanking(m: MatchRow, rules: RulesPoints): boolean {
   if (m.status === 'cancelled') return false
   if (importResultTypeBothPenalized(m.result_type)) {
+    return m.status === 'closed' || m.status === 'validated'
+  }
+  if (importResultTypeIsRetiredDraw(m.result_type)) {
     return m.status === 'closed' || m.status === 'validated'
   }
   if (m.status !== 'closed' && m.status !== 'validated') return false
@@ -88,8 +112,8 @@ type RankingSortFields = Pick<
 export function compareRankingRowsForLeaderboard(x: RankingSortFields, y: RankingSortFields): number {
   if (y.points !== x.points) return y.points - x.points
   if (y.gamesFor !== x.gamesFor) return y.gamesFor - x.gamesFor
-  const xgd = x.gamesFor - x.gamesAgainst
-  const ygd = y.gamesFor - y.gamesAgainst
+  const xgd = computeRankingGamesDifference(x.gamesFor, x.gamesAgainst)
+  const ygd = computeRankingGamesDifference(y.gamesFor, y.gamesAgainst)
   if (ygd !== xgd) return ygd - xgd
   if (y.won !== x.won) return y.won - x.won
   const xsd = x.setsFor - x.setsAgainst
@@ -125,8 +149,21 @@ export function computeGroupRanking(players: GroupPlayer[], matches: MatchRow[],
       statsB.played += 1
       statsA.lost += 1
       statsB.lost += 1
+      addScoreStats(statsA, statsB, m.score_raw?.length ? m.score_raw : [])
       statsA.points += ptsRules.penaltyBoth
       statsB.points += ptsRules.penaltyBoth
+      continue
+    }
+
+    if (importResultTypeIsRetiredDraw(m.result_type)) {
+      const sets = m.score_raw?.length ? m.score_raw : []
+      statsA.played += 1
+      statsB.played += 1
+      if (sets.length > 0) {
+        addScoreStats(statsA, statsB, sets)
+      }
+      statsA.points += ptsRules.normalLoss
+      statsB.points += ptsRules.normalLoss
       continue
     }
 
@@ -134,33 +171,13 @@ export function computeGroupRanking(players: GroupPlayer[], matches: MatchRow[],
     if (!effectiveWinnerId) continue
 
     const isDefault = isDefaultType(m.result_type)
-    const adminSets = syntheticAdministrativeSetsForDefaultMatch(m)
-    const sets: ScoreSet[] =
-      isDefault
-        ? adminSets ?? (m.score_raw?.length ? m.score_raw : [])
-        : m.game_type === 'sudden_death' && (!m.score_raw || m.score_raw.length !== 3)
-          ? adminSets ?? (m.score_raw?.length ? m.score_raw : [])
-          : m.score_raw?.length
-            ? m.score_raw
-            : []
+    const sets = resolveScoreSetsForRankingStats(m)
 
     statsA.played += 1
     statsB.played += 1
 
     if (sets.length > 0) {
-      const aSets = setsWonForA(sets)
-      const bSets = setsWonForB(sets)
-      const aGames = sumGames(sets, true)
-      const bGames = sumGames(sets, false)
-
-      statsA.setsFor += aSets
-      statsA.setsAgainst += bSets
-      statsB.setsFor += bSets
-      statsB.setsAgainst += aSets
-      statsA.gamesFor += aGames
-      statsA.gamesAgainst += bGames
-      statsB.gamesFor += bGames
-      statsB.gamesAgainst += aGames
+      addScoreStats(statsA, statsB, sets)
     }
 
     const winPts = isDefault ? ptsRules.defaultWin : ptsRules.normalWin

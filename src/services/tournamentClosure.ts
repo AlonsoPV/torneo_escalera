@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase'
 import { getAdminGroupsForTournament } from '@/services/admin'
 import { getTournamentRules, updateTournament } from '@/services/tournaments'
 import { sortGroupStandingsForMovement } from '@/utils/nextTournamentPromotion'
-import { computeGroupRanking } from '@/utils/ranking'
+import { computeGroupRanking, normalizeRankingGamesStats } from '@/utils/ranking'
 
 export type TournamentClosureCounts = {
   pendingScore: number
@@ -37,7 +37,7 @@ export async function getTournamentClosureBlockers(tournamentId: string): Promis
     for (const m of g.matches) {
       if (seenMatchIds.has(m.id)) continue
       seenMatchIds.add(m.id)
-      if (m.status !== 'closed' && m.status !== 'cancelled') {
+      if (m.status !== 'closed' && m.status !== 'validated' && m.status !== 'cancelled') {
         counts.openMatches += 1
       }
       if (m.status === 'pending_score') {
@@ -114,7 +114,7 @@ export async function finishTournament(params: {
   const { tournamentId, closedBy } = params
 
   let blockers = await getTournamentClosureBlockers(tournamentId)
-  if (!blockers.canClose && params.applyMissingScoresAsDoublePenalty && blockers.canCloseWithDefaultRules) {
+  if (!blockers.canClose && blockers.canCloseWithDefaultRules) {
     await applyDefaultClosureForUnreportedMatches({ tournamentId, closedBy })
     blockers = await getTournamentClosureBlockers(tournamentId)
   }
@@ -164,7 +164,7 @@ export async function finishTournament(params: {
     )
 
     for (const row of ranking) {
-      const gd = row.gamesFor - row.gamesAgainst
+      const games = normalizeRankingGamesStats(row.gamesFor, row.gamesAgainst)
       snapshotRows.push({
         tournament_id: tournamentId,
         group_id: g.id,
@@ -172,9 +172,9 @@ export async function finishTournament(params: {
         player_id: row.userId,
         position: row.position,
         points: row.points,
-        games_for: row.gamesFor,
-        games_against: row.gamesAgainst,
-        games_difference: gd,
+        games_for: games.gamesFor,
+        games_against: games.gamesAgainst,
+        games_difference: games.gamesDifference,
         wins: row.won,
         losses: row.lost,
       })

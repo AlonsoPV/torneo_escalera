@@ -18,7 +18,7 @@ import { generateRoundRobinMatches } from '@/services/matches'
 import { listGroupPlayers } from '@/services/groups'
 import type { Json, MatchGameType, MatchResultType, MatchStatus, Profile, ScoreSet, TournamentRules } from '@/types/database'
 import { pairKey } from '@/utils/matches'
-import { validateBestOf3Score, validateSuddenDeathMatchScore } from '@/utils/score'
+import { validateBestOf3Score, validateIncompleteBestOf3Score, validateSuddenDeathMatchScore } from '@/utils/score'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -101,6 +101,12 @@ function normalizeImportResultTypeToken(raw: string): MatchResultType | null {
     not_reported: 'not_reported',
     ret: 'retired',
     retired: 'retired',
+    ret_draw: 'retired_draw',
+    retdraw: 'retired_draw',
+    retireddraw: 'retired_draw',
+    retired_draw: 'retired_draw',
+    retiro_empate: 'retired_draw',
+    retiroempate: 'retired_draw',
     pending_score: 'pending_score',
     pending: 'pending_score',
     double_penalty: 'double_penalty',
@@ -520,6 +526,14 @@ export async function buildMatchResultsImportPreview(
       bumpKind('penalty')
     }
 
+    if (effectiveResultType === 'retired' && !anySets) {
+      penaltyClosure = true
+      effectiveResultType = 'not_reported'
+      winnerGroupPlayerId = null
+      infoMessages.push('RET sin games: tratado como N.R → penalización −1 / −1.')
+      bumpKind('penalty')
+    }
+
     if (effectiveResultType === 'def' && !winnerGroupPlayerId) {
       if (historicalImportMode) {
         penaltyClosure = true
@@ -603,20 +617,56 @@ export async function buildMatchResultsImportPreview(
       bumpKind('penalty')
     } else if (
       effectiveResultType === 'wo' ||
-      effectiveResultType === 'def' ||
-      (effectiveResultType === 'retired' && !anySets)
+      effectiveResultType === 'def'
     ) {
       scoreRaw = null
       effectiveGameType = 'sudden_death'
       if (effectiveResultType === 'wo') {
         infoMessages.push('W.O detectado · sin games registrados.')
         bumpKind('normalized')
-      } else if (effectiveResultType === 'def') {
+      } else {
         infoMessages.push('DEF detectado · sin games registrados.')
         bumpKind('normalized')
+      }
+    } else if (effectiveResultType === 'retired' || effectiveResultType === 'retired_draw') {
+      const retiredSets: ScoreSet[] = []
+      for (let i = 1; i <= 3; i += 1) {
+        const s = pullSet(i)
+        if (s) retiredSets.push(s)
+      }
+      const valRet = validateIncompleteBestOf3Score(retiredSets)
+      if (!valRet.ok) {
+        messages.push(...valRet.errors)
       } else {
-        infoMessages.push('RET sin sets en CSV · resultado compacto.')
-        bumpKind('warning')
+        scoreRaw = retiredSets
+        effectiveGameType = 'best_of_3'
+        if (effectiveResultType === 'retired_draw') {
+          if (valRet.games.a !== valRet.games.b) {
+            messages.push('RET empate: ambos jugadores deben tener la misma cantidad total de games.')
+          } else {
+            winnerGroupPlayerId = null
+            infoMessages.push('RET empate: ambos jugadores reciben 1 punto.')
+            bumpKind('normalized')
+          }
+        } else if (winnerGroupPlayerId) {
+          infoMessages.push('RET: ganador indicado por retiro, aunque el total de games este empatado.')
+          bumpKind('normalized')
+        } else if (valRet.games.a === valRet.games.b) {
+          effectiveResultType = 'retired_draw'
+          winnerGroupPlayerId = null
+          infoMessages.push('RET con empate en games sin winner_id: ambos jugadores reciben 1 punto.')
+          bumpKind('normalized')
+        } else {
+          const inferredWinner =
+            valRet.winnerByGames === 'a' ? match.player_a_id : match.player_b_id
+          if (winnerGroupPlayerId && winnerGroupPlayerId !== inferredWinner) {
+            messages.push('RET: el winner_id debe ser el jugador con mayor cantidad total de games.')
+          } else {
+            winnerGroupPlayerId = inferredWinner
+            infoMessages.push('RET: ganador inferido por mayor cantidad total de games.')
+            bumpKind('normalized')
+          }
+        }
       }
     } else if (gameTypeParsed === 'sudden_death') {
       effectiveGameType = 'sudden_death'
@@ -629,7 +679,7 @@ export async function buildMatchResultsImportPreview(
       if (setsSd.length === 0) {
         if (
           historicalImportMode &&
-          (effectiveResultType === 'normal' || effectiveResultType === 'retired') &&
+          effectiveResultType === 'normal' &&
           winnerGroupPlayerId
         ) {
           scoreRaw = null
@@ -663,7 +713,7 @@ export async function buildMatchResultsImportPreview(
             scoreRaw = setsSd
             if (
               !winnerGroupPlayerId &&
-              (effectiveResultType === 'normal' || effectiveResultType === 'retired') &&
+              effectiveResultType === 'normal' &&
               valSd.winner
             ) {
               winnerGroupPlayerId =
@@ -686,7 +736,7 @@ export async function buildMatchResultsImportPreview(
           scoreRaw = [s]
           if (
             !winnerGroupPlayerId &&
-            (effectiveResultType === 'normal' || effectiveResultType === 'retired') &&
+            effectiveResultType === 'normal' &&
             s.a !== s.b
           ) {
             winnerGroupPlayerId = s.a > s.b ? match.player_a_id : match.player_b_id
@@ -707,8 +757,7 @@ export async function buildMatchResultsImportPreview(
       } else {
         const allowShort =
           historicalImportMode ||
-          gameTypeParsed === 'best_of_3_short_tiebreak' ||
-          effectiveResultType === 'retired'
+          gameTypeParsed === 'best_of_3_short_tiebreak'
 
         const forcedWinnerSide: 'a' | 'b' | undefined =
           winnerGroupPlayerId === match.player_a_id
@@ -742,13 +791,6 @@ export async function buildMatchResultsImportPreview(
           }
 
           scoreRaw = sets
-
-          if (!winnerGroupPlayerId && effectiveResultType === 'retired' && val.winner) {
-            winnerGroupPlayerId =
-              val.winner === 'a' ? match.player_a_id : match.player_b_id
-            infoMessages.push('RET: ganador inferido por marcador.')
-            bumpKind('normalized')
-          }
 
           if (
             !winnerGroupPlayerId &&

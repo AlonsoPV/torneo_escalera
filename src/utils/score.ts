@@ -61,6 +61,24 @@ export function getSetsWon(scoreSets: ScoreSet[]): { a: number; b: number } {
   )
 }
 
+export function totalGamesBySide(scoreSets: ScoreSet[]): { a: number; b: number } {
+  return scoreSets.reduce(
+    (acc, set) => {
+      acc.a += Number.isFinite(set.a) ? set.a : 0
+      acc.b += Number.isFinite(set.b) ? set.b : 0
+      return acc
+    },
+    { a: 0, b: 0 },
+  )
+}
+
+export function winnerSideByTotalGames(scoreSets: ScoreSet[]): ScoreWinnerSide | null {
+  const games = totalGamesBySide(scoreSets)
+  if (games.a > games.b) return 'a'
+  if (games.b > games.a) return 'b'
+  return null
+}
+
 export function isMatchDecidedAfterTwoSets(scoreSets: ScoreSet[]): boolean {
   if (scoreSets.length < 2) return false
   const won = getSetsWon(scoreSets.slice(0, 2))
@@ -97,6 +115,30 @@ export function validateImportLooseSet(set: ScoreSet): string | null {
     return 'Cada set debe tener números enteros ≥ 0.'
   }
   return null
+}
+
+export function validateIncompleteBestOf3Score(scoreSets: ScoreSet[]): {
+  ok: boolean
+  errors: string[]
+  winnerByGames: ScoreWinnerSide | null
+  games: { a: number; b: number }
+} {
+  const sets = scoreSets.filter((set) => Number.isFinite(set.a) && Number.isFinite(set.b))
+  const errors: string[] = []
+  if (sets.length < 1) errors.push('Captura al menos un set jugado o usa No reportado.')
+  if (sets.length > 3) errors.push('Maximo 3 sets.')
+  for (const set of sets) {
+    const error = validateImportLooseSet(set)
+    if (error) errors.push(error)
+  }
+  const games = totalGamesBySide(sets)
+  if (games.a + games.b <= 0) errors.push('Para retiro debe existir al menos un game jugado.')
+  return {
+    ok: errors.length === 0,
+    errors,
+    winnerByGames: winnerSideByTotalGames(sets),
+    games,
+  }
 }
 
 export type ValidateBestOf3Options = {

@@ -46,6 +46,7 @@ export function PlayerDashboardPage() {
     queryKey: ['playerContexts', userId],
     queryFn: () => (userId ? listPlayerDashboardContexts(userId) : []),
     enabled: Boolean(userId),
+    staleTime: 5 * 60_000,
   })
 
   const contexts = useMemo(() => contextsQ.data ?? [], [contextsQ.data])
@@ -62,6 +63,7 @@ export function PlayerDashboardPage() {
     queryFn: () =>
       userId && effectiveGroupId ? getPlayerViewModelSession(userId, effectiveGroupId) : null,
     enabled: Boolean(userId && effectiveGroupId && contexts.length > 0),
+    staleTime: 90_000,
   })
 
   const onMatchMutated = useCallback(

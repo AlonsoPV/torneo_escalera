@@ -35,7 +35,6 @@ export function CloseTournamentDialog({
 }) {
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
-  const [applyDefaultRules, setApplyDefaultRules] = useState(false)
 
   const blockersQ = useQuery({
     queryKey: ['tournamentClosureBlockers', tournamentId],
@@ -49,7 +48,6 @@ export function CloseTournamentDialog({
       await finishTournament({
         tournamentId,
         closedBy,
-        applyMissingScoresAsDoublePenalty: applyDefaultRules,
       })
     },
     onSuccess: async () => {
@@ -69,7 +67,7 @@ export function CloseTournamentDialog({
   const blockers = blockersQ.data
   const canClose = blockers?.canClose ?? false
   const canCloseWithDefaultRules = blockers?.canCloseWithDefaultRules ?? false
-  const canConfirmClose = canClose || (applyDefaultRules && canCloseWithDefaultRules)
+  const canConfirmClose = canClose || canCloseWithDefaultRules
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -77,7 +75,6 @@ export function CloseTournamentDialog({
         onClick: (event: MouseEvent<HTMLElement>) => {
           trigger.props.onClick?.(event)
           if (!event.defaultPrevented) {
-            setApplyDefaultRules(false)
             setOpen(true)
           }
         },
@@ -120,18 +117,14 @@ export function CloseTournamentDialog({
                     <p className="mt-2 text-[13px]">Hay partidos u operaciones pendientes.</p>
                   )}
                   {canCloseWithDefaultRules ? (
-                    <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-md border border-amber-200 bg-white/70 px-3 py-2 text-[13px] leading-snug text-amber-950">
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 size-4 rounded border-amber-300 text-amber-700"
-                        checked={applyDefaultRules}
-                        onChange={(event) => setApplyDefaultRules(event.target.checked)}
-                      />
+                    <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-200 bg-white/70 px-3 py-2 text-[13px] leading-snug text-amber-950">
+                      <AlertTriangle className="mt-0.5 size-4 shrink-0" />
                       <span>
-                        Cerrar partidos sin marcador como <span className="font-semibold">doble penalizacion</span>.
-                        Aplica los puntos de regla para no reportado y deja el torneo listo para cierre.
+                        Al confirmar, los partidos sin marcador se cerraran como{' '}
+                        <span className="font-semibold">doble penalizacion</span>: -1 punto para ambos jugadores.
+                        Esto deja el torneo listo para crear el siguiente.
                       </span>
-                    </label>
+                    </div>
                   ) : (
                     <div className="mt-3">
                       <Link

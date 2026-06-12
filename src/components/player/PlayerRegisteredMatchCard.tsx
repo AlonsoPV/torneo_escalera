@@ -8,13 +8,15 @@ import {
 import { buildPlayerLogEntries, gameTypeLabel } from '@/lib/playerMatchFeed'
 import {
   importResultTypeBothPenalized,
+  importResultTypeIsRetiredDraw,
   importResultTypeUsesDefaultPoints,
 } from '@/lib/matchResultSemantics'
 import type { GroupPlayer, MatchResultType, MatchRow, TournamentRules } from '@/types/database'
 
 function outcomeLine(match: MatchRow, myGroupPlayerId: string, resultType: MatchResultType | null): string {
   if (importResultTypeBothPenalized(match.result_type)) return 'No reportado · penalización'
-  if (match.winner_id == null) return '—'
+  if (importResultTypeIsRetiredDraw(match.result_type)) return 'Empate por retiro'
+  if (match.winner_id == null) return '---'
   const walkoverLike = importResultTypeUsesDefaultPoints(resultType)
   const w = getMatchOutcome(match, myGroupPlayerId)
   if (walkoverLike) {
@@ -58,7 +60,7 @@ export function PlayerRegisteredMatchCard({
   onRefute?: () => void
 }) {
   const officialCounted =
-    (match.status === 'closed' || match.status === 'validated') && match.winner_id != null
+    (match.status === 'closed' || match.status === 'validated') && (match.winner_id != null || importResultTypeBothPenalized(match.result_type) || importResultTypeIsRetiredDraw(match.result_type))
   const pts = officialCounted ? getPointsForPlayerInMatch(match, myGroupPlayerId, rules) : null
   const gamesDiff = officialCounted ? calculateMatchGamesDifference(myGroupPlayerId, match) : null
   const outcome = officialCounted ? outcomeLine(match, myGroupPlayerId, match.result_type) : null
@@ -89,3 +91,4 @@ export function PlayerRegisteredMatchCard({
     />
   )
 }
+

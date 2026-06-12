@@ -16,13 +16,22 @@ import type {
   TournamentStatus,
 } from '@/types/database'
 import {
+  buildPromotionTierLadderEntries,
   chunkPlayersIntoGroups,
-  comparePromotionPreviewPlayers,
+  comparePromotionRowsForGroupAssignment,
   generateTierGroupName,
+  getMaxPromotionTier,
+  getPromotionTierRankForGroup,
   getTargetGroupOrder,
+  orderIndexForTierRank,
+  promotionTierLabel,
   sortGroupStandingsForMovement,
+  targetSeedOrderForPromotionRow,
+  validatePromotionPreviewCascade,
+  type GroupTierInput,
+  type PromotionTierEntry,
 } from '@/utils/nextTournamentPromotion'
-import { computeGroupRanking } from '@/utils/ranking'
+import { computeGroupRanking, normalizeRankingGamesStats } from '@/utils/ranking'
 
 /** Tamaño de lote para inserts masivos (PostgREST / límites prácticos). */
 const INSERT_CHUNK_DEFAULT = 500
@@ -92,7 +101,7 @@ export type NextTournamentGroupPreview = {
   tierDisplayName: string
   groups: {
     name: string
-    players: { userId: string; displayName: string }[]
+    players: { userId: string; displayName: string; seedOrder: number }[]
     isComplete: boolean
   }[]
 }
@@ -181,7 +190,7 @@ export type PlannedPersistGroup = {
   tierDisplayName: string
   targetOrderIndex: number
   orderIndex: number
-  players: { userId: string; displayName: string }[]
+  players: { userId: string; displayName: string; seedOrder: number }[]
   isComplete: boolean
 }
 
@@ -236,28 +245,30 @@ function nonClosedMatchCount(groups: AdminGroupRecord[]): number {
   let n = 0
   for (const g of groups) {
     for (const m of g.matches) {
-      if (m.status !== 'closed' && m.status !== 'cancelled') n += 1
+      if (m.status !== 'closed' && m.status !== 'validated' && m.status !== 'cancelled') n += 1
     }
   }
   return n
 }
 
-function distinctSortedGroupOrderIndices(groups: AdminGroupRecord[]): number[] {
-  const set = new Set<number>()
-  for (const g of groups) {
-    if (g.players.length > 0) set.add(g.order_index)
-  }
-  return [...set].sort((a, b) => a - b)
+function groupLabelForTierRank(tierEntries: PromotionTierEntry[], targetOrderIndex: number): string {
+  const entry = tierEntries.find((e) => e.orderIndex === targetOrderIndex)
+  const rank = entry?.tierRank ?? 1
+  return promotionTierLabel(rank, entry?.name, getMaxPromotionTier(tierEntries))
 }
 
-function groupLabelForTierRank(sortedDistinct: number[], targetOrderIndex: number): string {
-  const i = sortedDistinct.indexOf(targetOrderIndex)
-  const tr = i >= 0 ? i + 1 : 1
-  return `Grupo ${tr}`
+function toGroupTierInputs(groups: AdminGroupRecord[]): GroupTierInput[] {
+  return groups.map((g) => ({
+    id: g.id,
+    order_index: g.order_index,
+    name: g.name,
+    players: g.players,
+  }))
 }
 
 export async function buildPromotionPreview(baseTournamentId: string): Promise<{
   rows: PromotionPreviewRow[]
+  promotionTierEntries: PromotionTierEntry[]
   sortedDistinctGroupOrderIndices: number[]
   nonClosedMatchCount: number
   skippedDuplicatePlayers: number
@@ -278,15 +289,21 @@ export async function buildPromotionPreview(baseTournamentId: string): Promise<{
     throw new Error('No hay reglas configuradas para el torneo base.')
   }
 
-  const sortedDistinct = distinctSortedGroupOrderIndices(groups)
-  if (sortedDistinct.length === 0) {
+  const snapRows = snapRes.data ?? []
+  const usedSnapshot = snapRows.length > 0
+  const tierInputs = toGroupTierInputs(groups)
+  const participatingGroupIds = usedSnapshot
+    ? new Set(snapRows.map((r) => r.group_id))
+    : new Set(groups.filter((g) => g.players.length > 0).map((g) => g.id))
+
+  const tierEntries = buildPromotionTierLadderEntries(tierInputs, { participatingGroupIds })
+  const sortedDistinct = tierEntries.map((e) => e.orderIndex)
+  if (tierEntries.length === 0) {
     throw new Error('No hay grupos con jugadores en el torneo base.')
   }
 
-  const snapRows = snapRes.data ?? []
-  const usedSnapshot = snapRows.length > 0
   const minTier = 1
-  const maxTier = sortedDistinct.length
+  const maxTier = getMaxPromotionTier(tierEntries)
 
   const rows: PromotionPreviewRow[] = []
   const seenUser = new Set<string>()
@@ -316,7 +333,7 @@ export async function buildPromotionPreview(baseTournamentId: string): Promise<{
       if (!g || g.players.length === 0) continue
 
       const ordered = [...plist].sort((a, b) => a.position - b.position || a.player_id.localeCompare(b.player_id))
-      const tierRank = sortedDistinct.indexOf(g.order_index) + 1
+      const tierRank = getPromotionTierRankForGroup(tierEntries, g.id)
       if (tierRank < 1) continue
 
       for (const row of ordered) {
@@ -330,12 +347,13 @@ export async function buildPromotionPreview(baseTournamentId: string): Promise<{
           minTier,
           maxTier,
         )
-        const targetOrderIndex = sortedDistinct[targetTierRank - 1]!
+        const targetOrderIndex = orderIndexForTierRank(tierEntries, targetTierRank)
         if (seenUser.has(row.player_id)) {
           skippedDuplicatePlayers += 1
           continue
         }
         seenUser.add(row.player_id)
+        const games = normalizeRankingGamesStats(row.games_for, row.games_against)
         rows.push({
           userId: row.player_id,
           displayName,
@@ -344,10 +362,10 @@ export async function buildPromotionPreview(baseTournamentId: string): Promise<{
           fromGroupOrderIndex: g.order_index,
           fromPosition: row.position,
           points: row.points,
-          gamesFor: row.games_for,
-          gamesDifference: row.games_difference,
+          gamesFor: games.gamesFor,
+          gamesDifference: games.gamesDifference,
           targetOrderIndex,
-          targetGroupLabel: groupLabelForTierRank(sortedDistinct, targetOrderIndex),
+          targetGroupLabel: groupLabelForTierRank(tierEntries, targetOrderIndex),
           movementType,
           movementReason,
         })
@@ -371,7 +389,7 @@ export async function buildPromotionPreview(baseTournamentId: string): Promise<{
           rules,
         ),
       )
-      const tierRank = sortedDistinct.indexOf(g.order_index) + 1
+      const tierRank = getPromotionTierRankForGroup(tierEntries, g.id)
       if (tierRank < 1) continue
 
       for (const r of ranking) {
@@ -381,7 +399,7 @@ export async function buildPromotionPreview(baseTournamentId: string): Promise<{
           minTier,
           maxTier,
         )
-        const targetOrderIndex = sortedDistinct[targetTierRank - 1]!
+        const targetOrderIndex = orderIndexForTierRank(tierEntries, targetTierRank)
         const gp = g.players.find((p) => p.user_id === r.userId)
         const displayName = gp?.display_name ?? r.displayName
         if (seenUser.has(r.userId)) {
@@ -389,6 +407,7 @@ export async function buildPromotionPreview(baseTournamentId: string): Promise<{
           continue
         }
         seenUser.add(r.userId)
+        const games = normalizeRankingGamesStats(r.gamesFor, r.gamesAgainst)
         rows.push({
           userId: r.userId,
           displayName,
@@ -397,10 +416,10 @@ export async function buildPromotionPreview(baseTournamentId: string): Promise<{
           fromGroupOrderIndex: g.order_index,
           fromPosition: r.position,
           points: r.points,
-          gamesFor: r.gamesFor,
-          gamesDifference: r.gamesFor - r.gamesAgainst,
+          gamesFor: games.gamesFor,
+          gamesDifference: games.gamesDifference,
           targetOrderIndex,
-          targetGroupLabel: groupLabelForTierRank(sortedDistinct, targetOrderIndex),
+          targetGroupLabel: groupLabelForTierRank(tierEntries, targetOrderIndex),
           movementType,
           movementReason,
         })
@@ -410,6 +429,7 @@ export async function buildPromotionPreview(baseTournamentId: string): Promise<{
 
   return {
     rows,
+    promotionTierEntries: tierEntries,
     sortedDistinctGroupOrderIndices: sortedDistinct,
     nonClosedMatchCount: nonClosedMatchCount(groups),
     skippedDuplicatePlayers,
@@ -422,11 +442,10 @@ export async function buildPromotionPreview(baseTournamentId: string): Promise<{
 export function buildNextTournamentGroupPreview(
   rows: PromotionPreviewRow[],
   groupSize: number,
-  sortedDistinctGroupOrderIndices: number[],
+  tierEntries: PromotionTierEntry[],
 ): NextTournamentGroupPreview[] {
-  const tierRank = (orderIdx: number) => {
-    const i = sortedDistinctGroupOrderIndices.indexOf(orderIdx)
-    return i >= 0 ? i + 1 : 1
+  const tierRankForOrderIndex = (orderIdx: number) => {
+    return tierEntries.find((e) => e.orderIndex === orderIdx)?.tierRank ?? 1
   }
 
   const byTier = new Map<number, PromotionPreviewRow[]>()
@@ -437,20 +456,26 @@ export function buildNextTournamentGroupPreview(
   }
 
   const out: NextTournamentGroupPreview[] = []
-  const tierKeys = [...byTier.keys()].sort((a, b) => a - b)
+  const tierKeys = [...byTier.keys()].sort(
+    (a, b) => tierRankForOrderIndex(a) - tierRankForOrderIndex(b),
+  )
 
   for (const targetOrderIndex of tierKeys) {
     const bucket = byTier.get(targetOrderIndex)!
-    const sorted = [...bucket].sort((a, b) => comparePromotionPreviewPlayers(a, b))
-    const tr = tierRank(targetOrderIndex)
-    const tierDisplayName = `Grupo ${tr}`
+    const sorted = [...bucket].sort(comparePromotionRowsForGroupAssignment)
+    const tr = tierRankForOrderIndex(targetOrderIndex)
+    const tierDisplayName = promotionTierLabel(tr, undefined, getMaxPromotionTier(tierEntries))
     const chunks = chunkPlayersIntoGroups(sorted, groupSize)
     out.push({
       targetOrderIndex,
       tierDisplayName,
       groups: chunks.map((chunk, idx) => ({
         name: generateTierGroupName(tr, idx, chunks.length),
-        players: chunk.map((r) => ({ userId: r.userId, displayName: r.displayName })),
+        players: chunk.map((r) => ({
+          userId: r.userId,
+          displayName: r.displayName,
+          seedOrder: targetSeedOrderForPromotionRow(r),
+        })),
         isComplete: chunk.length === groupSize,
       })),
     })
@@ -630,6 +655,9 @@ export async function validateNextTournamentCreationPlan(
     if (nonClosedMatchCount(groups) > 0) {
       errors.push('Todos los partidos del torneo base deben estar cerrados o cancelados.')
     }
+    const participatingGroupIds = new Set(previewRows.map((r) => r.fromGroupId))
+    const tierEntries = buildPromotionTierLadderEntries(toGroupTierInputs(groups), { participatingGroupIds })
+    errors.push(...validatePromotionPreviewCascade(previewRows, tierEntries))
   }
 
   return errors
@@ -687,7 +715,7 @@ export async function createNextTournamentWithProgress(
       throw new Error('No hay jugadores elegibles en los grupos del torneo base.')
     }
     rows = preview.rows
-    groupPlan = buildNextTournamentGroupPreview(rows, groupSize, preview.sortedDistinctGroupOrderIndices)
+    groupPlan = buildNextTournamentGroupPreview(rows, groupSize, preview.promotionTierEntries)
   }
 
   const groupsPreviewCount = groupPlan.reduce((a, c) => a + c.groups.length, 0)
@@ -795,12 +823,12 @@ export async function createNextTournamentWithProgress(
     }[] = []
     planned.forEach((p, i) => {
       const gid = (createdGroups[i] as { id: string }).id
-      p.players.forEach((pl, seed) => {
+      p.players.forEach((pl) => {
         gpRows.push({
           group_id: gid,
           user_id: pl.userId,
           display_name: pl.displayName,
-          seed_order: seed,
+          seed_order: pl.seedOrder,
         })
       })
     })

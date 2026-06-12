@@ -3,7 +3,6 @@ import {
   KeyRound,
   Pencil,
   RotateCcw,
-  Search,
   Trash2,
   UserPlus,
   Users,
@@ -22,9 +21,12 @@ import {
 import { AdminEmptyState } from '@/components/admin/shared/AdminEmptyState'
 import { AdminPageHeader } from '@/components/admin/shared/AdminPageHeader'
 import { AdminMetricCard, ADMIN_METRIC_GRID_4 } from '@/components/admin/shared/AdminMetricCard'
+import {
+  AdminMatchScopeFiltersBar,
+  type AdminScopeFilterSelectConfig,
+} from '@/components/admin/shared/AdminMatchScopeFiltersBar'
 import { AdminSectionTitle } from '@/components/admin/shared/AdminSectionTitle'
 import { AdminStatusBadge } from '@/components/admin/shared/AdminStatusBadge'
-import { AdminToolbar } from '@/components/admin/shared/AdminToolbar'
 import { groupFilterOptionsFromRecords } from '@/components/admin/shared/adminMatchFilters'
 import { ChangePasswordModal } from '@/components/admin/users/ChangePasswordModal'
 import { CreateUserModal } from '@/components/admin/users/CreateUserModal'
@@ -33,7 +35,6 @@ import { UserBulkImportSection } from '@/components/admin/users/UserBulkImportSe
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -121,7 +122,10 @@ export function AdminUsersPage() {
   const categoriesQ = useQuery({ queryKey: ['player-categories'], queryFn: listPlayerCategories })
   const groups = useMemo(() => groupsQ.data ?? [], [groupsQ.data])
   const categories = useMemo(() => categoriesQ.data ?? [], [categoriesQ.data])
-  const groupOpts = useMemo(() => groupFilterOptionsFromRecords(groups), [groups])
+  const groupOpts = useMemo(
+    () => groupFilterOptionsFromRecords(groups, { primarySort: 'group_number' }),
+    [groups],
+  )
 
   /** Orden estable para el desplegable de categorías (solo UI de filtros). */
   const categoriesSortedForFilter = useMemo(
@@ -423,6 +427,84 @@ export function AdminUsersPage() {
           ? 'Cuenta activa (admin)'
           : 'Cuenta desactivada (admin)'
 
+  const hasActiveFilters =
+    deferredSearch.trim() !== '' ||
+    roleFilter !== 'all' ||
+    groupFilter !== 'all' ||
+    categoryFilter !== 'all' ||
+    estadoFilter !== 'all'
+
+  const clearUserFilters = useCallback(() => {
+    setSearch('')
+    setRoleFilter('all')
+    setGroupFilter('all')
+    setCategoryFilter('all')
+    setEstadoFilter('all')
+  }, [])
+
+  const userFilterSelects = useMemo((): AdminScopeFilterSelectConfig[] => {
+    return [
+      {
+        id: 'role',
+        label: 'Rol',
+        value: roleFilter,
+        valueLabel: roleTriggerLabel,
+        onValueChange: (value) => setRoleFilter((value ?? 'all') as UserRole | 'all'),
+        items: [
+          { value: 'all', label: 'Todos' },
+          ...ADMIN_USER_FILTER_ROLES.map((r) => ({ value: r, label: userRoleLabelEs(r) })),
+        ],
+      },
+      {
+        id: 'category',
+        label: 'Categoría',
+        value: categoryFilter,
+        valueLabel: categoryTriggerLabel,
+        onValueChange: (value) => setCategoryFilter(value ?? 'all'),
+        items: [
+          { value: 'all', label: 'Todas' },
+          ...categoriesSortedForFilter.map((c) => ({ value: c.id, label: c.name })),
+        ],
+      },
+      {
+        id: 'estado',
+        label: 'Estado',
+        value: estadoFilter,
+        valueLabel: estadoTriggerLabel,
+        onValueChange: (value) => setEstadoFilter((value ?? 'all') as typeof estadoFilter),
+        items: [
+          { value: 'all', label: 'Todos' },
+          { value: 'pendiente', label: 'Sin correo de recuperación' },
+          { value: 'cuenta_activa', label: 'Cuenta activa (admin)' },
+          { value: 'cuenta_inactiva', label: 'Cuenta desactivada (admin)' },
+        ],
+      },
+      {
+        id: 'group',
+        label: 'Grupo',
+        value: groupFilter,
+        valueLabel: groupTriggerLabel,
+        triggerTitle:
+          groupFilter !== 'all' && groupFilter.includes('|')
+            ? 'Varios grupos comparten este nombre; el filtro incluye a todos.'
+            : undefined,
+        onValueChange: (value) => setGroupFilter(value ?? 'all'),
+        items: [{ value: 'all', label: 'Todos' }, ...groupOpts.map((opt) => ({ value: opt.value, label: opt.label }))],
+      },
+    ]
+  }, [
+    categoriesSortedForFilter,
+    categoryFilter,
+    categoryTriggerLabel,
+    estadoFilter,
+    estadoTriggerLabel,
+    groupFilter,
+    groupOpts,
+    groupTriggerLabel,
+    roleFilter,
+    roleTriggerLabel,
+  ])
+
   const loadMoreFooter =
     hayMas && sortedFilteredUsers.length > 0 ? (
       <TableRow className="border-0 hover:bg-transparent">
@@ -546,106 +628,70 @@ export function AdminUsersPage() {
         </div>
       </section>
 
-      <section className="space-y-4" aria-labelledby="users-toolbar-heading">
-        <AdminSectionTitle
-          id="users-toolbar-heading"
-          title="Filtros"
-          description="Encuentra personas rápido antes de editar o asignar a un grupo."
-        />
-        <AdminToolbar className="flex-wrap gap-3 sm:items-center">
-          <div className="relative min-w-[180px] flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Input
-              className={cn('h-11 pl-9', search !== deferredSearch && 'opacity-70')}
-              placeholder="Buscar por nombre, ID, celular o correo"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              aria-label="Buscar usuarios"
-              aria-busy={search !== deferredSearch}
-            />
-          </div>
-          <Select value={roleFilter} onValueChange={(value) => setRoleFilter(value as UserRole | 'all')}>
-            <SelectTrigger className="h-11 min-w-[140px] w-[min(100%,11rem)]">
-              <SelectValue placeholder="Rol">{roleTriggerLabel}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" label="Todos">
-                Todos
-              </SelectItem>
-              {ADMIN_USER_FILTER_ROLES.map((r) => (
-                <SelectItem key={r} value={r} label={userRoleLabelEs(r)}>
-                  {userRoleLabelEs(r)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value ?? 'all')}>
-            <SelectTrigger className="h-11 min-w-[150px] w-[min(100%,12rem)]">
-              <SelectValue placeholder="Categoría">{categoryTriggerLabel}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" label="Todas">
-                Todas
-              </SelectItem>
-              {categoriesSortedForFilter.map((c) => (
-                <SelectItem key={c.id} value={c.id} label={c.name}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={estadoFilter} onValueChange={(value) => setEstadoFilter(value as typeof estadoFilter)}>
-            <SelectTrigger className="h-11 min-w-[140px] w-[min(100%,11rem)]">
-              <SelectValue placeholder="Estado">{estadoTriggerLabel}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" label="Todos">
-                Todos
-              </SelectItem>
-              <SelectItem value="pendiente" label="Sin correo de recuperación">
-                Sin correo de recuperación
-              </SelectItem>
-              <SelectItem value="cuenta_activa" label="Cuenta activa (admin)">
-                Cuenta activa (admin)
-              </SelectItem>
-              <SelectItem value="cuenta_inactiva" label="Cuenta desactivada (admin)">
-                Cuenta desactivada (admin)
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={groupFilter} onValueChange={(value) => setGroupFilter(value ?? 'all')}>
-            <SelectTrigger
-              className="h-11 min-w-[160px] w-[min(100%,13rem)]"
-              title={
-                groupFilter !== 'all' && groupFilter.includes('|')
-                  ? 'Varios grupos comparten este nombre; el filtro incluye a todos.'
-                  : undefined
-              }
-            >
-              <SelectValue placeholder="Grupo" className="truncate">
-                {groupTriggerLabel}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" label="Todos">
-                Todos
-              </SelectItem>
-              {groupOpts.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value} label={opt.label}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </AdminToolbar>
-      </section>
+      <AdminMatchScopeFiltersBar
+        heading="Filtros"
+        description="Busca por nombre, ID, celular o correo. Refina por rol, categoría, estado de cuenta y grupo."
+        search={{
+          value: search,
+          onChange: setSearch,
+          placeholder: 'Buscar por nombre, ID, celular o correo…',
+          ariaLabel: 'Buscar usuarios',
+        }}
+        selects={userFilterSelects}
+        onClear={clearUserFilters}
+        clearLabel={hasActiveFilters ? 'Limpiar filtros' : 'Restablecer'}
+      />
 
-      <section className="space-y-4" aria-labelledby="users-list-heading">
-        <AdminSectionTitle
-          id="users-list-heading"
-          title="Listado"
-          description={`${sortedFilteredUsers.length} resultado(s) con filtros actuales · ${stats.total} usuarios en total. Marca filas y usa la barra de acciones. «Recuperación» = correo para reset. «Cuenta» = alta o baja por administrador.`}
-        />
+      <section className="space-y-3 sm:space-y-4" aria-label="Listado de usuarios">
+        <div
+          id="admin-users-list-summary"
+          data-name="users-list-summary"
+          className="rounded-2xl border border-slate-200/90 bg-gradient-to-b from-white to-slate-50/40 p-4 shadow-sm ring-1 ring-slate-900/[0.04] sm:p-5"
+        >
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="inline-flex items-baseline gap-1.5 rounded-lg bg-[#102A43] px-3 py-1.5 text-white shadow-sm">
+                <span className="text-lg font-semibold tabular-nums leading-none">{sortedFilteredUsers.length}</span>
+                <span className="text-xs font-medium text-white/85">
+                  {sortedFilteredUsers.length === 1 ? 'resultado' : 'resultados'}
+                </span>
+              </span>
+              <span className="text-sm text-slate-600">
+                de <span className="font-medium tabular-nums text-slate-800">{stats.total}</span> en el directorio
+              </span>
+              {hasActiveFilters ? (
+                <Badge
+                  variant="secondary"
+                  className="h-6 border-amber-200/90 bg-amber-50 px-2 text-[11px] font-medium text-amber-950"
+                >
+                  Filtros activos
+                </Badge>
+              ) : (
+                <Badge
+                  variant="secondary"
+                  className="h-6 border-slate-200 bg-slate-50 px-2 text-[11px] font-medium text-slate-600"
+                >
+                  Sin filtros
+                </Badge>
+              )}
+              {visibleUsers.length < sortedFilteredUsers.length ? (
+                <span className="text-xs text-slate-500">
+                  Mostrando {visibleUsers.length} · usa «Ver más» al final
+                </span>
+              ) : null}
+            </div>
+            <dl className="grid min-w-0 gap-2 sm:grid-cols-2 lg:max-w-lg lg:gap-x-4 lg:gap-y-1.5">
+              <div className="min-w-0">
+                <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Recuperación</dt>
+                <dd className="text-xs leading-snug text-slate-600">Correo registrado para reset de contraseña.</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Cuenta</dt>
+                <dd className="text-xs leading-snug text-slate-600">Alta o baja de acceso por administrador.</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
 
         {usersQ.isLoading ? (
           <Skeleton className="h-72 rounded-2xl" />
@@ -666,9 +712,9 @@ export function AdminUsersPage() {
             <div
               role="toolbar"
               aria-label="Acciones sobre usuarios seleccionados"
-              className="flex flex-col gap-3 rounded-xl border border-border/40 bg-muted/25 px-3 py-3 sm:flex-row sm:flex-wrap sm:items-center"
+              className="flex flex-col gap-3 rounded-2xl border border-slate-200/90 bg-white px-3 py-3 shadow-sm ring-1 ring-slate-900/[0.04] sm:flex-row sm:flex-wrap sm:items-center sm:px-4 sm:py-3.5"
             >
-              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
                 <span>
                   {selectedIds.size === 0
                     ? 'Selecciona una o más filas para editar, cambiar contraseña o aplicar acciones en bloque.'

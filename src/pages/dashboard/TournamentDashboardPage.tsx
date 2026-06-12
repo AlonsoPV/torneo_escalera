@@ -31,7 +31,11 @@ function defaultTournamentId(tournaments: Tournament[]): string | null {
 
 export function TournamentDashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const tq = useQuery({ queryKey: ['tournament-dashboard-options'], queryFn: listTournamentOptionsForDashboard })
+  const tq = useQuery({
+    queryKey: ['tournament-dashboard-options'],
+    queryFn: listTournamentOptionsForDashboard,
+    staleTime: 5 * 60_000,
+  })
   const tournaments = useMemo(() => tq.data ?? [], [tq.data])
 
   const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null)
@@ -53,16 +57,24 @@ export function TournamentDashboardPage() {
       return listGroupCategories(tournamentId!)
     },
     enabled: Boolean(tournamentId),
-    staleTime: 30_000,
+    staleTime: 10 * 60_000,
   })
-  const groupCategories = categoriesQ.data ?? []
+  const groupCategories = useMemo(() => categoriesQ.data ?? [], [categoriesQ.data])
+
+  const effectiveGroupCategoryId = useMemo(() => {
+    if (groupCategoryId !== 'all') return groupCategoryId
+    const fromUrl = searchParams.get('category') ?? searchParams.get('categoria')
+    if (fromUrl === 'none') return 'none'
+    if (fromUrl && groupCategories.some((c) => c.id === fromUrl)) return fromUrl
+    return 'all'
+  }, [groupCategories, groupCategoryId, searchParams])
 
   const filters = useMemo(
     () => ({
-      groupCategoryId,
+      groupCategoryId: effectiveGroupCategoryId,
       groupId,
     }),
-    [groupCategoryId, groupId],
+    [effectiveGroupCategoryId, groupId],
   )
 
   const baseFilters = useMemo(
@@ -81,6 +93,7 @@ export function TournamentDashboardPage() {
       return d
     },
     enabled: Boolean(tournamentId),
+    staleTime: 90_000,
   })
 
   const data = useMemo(() => {
@@ -88,11 +101,11 @@ export function TournamentDashboardPage() {
     if (!raw) return raw
 
     const groups =
-      groupCategoryId === 'all'
+      effectiveGroupCategoryId === 'all'
         ? raw.groups
-        : groupCategoryId === 'none'
+        : effectiveGroupCategoryId === 'none'
           ? raw.groups.filter((g) => !g.group_category_id)
-          : raw.groups.filter((g) => g.group_category_id === groupCategoryId)
+          : raw.groups.filter((g) => g.group_category_id === effectiveGroupCategoryId)
 
     const groupFromUrl = searchParams.get('group') ?? searchParams.get('grupo')
     const requestedGroupId = groupId !== 'all' ? groupId : groupFromUrl
@@ -112,7 +125,7 @@ export function TournamentDashboardPage() {
     })
 
     return { ...raw, groups, ...derived }
-  }, [dq.data, filters, groupCategoryId, groupId, searchParams])
+  }, [dq.data, effectiveGroupCategoryId, filters, groupId, searchParams])
 
   const selectedGroupId = useMemo(() => {
     const groupFromUrl = searchParams.get('group') ?? searchParams.get('grupo')
@@ -151,6 +164,8 @@ export function TournamentDashboardPage() {
     setSearchParams(
       (prev) => {
         const n = new URLSearchParams(prev)
+        n.delete('category')
+        n.delete('categoria')
         n.delete('group')
         n.delete('grupo')
         return n
@@ -214,13 +229,19 @@ export function TournamentDashboardPage() {
 
   return (
     <div className="tdash-root space-y-5 pb-6 sm:space-y-6 sm:pb-8">
-      <TournamentDashboardHeaderCompact tournament={data.tournament} />
+      <TournamentDashboardHeaderCompact
+        tournament={data.tournament}
+        stats={{
+          playerCount: data.metrics.totalPlayers,
+          groupCount: data.metrics.totalGroups,
+        }}
+      />
 
       <TournamentFiltersBar
         tournaments={tournaments}
         tournamentId={tournamentId}
         groupCategories={groupCategories}
-        groupCategoryId={groupCategoryId}
+        groupCategoryId={effectiveGroupCategoryId}
         groups={data.groups}
         groupId={selectedGroupId}
         defaultGroupId={data.groups[0]?.id ?? 'all'}
@@ -234,6 +255,8 @@ export function TournamentDashboardPage() {
               const n = new URLSearchParams(prev)
               n.set('tournament', id)
               n.delete('torneo')
+              n.delete('category')
+              n.delete('categoria')
               n.delete('group')
               n.delete('grupo')
               return n
@@ -247,6 +270,13 @@ export function TournamentDashboardPage() {
           setSearchParams(
             (prev) => {
               const n = new URLSearchParams(prev)
+              if (id === 'all') {
+                n.delete('category')
+                n.delete('categoria')
+              } else {
+                n.set('category', id)
+                n.delete('categoria')
+              }
               n.delete('group')
               n.delete('grupo')
               return n

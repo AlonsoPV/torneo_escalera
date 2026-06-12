@@ -1,5 +1,9 @@
 import { Badge } from '@/components/ui/badge'
-import { importResultTypeBothPenalized, importResultTypeUsesDefaultPoints } from '@/lib/matchResultSemantics'
+import {
+  importResultTypeBothPenalized,
+  importResultTypeIsRetiredDraw,
+  importResultTypeUsesDefaultPoints,
+} from '@/lib/matchResultSemantics'
 import { matchStatusLabels } from '@/lib/matchStatus'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
@@ -72,6 +76,7 @@ export function GroupMatrix(props: {
                       : null
                   const isDefault = match ? importResultTypeUsesDefaultPoints(match.result_type) : false
                   const isPenaltyCell = match ? importResultTypeBothPenalized(match.result_type) : false
+                  const isRetiredDrawCell = match ? importResultTypeIsRetiredDraw(match.result_type) : false
                   const label =
                     match?.status === 'score_disputed'
                       ? 'REF'
@@ -110,6 +115,11 @@ export function GroupMatrix(props: {
                               {isPenaltyCell ? (
                                 <span className="mt-0.5 block text-[9px] font-normal text-amber-800">
                                   No reportado
+                                </span>
+                              ) : null}
+                              {isRetiredDrawCell ? (
+                                <span className="mt-0.5 block text-[9px] font-normal text-emerald-800">
+                                  Empate retiro
                                 </span>
                               ) : null}
                             </span>

@@ -1,8 +1,13 @@
 import type { QueryClient } from '@tanstack/react-query'
 
 import { resolveRankingPointsRules } from '@/domain/tournamentRankingPoints'
+import { logPerfMetric } from '@/lib/performanceDiagnostics'
 import { supabase } from '@/lib/supabase'
-import { importResultTypeBothPenalized, importResultTypeUsesDefaultPoints } from '@/lib/matchResultSemantics'
+import {
+  importResultTypeBothPenalized,
+  importResultTypeIsRetiredDraw,
+  importResultTypeUsesDefaultPoints,
+} from '@/lib/matchResultSemantics'
 import { getTournamentRules } from '@/services/tournaments'
 import type { Group, GroupPlayer, MatchRow, Tournament, TournamentRules } from '@/types/database'
 import { buildGroupProgressItems, type GroupProgressItem } from '@/utils/groupProgress'
@@ -258,6 +263,9 @@ function buildRecentMatches(
       if (importResultTypeBothPenalized(m.result_type)) {
         const p = ptsRules.penaltyBoth
         pointsNote = `${fmt(p)} / ${fmt(p)}`
+      } else if (importResultTypeIsRetiredDraw(m.result_type)) {
+        const p = ptsRules.normalLoss
+        pointsNote = `${fmt(p)} / ${fmt(p)}`
       } else {
         const winnerGp = getOfficialWinnerGroupPlayerId(m, rules)
         if (winnerGp) {
@@ -302,6 +310,7 @@ export async function getTournamentDashboardData(
   tournamentId: string,
   filters: TournamentDashboardFiltersInput,
 ): Promise<TournamentDashboardData | null> {
+  const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now()
   const [tournamentRes, rules, groupsRes] = await Promise.all([
     supabase.from('tournaments').select('*').eq('id', tournamentId).maybeSingle(),
     getTournamentRules(tournamentId),
@@ -352,6 +361,12 @@ export async function getTournamentDashboardData(
       rules,
       filters,
     })
+
+  logPerfMetric('dashboard.tournamentData', (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt, {
+    groups: groups.length,
+    players: allGroupPlayers.length,
+    matches: allMatches.length,
+  })
 
   return {
     tournament,

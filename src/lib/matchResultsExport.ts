@@ -16,6 +16,7 @@ function statusForImport(status: MatchStatus): string {
 function resultTypeForImport(resultType: MatchResultType): string {
   if (resultType === 'default_win_a' || resultType === 'default_win_b') return 'def'
   if (resultType === 'retired') return 'ret'
+  if (resultType === 'retired_draw') return 'ret_draw'
   return resultType
 }
 

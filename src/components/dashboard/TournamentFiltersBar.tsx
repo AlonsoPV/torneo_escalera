@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import type { Group, GroupCategory, Tournament } from '@/types/database'
+import { compareGroupsForPromotionTier } from '@/utils/nextTournamentPromotion'
 
 function localeEsNumericNameCompare(a: string, b: string): number {
   return a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' })
@@ -84,10 +85,11 @@ export function TournamentFiltersBar({
 
   const sortedGroups = useMemo(
     () =>
-      [...groups].sort(
-        (a, b) =>
-          (a.order_index ?? 0) - (b.order_index ?? 0) ||
-          localeEsNumericNameCompare(a.name, b.name),
+      [...groups].sort((a, b) =>
+        compareGroupsForPromotionTier(
+          { name: a.name, order_index: a.order_index ?? 0, players: [] },
+          { name: b.name, order_index: b.order_index ?? 0, players: [] },
+        ),
       ),
     [groups],
   )

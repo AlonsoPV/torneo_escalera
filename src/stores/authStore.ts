@@ -3,6 +3,7 @@ import { create } from 'zustand'
 
 import { fetchProfile } from '@/lib/auth'
 import { recoverFromAuthError } from '@/lib/authSessionRecovery'
+import { logPerfMetric, measureAsync } from '@/lib/performanceDiagnostics'
 import { supabase } from '@/lib/supabase'
 import type { Profile } from '@/types/database'
 
@@ -36,7 +37,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       profileLoading: Boolean(nextUserId && (!sameUser || !currentProfile)),
     })
   },
-  setProfile: (profile) => set({ profile }),
+  setProfile: (profile) => set({ profile, profileLoading: false }),
   setInitialized: (initialized) => set({ initialized }),
   refreshProfile: async () => {
     const uid = get().user?.id
@@ -46,7 +47,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     set({ profileLoading: true })
     try {
-      const profile = await fetchProfile(uid)
+      const profile = await getProfileOnce(uid)
       // Evita aplicar un perfil obsoleto si hubo cierre de sesión durante el fetch
       if (get().user?.id !== uid) return
       if (profile?.status === 'inactive') {
@@ -63,9 +64,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 }))
 
+const profileRequests = new Map<string, Promise<Profile | null>>()
+
+function getProfileOnce(userId: string): Promise<Profile | null> {
+  const existing = profileRequests.get(userId)
+  if (existing) return existing
+
+  const request = measureAsync('auth.profile', () => fetchProfile(userId), { user: 'current' }).finally(() => {
+    profileRequests.delete(userId)
+  })
+  profileRequests.set(userId, request)
+  return request
+}
+
 export async function initAuthListener() {
+  const initStartedAt = typeof performance !== 'undefined' ? performance.now() : Date.now()
   try {
-    const { data, error } = await supabase.auth.getSession()
+    const { data, error } = await measureAsync('auth.getSession', () => supabase.auth.getSession())
     if (error) await recoverFromAuthError(error)
     useAuthStore.getState().setSession(data.session ?? null)
   } catch (e) {
@@ -73,12 +88,11 @@ export async function initAuthListener() {
     useAuthStore.getState().setSession(null)
     useAuthStore.getState().setProfile(null)
   }
-  try {
-    await useAuthStore.getState().refreshProfile()
-  } catch (e) {
-    await recoverFromAuthError(e)
-  }
   useAuthStore.getState().setInitialized(true)
+  logPerfMetric('auth.initialized', (typeof performance !== 'undefined' ? performance.now() : Date.now()) - initStartedAt)
+  void useAuthStore.getState().refreshProfile().catch((e) => {
+    void recoverFromAuthError(e)
+  })
 
   supabase.auth.onAuthStateChange(async (_event, session) => {
     useAuthStore.getState().setSession(session)

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { lazy } from 'react'
 import { createBrowserRouter, Navigate, useLocation } from 'react-router-dom'
 
@@ -5,24 +6,9 @@ import { AppShell } from '@/components/layout/AppShell'
 import { IndexRedirect } from '@/components/layout/IndexRedirect'
 import { RequireAdmin } from '@/components/layout/RequireAdmin'
 import { RequireAuth } from '@/components/layout/RequireAuth'
-import { AdminDashboardPage } from '@/pages/admin/AdminDashboardPage'
-import { AdminExportsPage } from '@/pages/admin/AdminExportsPage'
-import { AdminGroupsPage } from '@/pages/admin/AdminGroupsPage'
-import { AdminMatchesPage } from '@/pages/admin/AdminMatchesPage'
-import { AdminNotificationsPage } from '@/pages/admin/AdminNotificationsPage'
-import { AdminOverviewPage } from '@/pages/admin/AdminOverviewPage'
-import { AdminMatchResultsImportPage } from '@/pages/admin/AdminMatchResultsImportPage'
-import { AdminRulesPage } from '@/pages/admin/AdminRulesPage'
-import { AdminSettingsPage } from '@/pages/admin/AdminSettingsPage'
-import { AdminTournamentsPage } from '@/pages/admin/AdminTournamentsPage'
-import { AdminUsersPage } from '@/pages/admin/AdminUsersPage'
-import { NextTournamentPage } from '@/pages/admin/NextTournamentPage'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
-import { TournamentDashboardPage } from '@/pages/dashboard/TournamentDashboardPage'
-import { PlayerAccountPage } from '@/pages/player/PlayerAccountPage'
-import { PlayerDashboardPage } from '@/pages/player/PlayerDashboardPage'
 
 function RedirectLegacyAdminResultsToMatches() {
   const { search } = useLocation()
@@ -31,6 +17,51 @@ function RedirectLegacyAdminResultsToMatches() {
 
 const TournamentSimulationPage = lazy(() =>
   import('@/pages/simulation/TournamentSimulationPage').then((m) => ({ default: m.TournamentSimulationPage })),
+)
+const TournamentDashboardPage = lazy(() =>
+  import('@/pages/dashboard/TournamentDashboardPage').then((m) => ({ default: m.TournamentDashboardPage })),
+)
+const PlayerDashboardPage = lazy(() =>
+  import('@/pages/player/PlayerDashboardPage').then((m) => ({ default: m.PlayerDashboardPage })),
+)
+const PlayerAccountPage = lazy(() =>
+  import('@/pages/player/PlayerAccountPage').then((m) => ({ default: m.PlayerAccountPage })),
+)
+const AdminDashboardPage = lazy(() =>
+  import('@/pages/admin/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })),
+)
+const AdminOverviewPage = lazy(() =>
+  import('@/pages/admin/AdminOverviewPage').then((m) => ({ default: m.AdminOverviewPage })),
+)
+const AdminTournamentsPage = lazy(() =>
+  import('@/pages/admin/AdminTournamentsPage').then((m) => ({ default: m.AdminTournamentsPage })),
+)
+const NextTournamentPage = lazy(() =>
+  import('@/pages/admin/NextTournamentPage').then((m) => ({ default: m.NextTournamentPage })),
+)
+const AdminRulesPage = lazy(() =>
+  import('@/pages/admin/AdminRulesPage').then((m) => ({ default: m.AdminRulesPage })),
+)
+const AdminGroupsPage = lazy(() =>
+  import('@/pages/admin/AdminGroupsPage').then((m) => ({ default: m.AdminGroupsPage })),
+)
+const AdminMatchResultsImportPage = lazy(() =>
+  import('@/pages/admin/AdminMatchResultsImportPage').then((m) => ({ default: m.AdminMatchResultsImportPage })),
+)
+const AdminMatchesPage = lazy(() =>
+  import('@/pages/admin/AdminMatchesPage').then((m) => ({ default: m.AdminMatchesPage })),
+)
+const AdminUsersPage = lazy(() =>
+  import('@/pages/admin/AdminUsersPage').then((m) => ({ default: m.AdminUsersPage })),
+)
+const AdminNotificationsPage = lazy(() =>
+  import('@/pages/admin/AdminNotificationsPage').then((m) => ({ default: m.AdminNotificationsPage })),
+)
+const AdminExportsPage = lazy(() =>
+  import('@/pages/admin/AdminExportsPage').then((m) => ({ default: m.AdminExportsPage })),
+)
+const AdminSettingsPage = lazy(() =>
+  import('@/pages/admin/AdminSettingsPage').then((m) => ({ default: m.AdminSettingsPage })),
 )
 
 export const router = createBrowserRouter([

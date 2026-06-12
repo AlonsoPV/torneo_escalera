@@ -42,11 +42,15 @@ export function syntheticAdministrativeSetsForDefaultMatch(
 export const IMPORT_PENALTY_RANKING_POINTS = -1
 
 export function importResultTypeAllowsNullWinner(rt: MatchResultType | null | undefined): boolean {
-  return rt === 'not_reported' || rt === 'double_penalty' || rt === 'pending_score'
+  return rt === 'not_reported' || rt === 'double_penalty' || rt === 'pending_score' || rt === 'retired_draw'
 }
 
 export function importResultTypeBothPenalized(rt: MatchResultType | null | undefined): boolean {
-  return importResultTypeAllowsNullWinner(rt)
+  return rt === 'not_reported' || rt === 'double_penalty' || rt === 'pending_score'
+}
+
+export function importResultTypeIsRetiredDraw(rt: MatchResultType | null | undefined): boolean {
+  return rt === 'retired_draw'
 }
 
 export function importResultTypeUsesDefaultPoints(rt: MatchResultType | null | undefined): boolean {

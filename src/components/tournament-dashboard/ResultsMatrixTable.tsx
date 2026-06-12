@@ -2,6 +2,7 @@ import { ScoreCell } from '@/components/simulation/ScoreCell'
 import { getMatrixCellKind } from '@/components/simulation/matrixCellState'
 import { getCellLabelAndTitle } from '@/components/simulation/matrixLabels'
 import { TDASH_COPY } from '@/lib/tournamentDashboardCopy'
+import { matrixPositionLabel, sortPlayersByStandingPosition } from '@/lib/sortMatrixPlayers'
 import { cn } from '@/lib/utils'
 import type { GroupStandingRow, SimMatch, SimPlayer } from '@/types/tournament'
 
@@ -36,9 +37,7 @@ export function ResultsMatrixTable(props: Props) {
     )
   }
 
-  const colPlayers = [...players].sort(
-    (a, b) => a.seed_order - b.seed_order || a.id.localeCompare(b.id),
-  )
+  const colPlayers = sortPlayersByStandingPosition(players, standings)
 
   return (
     <div className="relative rounded-lg border border-[var(--tdash-border)] bg-[var(--tdash-surface)] shadow-sm">
@@ -67,7 +66,7 @@ export function ResultsMatrixTable(props: Props) {
                   className="min-w-[3.75rem] border-b border-[var(--tdash-border)] px-0.5 py-2 text-center align-bottom sm:min-w-[5rem] sm:px-1 sm:py-3 lg:min-w-[5.5rem]"
                 >
                   <span className="inline-flex size-7 items-center justify-center rounded-full border border-[var(--tdash-border)] bg-[var(--tdash-surface)] text-[11px] font-bold tabular-nums text-[var(--tdash-text)] shadow-sm sm:size-8 sm:text-xs lg:size-9">
-                    {idx + 1}
+                    {matrixPositionLabel(p.id, idx, standings)}
                   </span>
                   <span className="sr-only">{p.full_name}</span>
                 </th>
@@ -118,7 +117,7 @@ export function ResultsMatrixTable(props: Props) {
                       rowSurface,
                     )}
                   >
-                    {row.seed_order}
+                    {matrixPositionLabel(row.id, ri, standings)}
                   </th>
                   <th
                     scope="row"

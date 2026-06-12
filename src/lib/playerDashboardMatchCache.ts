@@ -18,7 +18,9 @@ export function mergeMatchAfterPlayerSubmit(
   const now = new Date().toISOString()
   const sets = scorePayloadToSets(prepared.payload)
   const score_raw: MatchRow['score_raw'] =
-    prepared.payload.game_type === 'sudden_death'
+    prepared.resultType === 'not_reported'
+      ? null
+      : prepared.payload.game_type === 'sudden_death'
       ? sets.length === 3
         ? sets
         : match.score_raw
@@ -29,7 +31,7 @@ export function mergeMatchAfterPlayerSubmit(
     score_raw,
     winner_id: prepared.winnerId,
     game_type: prepared.payload.game_type,
-    result_type: 'normal',
+    result_type: prepared.resultType,
     status: 'closed',
     score_submitted_by: actorUserId,
     score_submitted_at: now,

@@ -1,4 +1,8 @@
-import { Card, CardContent } from '@/components/ui/card'
+import {
+  TournamentClubBanner,
+  type TournamentHeroStats,
+} from '@/components/tournament-dashboard/TournamentClubBanner'
+import type { ClubStatusVariant } from '@/components/tournament-dashboard/ClubBannerPrimitives'
 import type { Tournament, TournamentStatus } from '@/types/database'
 
 const statusLabel: Record<TournamentStatus, string> = {
@@ -8,49 +12,32 @@ const statusLabel: Record<TournamentStatus, string> = {
   archived: 'Archivado',
 }
 
-const statusPillClass: Record<TournamentStatus, string> = {
-  active: 'border-emerald-200/90 bg-emerald-100 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/50 dark:text-emerald-300',
-  draft: 'border-amber-200/90 bg-amber-100 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200',
-  finished: 'border-border bg-muted text-muted-foreground',
-  archived: 'border-border bg-muted text-muted-foreground',
+const statusVariant: Record<TournamentStatus, ClubStatusVariant> = {
+  active: 'active',
+  draft: 'draft',
+  finished: 'finished',
+  archived: 'finished',
 }
 
 export function TournamentDashboardHeaderCompact({
   tournament,
+  stats,
 }: {
   tournament: Tournament
+  stats?: TournamentHeroStats
 }) {
-  const categoryOrSeason = [tournament.category, tournament.season].filter(Boolean).join(' · ') || null
+  const categoryOrSeason = [tournament.category, tournament.season].filter(Boolean).join(' · ') || undefined
 
   return (
-    <Card className="border-border/80 shadow-sm ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
-      <CardContent className="p-4 sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold tracking-wide text-emerald-600 uppercase dark:text-emerald-400">
-              Dashboard del torneo
-            </p>
-            <h1 className="text-balance text-lg font-bold tracking-tight text-foreground sm:text-xl md:text-2xl">
-              {tournament.name}
-            </h1>
-            <p className="mt-1 text-pretty text-sm text-muted-foreground">
-              Ranking, avance y desempeño por grupo
-            </p>
-          </div>
-          <div className="flex w-full flex-col gap-2 min-[400px]:flex-row min-[400px]:flex-wrap min-[400px]:items-center min-[400px]:justify-between sm:w-auto sm:justify-end sm:shrink-0">
-            {categoryOrSeason ? (
-              <span className="max-w-[12rem] truncate text-sm text-muted-foreground sm:max-w-none" title={categoryOrSeason}>
-                {categoryOrSeason}
-              </span>
-            ) : null}
-            <span
-              className={`rounded-full border px-3 py-1 text-center text-xs font-medium ${statusPillClass[tournament.status]}`}
-            >
-              {statusLabel[tournament.status]}
-            </span>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <TournamentClubBanner
+      compact
+      eyebrow="Dashboard del torneo"
+      title={tournament.name}
+      stats={stats}
+      statusLabel={statusLabel[tournament.status]}
+      statusVariant={statusVariant[tournament.status]}
+      description="Ranking, avance y desempeño por grupo"
+      meta={categoryOrSeason ?? 'Ranking, avance y desempeño por grupo'}
+    />
   )
 }

@@ -60,7 +60,11 @@ function tournamentSelectLabel(t: Tournament): string {
 }
 
 export function AdminOverviewPage() {
-  const tournamentsQ = useQuery({ queryKey: ['admin-tournaments'], queryFn: listTournaments })
+  const tournamentsQ = useQuery({
+    queryKey: ['admin-tournaments'],
+    queryFn: listTournaments,
+    staleTime: 5 * 60_000,
+  })
   const [userTournamentOverride, setUserTournamentOverride] = useState<string | null>(null)
 
   const selectedTournamentId = useMemo(() => {
@@ -85,6 +89,7 @@ export function AdminOverviewPage() {
     queryKey: ['admin-overview', selectedTournamentId],
     queryFn: () => getAdminOverviewData(selectedTournamentId),
     enabled: Boolean(selectedTournamentId),
+    staleTime: 60_000,
   })
 
   const selectedTournament = useMemo(

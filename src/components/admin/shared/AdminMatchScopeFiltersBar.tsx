@@ -26,6 +26,7 @@ export type AdminScopeFilterSelectConfig = {
    * Texto fijo en el trigger (evita UUID cuando el valor no resuelve bien contra los ítems).
    */
   valueLabel?: string
+  triggerTitle?: string
 }
 
 type Props = {
@@ -116,6 +117,7 @@ export function AdminMatchScopeFiltersBar({
                   <Select value={field.value} onValueChange={field.onValueChange}>
                     <SelectTrigger
                       id={`admin-filter-${field.id}`}
+                      title={field.triggerTitle}
                       className="h-10 w-full min-w-0 border-slate-200 bg-white text-left text-sm font-normal shadow-none"
                     >
                       <SelectValue placeholder={field.placeholder ?? field.label}>

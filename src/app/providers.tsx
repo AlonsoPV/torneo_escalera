@@ -16,10 +16,11 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 30_000,
-            refetchOnMount: 'always',
-            refetchOnReconnect: 'always',
-            refetchOnWindowFocus: true,
+            staleTime: 2 * 60_000,
+            gcTime: 10 * 60_000,
+            refetchOnMount: false,
+            refetchOnReconnect: true,
+            refetchOnWindowFocus: false,
             retry: queryRetry,
           },
           mutations: {

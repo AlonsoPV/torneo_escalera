@@ -104,16 +104,10 @@ export function LoginPage() {
       <div className="mx-auto grid min-h-dvh max-w-6xl lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:gap-0">
         <aside className="relative hidden flex-col justify-between border-border/50 px-10 py-12 lg:flex lg:border-r">
           <div>
-            <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-border/60 bg-card/80 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm">
+            <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-card/80 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm">
               <span className="size-1.5 rounded-full bg-emerald-500/90" aria-hidden />
               Panel de torneos
             </div>
-            <h1 className="max-w-sm text-balance text-3xl font-semibold tracking-tight text-foreground">
-              Organiza torneos y sigue los partidos en un solo lugar.
-            </h1>
-            <p className="mt-4 max-w-md text-pretty text-sm leading-relaxed text-muted-foreground">
-              Accede con tu cuenta para gestionar competiciones, cuadros y resultados.
-            </p>
           </div>
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">

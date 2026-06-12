@@ -22,9 +22,10 @@ type Props = {
   className?: string
 }
 
-function outcomeLabel(o: 'win' | 'loss' | null): { text: string; variant: 'win' | 'loss' } {
+function outcomeLabel(o: 'win' | 'loss' | 'draw' | null): { text: string; variant: 'win' | 'loss' } {
   if (o === 'win') return { text: PLY_COPY.win, variant: 'win' }
   if (o === 'loss') return { text: PLY_COPY.loss, variant: 'loss' }
+  if (o === 'draw') return { text: 'Empate', variant: 'loss' }
   return { text: '—', variant: 'loss' }
 }
 

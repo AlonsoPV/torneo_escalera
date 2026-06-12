@@ -76,9 +76,14 @@ export function AdminMatchesPage() {
     queryKey: ['admin-matches'],
     queryFn: () => getAdminMatches(),
     refetchInterval: tab === 'disputed' ? 15_000 : false,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: tab === 'disputed',
+    staleTime: tab === 'disputed' ? 10_000 : 60_000,
   })
-  const groupsQ = useQuery({ queryKey: ['admin-groups'], queryFn: () => getAdminGroups() })
+  const groupsQ = useQuery({
+    queryKey: ['admin-groups'],
+    queryFn: () => getAdminGroups(),
+    staleTime: 60_000,
+  })
   const rulesForEditor = useQuery({
     queryKey: ['tournament-rules', editingResult?.tournament_id ?? ''],
     queryFn: () => getTournamentRules(editingResult!.tournament_id),
@@ -158,22 +163,29 @@ export function AdminMatchesPage() {
   )
 
   const refreshMatchQueries = async (opts?: { touchedMatch?: Pick<AdminMatchRecord, 'id' | 'tournament_id'> }) => {
-    await qc.invalidateQueries({ queryKey: ['admin-disputed-results'] })
-    await qc.invalidateQueries({ queryKey: ['admin-matches'] })
-    await qc.invalidateQueries({ queryKey: ['admin-results'] })
-    await qc.invalidateQueries({ queryKey: ['admin-overview'] })
-    await qc.invalidateQueries({
-      predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'playerViewModel',
-    })
-    await qc.invalidateQueries({
-      predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'tournament-dashboard',
-    })
+    const invalidations = [
+      qc.invalidateQueries({ queryKey: ['admin-disputed-results'], refetchType: 'active' }),
+      qc.invalidateQueries({ queryKey: ['admin-matches'], refetchType: 'active' }),
+      qc.invalidateQueries({ queryKey: ['admin-results'], refetchType: 'active' }),
+      qc.invalidateQueries({ queryKey: ['admin-overview'], refetchType: 'active' }),
+      qc.invalidateQueries({
+        predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'playerViewModel',
+        refetchType: 'active',
+      }),
+      qc.invalidateQueries({
+        predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'tournament-dashboard',
+        refetchType: 'active',
+      }),
+    ]
     const tm = opts?.touchedMatch
     if (tm) {
-      await qc.invalidateQueries({ queryKey: ['matchScoreLogs', tm.id] })
-      await qc.invalidateQueries({ queryKey: ['matchScoreEvents', tm.id] })
-      await qc.invalidateQueries({ queryKey: ['tournament-dashboard', tm.tournament_id], exact: false })
+      invalidations.push(
+        qc.invalidateQueries({ queryKey: ['matchScoreLogs', tm.id], refetchType: 'active' }),
+        qc.invalidateQueries({ queryKey: ['matchScoreEvents', tm.id], refetchType: 'active' }),
+        qc.invalidateQueries({ queryKey: ['tournament-dashboard', tm.tournament_id], exact: false, refetchType: 'active' }),
+      )
     }
+    await Promise.all(invalidations)
   }
 
   const resultMut = useMutation({

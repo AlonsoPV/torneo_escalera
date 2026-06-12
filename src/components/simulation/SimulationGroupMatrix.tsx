@@ -3,6 +3,7 @@ import { PlayerRowLabel } from '@/components/simulation/PlayerRowLabel'
 import { ScoreCell } from '@/components/simulation/ScoreCell'
 import { getMatrixCellKind } from '@/components/simulation/matrixCellState'
 import { getCellLabelAndTitle } from '@/components/simulation/matrixLabels'
+import { matrixPositionLabel, sortPlayersByStandingPosition } from '@/lib/sortMatrixPlayers'
 import { cn } from '@/lib/utils'
 import type { GroupStandingRow, SimMatch, SimPlayer } from '@/types/tournament'
 
@@ -37,9 +38,7 @@ export function SimulationGroupMatrix(props: Props) {
     )
   }
 
-  const colPlayers = [...players].sort(
-    (a, b) => a.seed_order - b.seed_order || a.id.localeCompare(b.id),
-  )
+  const colPlayers = sortPlayersByStandingPosition(players, standings)
 
   return (
     <div className="space-y-4">
@@ -61,7 +60,7 @@ export function SimulationGroupMatrix(props: Props) {
                     className="min-w-[5rem] px-1 pb-2 pt-3 text-center align-bottom"
                   >
                     <span className="inline-flex size-8 items-center justify-center rounded-full bg-muted/80 text-xs font-bold tabular-nums text-foreground shadow-sm">
-                      {idx + 1}
+                      {matrixPositionLabel(p.id, idx, standings)}
                     </span>
                     <span className="sr-only">{p.full_name}</span>
                   </th>
@@ -107,7 +106,10 @@ export function SimulationGroupMatrix(props: Props) {
                       scope="row"
                       className="sticky left-0 z-20 border-t border-border/40 bg-card/95 px-2 py-2 text-left align-middle backdrop-blur-sm"
                     >
-                      <PlayerRowLabel seed={row.seed_order} name={row.full_name} />
+                      <PlayerRowLabel
+                        seed={matrixPositionLabel(row.id, ri, standings)}
+                        name={row.full_name}
+                      />
                     </th>
                     {colPlayers.map((col) => {
                       const isDiag = row.id === col.id

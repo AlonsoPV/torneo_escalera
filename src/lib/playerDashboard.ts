@@ -1,5 +1,9 @@
 import { resolveRankingPointsRules } from '@/domain/tournamentRankingPoints'
-import { importResultTypeBothPenalized, importResultTypeUsesDefaultPoints } from '@/lib/matchResultSemantics'
+import {
+  importResultTypeBothPenalized,
+  importResultTypeIsRetiredDraw,
+  importResultTypeUsesDefaultPoints,
+} from '@/lib/matchResultSemantics'
 import { matchStatusCountsTowardStandings } from '@/lib/matchReviewPhase'
 import type { GroupPlayer, MatchRow, ScoreSet, TournamentRules } from '@/types/database'
 import type { RankingRow } from '@/utils/ranking'
@@ -11,6 +15,7 @@ export function isMatchCompleted(m: MatchRow): boolean {
   if (m.status === 'cancelled') return false
   if (m.status !== 'closed' && m.status !== 'validated') return false
   if (importResultTypeBothPenalized(m.result_type)) return true
+  if (importResultTypeIsRetiredDraw(m.result_type)) return true
   return m.winner_id != null
 }
 
@@ -133,6 +138,7 @@ export function getPointsForPlayerInMatch(
   const countsForTable = matchStatusCountsTowardStandings(match.status)
   if (!countsForTable) return 0
   if (importResultTypeBothPenalized(match.result_type)) return pts.penaltyBoth
+  if (importResultTypeIsRetiredDraw(match.result_type)) return pts.normalLoss
 
   const rulesForWinner: RulesPoints = {
     points_per_win: rules.points_per_win,
@@ -152,7 +158,7 @@ export function getPointsForPlayerInMatch(
   return pts.normalLoss
 }
 
-export type Outcome = 'win' | 'loss'
+export type Outcome = 'win' | 'loss' | 'draw'
 
 export function getMatchOutcome(
   match: MatchRow,
@@ -161,6 +167,7 @@ export function getMatchOutcome(
   const countsForTable = matchStatusCountsTowardStandings(match.status)
   if (!countsForTable) return null
   if (importResultTypeBothPenalized(match.result_type)) return null
+  if (importResultTypeIsRetiredDraw(match.result_type)) return 'draw'
   if (!match.winner_id) return null
   if (match.winner_id === myGroupPlayerId) return 'win'
   return 'loss'

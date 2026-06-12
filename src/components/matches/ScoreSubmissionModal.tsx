@@ -22,6 +22,7 @@ import {
   formatScoreCompact,
   invertScoreSets,
   shouldShowThirdSet,
+  validateIncompleteBestOf3Score,
   validateBestOf3Score,
   validateLongSetScore,
   validateSuddenDeathThirdSet,
@@ -64,6 +65,35 @@ function namesForMatch(match: MatchRow, players: GroupPlayer[]) {
 function normalizeSet(set: ScoreSet): ScoreSet {
   return { a: Math.max(0, Number(set.a) || 0), b: Math.max(0, Number(set.b) || 0) }
 }
+
+type IncompleteResultMode = 'normal' | 'not_reported' | 'retired_lead' | 'retired_draw'
+
+const incompleteResultOptions: Array<{
+  value: IncompleteResultMode
+  label: string
+  description: string
+}> = [
+  {
+    value: 'normal',
+    label: 'Marcador completo',
+    description: 'Valida 2 sets ganados y puntos normales.',
+  },
+  {
+    value: 'not_reported',
+    label: 'No reportado',
+    description: '-1 punto para ambos jugadores.',
+  },
+  {
+    value: 'retired_lead',
+    label: 'Retiro - gana mas games',
+    description: '3 puntos al que lleva mas games y 1 al rival.',
+  },
+  {
+    value: 'retired_draw',
+    label: 'Retiro - empate',
+    description: '1 punto para cada jugador.',
+  },
+]
 
 const INFO_HINT_VIEWPORT_MARGIN = 10
 const INFO_HINT_GAP = 8
@@ -560,12 +590,22 @@ export function ScoreSubmissionModal({
 }) {
   const [gameType, setGameType] = useState<MatchGameType>('best_of_3')
   const [sets, setSets] = useState<ScoreSet[]>([{ a: 0, b: 0 }, { a: 0, b: 0 }])
+  const [incompleteMode, setIncompleteMode] = useState<IncompleteResultMode>('normal')
 
   useEffect(() => {
     if (!open || !match) return
     /* eslint-disable react-hooks/set-state-in-effect -- sincronizar estado local del diálogo con `match` al abrir */
     const nextType = match.game_type ?? 'best_of_3'
     setGameType(nextType)
+    setIncompleteMode(
+      match.result_type === 'not_reported'
+        ? 'not_reported'
+        : match.result_type === 'retired'
+          ? 'retired_lead'
+          : match.result_type === 'retired_draw'
+            ? 'retired_draw'
+            : 'normal',
+    )
     if (nextType === 'sudden_death') {
       const raw = match.score_raw
       const decisive =
@@ -594,8 +634,38 @@ export function ScoreSubmissionModal({
   const bestOf3Sets = shouldShowThirdSet(normalizedSets.slice(0, 2))
     ? normalizedSets.slice(0, 3)
     : normalizedSets.slice(0, 2)
+  const retirementScoreSets = normalizedSets
+    .slice(0, 3)
+    .filter((set) => set.a > 0 || set.b > 0)
+  const isIncompleteMode = gameType === 'best_of_3' && incompleteMode !== 'normal'
+  const incompleteValidation = validateIncompleteBestOf3Score(retirementScoreSets)
   const suddenDecisiveSet = gameType === 'sudden_death' ? normalizedSets[0] : null
   const validation = (() => {
+    if (gameType === 'best_of_3' && incompleteMode === 'not_reported') {
+      return { ok: true, errors: [], winner: null as ScoreWinnerSide | null }
+    }
+    if (gameType === 'best_of_3' && incompleteMode === 'retired_lead') {
+      const errors = [...incompleteValidation.errors]
+      if (incompleteValidation.ok && !incompleteValidation.winnerByGames) {
+        errors.push('El partido esta empatado en games. Usa Retiro - empate.')
+      }
+      return {
+        ok: errors.length === 0 && incompleteValidation.winnerByGames != null,
+        errors,
+        winner: incompleteValidation.winnerByGames,
+      }
+    }
+    if (gameType === 'best_of_3' && incompleteMode === 'retired_draw') {
+      const errors = [...incompleteValidation.errors]
+      if (incompleteValidation.ok && incompleteValidation.games.a !== incompleteValidation.games.b) {
+        errors.push('Para empate por retiro, ambos jugadores deben tener la misma cantidad de games.')
+      }
+      return {
+        ok: errors.length === 0,
+        errors,
+        winner: null as ScoreWinnerSide | null,
+      }
+    }
     if (gameType === 'best_of_3')
       return validateBestOf3Score(bestOf3Sets, {
         allowShortDecisiveSet: match?.game_type === 'best_of_3_short_tiebreak',
@@ -618,9 +688,17 @@ export function ScoreSubmissionModal({
   })()
   const winner = validation.winner
   const scoreForPayload =
-    gameType === 'best_of_3' ? bestOf3Sets : gameType === 'sudden_death' ? [] : [normalizedSets[0]]
+    gameType === 'best_of_3'
+      ? isIncompleteMode
+        ? retirementScoreSets
+        : bestOf3Sets
+      : gameType === 'sudden_death'
+        ? []
+        : [normalizedSets[0]]
   const scoreLabel =
-    gameType === 'sudden_death'
+    incompleteMode === 'not_reported'
+      ? 'sin marcador'
+      : gameType === 'sudden_death'
       ? suddenDecisiveSet && validation.winner
         ? formatScoreCompact([suddenDecisiveSet])
         : 'muerte súbita'
@@ -696,6 +774,7 @@ export function ScoreSubmissionModal({
     if (nextType === gameType) return
     toast.message('Cambiar el tipo de juego limpiará el marcador actual.')
     setGameType(nextType)
+    setIncompleteMode('normal')
     setSets(
       nextType === 'long_set'
         ? [{ a: 0, b: 0 }]
@@ -706,6 +785,24 @@ export function ScoreSubmissionModal({
   }
 
   const handleSubmit = async () => {
+    if (isIncompleteMode) {
+      if (!validation.ok) {
+        toast.error(validation.errors[0] ?? 'Resultado incompleto invalido')
+        return
+      }
+      if (incompleteMode === 'retired_lead' && !winner) {
+        toast.error('No se pudo determinar el ganador por games.')
+        return
+      }
+      const payload: ScorePayload =
+        incompleteMode === 'not_reported'
+          ? { game_type: 'best_of_3', score_json: null, winner: null, result_type: 'not_reported' }
+          : incompleteMode === 'retired_draw'
+            ? { game_type: 'best_of_3', score_json: scoreForPayload, winner: null, result_type: 'retired_draw' }
+            : { game_type: 'best_of_3', score_json: scoreForPayload, winner, result_type: 'retired' }
+      await onSubmit(payload)
+      return
+    }
     if (!validation.ok || !winner) {
       toast.error(validation.errors[0] ?? 'Marcador inválido')
       return
@@ -724,6 +821,14 @@ export function ScoreSubmissionModal({
   }
 
   const calculatedWinnerName = winner != null ? (winner === 'a' ? names.a : names.b) : null
+  const incompleteSummary =
+    incompleteMode === 'not_reported'
+      ? 'No reportado: ambos jugadores reciben -1 punto.'
+      : incompleteMode === 'retired_draw'
+        ? 'Empate por retiro: ambos jugadores reciben 1 punto.'
+        : incompleteMode === 'retired_lead' && calculatedWinnerName
+          ? `Retiro: gana ${calculatedWinnerName} por mayor cantidad de games.`
+          : null
 
   if (!match || !rules) return null
 
@@ -781,6 +886,49 @@ export function ScoreSubmissionModal({
           />
           </div>
 
+          {gameType === 'best_of_3' ? (
+            <section className="space-y-2 rounded-xl border border-border/70 bg-background/80 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Partido incompleto / retiro
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    Usalo cuando el partido no termina o no se reporta completo.
+                  </p>
+                </div>
+                {incompleteMode !== 'normal' && incompleteMode !== 'not_reported' ? (
+                  <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-800 ring-1 ring-emerald-200">
+                    Games {incompleteValidation.games.a}-{incompleteValidation.games.b}
+                  </span>
+                ) : null}
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {incompleteResultOptions.map((option) => {
+                  const active = incompleteMode === option.value
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={cn(
+                        'min-h-16 rounded-xl border px-3 py-2 text-left transition-colors',
+                        active
+                          ? 'border-[#1F5A4C] bg-emerald-50 text-[#12372F] shadow-sm'
+                          : 'border-border/70 bg-muted/20 text-foreground hover:bg-muted/50',
+                      )}
+                      onClick={() => setIncompleteMode(option.value)}
+                    >
+                      <span className="block text-sm font-semibold leading-tight">{option.label}</span>
+                      <span className="mt-1 block text-[11px] leading-snug text-muted-foreground">
+                        {option.description}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+          ) : null}
+
           {gameType === 'sudden_death' && validation.ok && calculatedWinnerName ? (
             <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-900 break-words">
               Ganador calculado:{' '}
@@ -797,7 +945,14 @@ export function ScoreSubmissionModal({
           <div className="rounded-xl border border-border/70 bg-muted/20 p-3 sm:p-4">
             <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Antes de enviar</p>
 
-            {winner == null ? (
+            {isIncompleteMode && incompleteSummary ? (
+              <div className="mt-3 rounded-lg border border-emerald-600/15 bg-emerald-50/80 px-3 py-3">
+                <p className="text-sm font-semibold leading-snug text-emerald-950">{incompleteSummary}</p>
+                <p className="mt-1 text-xs leading-relaxed text-emerald-900/80">
+                  Marcador registrado: {scoreLabel}
+                </p>
+              </div>
+            ) : winner == null ? (
               gameType !== 'long_set' && numericYouFirst && numericRivalFirst ? (
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <div className="rounded-lg border border-border/60 bg-background/90 px-3 py-3">

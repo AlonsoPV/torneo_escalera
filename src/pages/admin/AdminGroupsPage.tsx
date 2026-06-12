@@ -383,26 +383,42 @@ export function AdminGroupsPage() {
   }, [managedGroup?.id])
 
   useEffect(() => {
-    setManagedGroup(null)
-    setManagerOpen(false)
+    const handle = window.setTimeout(() => {
+      setManagedGroup(null)
+      setManagerOpen(false)
+    }, 0)
+    return () => window.clearTimeout(handle)
   }, [tournamentId])
 
   const groupsQ = useQuery({
     queryKey: ['admin-groups', tournamentId],
     queryFn: () => getAdminGroupsForTournament(tournamentId!),
     enabled: Boolean(tournamentId),
+    staleTime: 60_000,
   })
-  const profilesQ = useQuery({ queryKey: ['profiles-admin'], queryFn: listProfilesForAdmin })
-  const tournamentsQ = useQuery({ queryKey: ['admin-tournaments'], queryFn: listTournaments })
+  const profilesQ = useQuery({
+    queryKey: ['profiles-admin'],
+    queryFn: listProfilesForAdmin,
+    enabled: Boolean(tournamentId),
+    staleTime: 2 * 60_000,
+  })
+  const tournamentsQ = useQuery({
+    queryKey: ['admin-tournaments'],
+    queryFn: listTournaments,
+    staleTime: 5 * 60_000,
+  })
 
   useEffect(() => {
     const list = tournamentsQ.data
     if (!list?.length) return
-    setTournamentId((prev) => {
-      if (prev && list.some((t) => t.id === prev)) return prev
-      const active = list.find((t) => t.status === 'active')
-      return active?.id ?? list[0].id
-    })
+    const handle = window.setTimeout(() => {
+      setTournamentId((prev) => {
+        if (prev && list.some((t) => t.id === prev)) return prev
+        const active = list.find((t) => t.status === 'active')
+        return active?.id ?? list[0].id
+      })
+    }, 0)
+    return () => window.clearTimeout(handle)
   }, [tournamentsQ.data])
 
   useEffect(() => {
@@ -410,7 +426,8 @@ export function AdminGroupsPage() {
     const list = tournamentsQ.data
     if (!fromUrl || !list?.length) return
     if (list.some((t) => t.id === fromUrl)) {
-      setTournamentId(fromUrl)
+      const handle = window.setTimeout(() => setTournamentId(fromUrl), 0)
+      return () => window.clearTimeout(handle)
     }
   }, [searchParams, tournamentsQ.data])
 
@@ -421,9 +438,10 @@ export function AdminGroupsPage() {
       return listGroupCategories(tournamentId!)
     },
     enabled: Boolean(tournamentId),
+    staleTime: 10 * 60_000,
   })
 
-  const categories = categoriesQ.data ?? []
+  const categories = useMemo(() => categoriesQ.data ?? [], [categoriesQ.data])
 
   const modalGroupCategoriesQ = useQuery({
     queryKey: ['group-categories', 'manager', managedGroup?.tournament_id],
@@ -442,7 +460,9 @@ export function AdminGroupsPage() {
   useEffect(() => {
     if (!managedGroup) return
     const freshGroup = groupsQ.data?.find((group) => group.id === managedGroup.id)
-    if (freshGroup) setManagedGroup(freshGroup)
+    if (!freshGroup) return
+    const handle = window.setTimeout(() => setManagedGroup(freshGroup), 0)
+    return () => window.clearTimeout(handle)
   }, [groupsQ.data, managedGroup])
 
   const refreshGroups = async () => {

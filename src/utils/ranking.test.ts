@@ -289,6 +289,99 @@ describe('computeGroupRanking', () => {
     expect(rows.find((r) => r.groupPlayerId === pb)!.won).toBe(0)
   })
 
+  it('N.R. cuenta penalización -1 y conserva games administrativos 3-6, 3-6', () => {
+    const m = matchRow({
+      id: '17171717-1717-1717-1717-171717171717',
+      player_a_id: pa,
+      player_b_id: pb,
+      winner_id: null,
+      result_type: 'not_reported',
+      score_raw: [
+        { a: 3, b: 6 },
+        { a: 3, b: 6 },
+      ],
+    })
+    const rows = computeGroupRanking(players, [m], rules())
+    const ra = rows.find((r) => r.groupPlayerId === pa)!
+    const rb = rows.find((r) => r.groupPlayerId === pb)!
+    expect(ra.points).toBe(-1)
+    expect(rb.points).toBe(-1)
+    expect(ra.gamesFor).toBe(6)
+    expect(ra.gamesAgainst).toBe(12)
+    expect(rb.gamesFor).toBe(12)
+    expect(rb.gamesAgainst).toBe(6)
+  })
+
+  it('RET suma puntos normales al jugador con más games', () => {
+    const m = matchRow({
+      id: '18181818-1818-1818-1818-181818181818',
+      player_a_id: pa,
+      player_b_id: pb,
+      winner_id: pa,
+      result_type: 'retired',
+      score_raw: [
+        { a: 4, b: 3 },
+        { a: 2, b: 1 },
+      ],
+    })
+    const rows = computeGroupRanking(players, [m], rules())
+    const ra = rows.find((r) => r.groupPlayerId === pa)!
+    const rb = rows.find((r) => r.groupPlayerId === pb)!
+    expect(ra.won).toBe(1)
+    expect(rb.lost).toBe(1)
+    expect(ra.points).toBe(3)
+    expect(rb.points).toBe(1)
+    expect(ra.gamesFor).toBe(6)
+    expect(rb.gamesFor).toBe(4)
+  })
+
+  it('empate por retiro suma 1 punto a ambos sin ganador ni perdedor', () => {
+    const m = matchRow({
+      id: '12121212-1212-1212-1212-121212121212',
+      player_a_id: pa,
+      player_b_id: pb,
+      winner_id: null,
+      result_type: 'retired_draw',
+      score_raw: [
+        { a: 3, b: 3 },
+        { a: 1, b: 1 },
+      ],
+    })
+    const rows = computeGroupRanking(players, [m], rules())
+    const ra = rows.find((r) => r.groupPlayerId === pa)!
+    const rb = rows.find((r) => r.groupPlayerId === pb)!
+    expect(ra.played).toBe(1)
+    expect(rb.played).toBe(1)
+    expect(ra.won).toBe(0)
+    expect(rb.won).toBe(0)
+    expect(ra.lost).toBe(0)
+    expect(rb.lost).toBe(0)
+    expect(ra.points).toBe(1)
+    expect(rb.points).toBe(1)
+    expect(ra.gamesFor).toBe(4)
+    expect(rb.gamesFor).toBe(4)
+  })
+
+  it('empate por retiro permite un solo set capturado', () => {
+    const m = matchRow({
+      id: '13131313-1313-1313-1313-131313131313',
+      player_a_id: pa,
+      player_b_id: pb,
+      winner_id: null,
+      result_type: 'retired_draw',
+      score_raw: [{ a: 1, b: 1 }],
+    })
+    const rows = computeGroupRanking(players, [m], rules())
+    const ra = rows.find((r) => r.groupPlayerId === pa)!
+    const rb = rows.find((r) => r.groupPlayerId === pb)!
+    expect(ra.played).toBe(1)
+    expect(rb.played).toBe(1)
+    expect(ra.points).toBe(1)
+    expect(rb.points).toBe(1)
+    expect(ra.gamesFor).toBe(1)
+    expect(rb.gamesFor).toBe(1)
+  })
+
   it('cuenta validated como oficial para la tabla del grupo', () => {
     const m = matchRow({
       id: '22221111-2222-2222-2222-222222222222',

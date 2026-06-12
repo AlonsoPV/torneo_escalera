@@ -60,6 +60,7 @@ const RESULT_TYPE_LABELS: Record<MatchResultType, string> = {
   def: 'Por defecto',
   not_reported: 'Sin reportar',
   retired: 'Retiro',
+  retired_draw: 'Empate retiro',
   pending_score: 'Pendiente marcador',
   double_penalty: 'Doble penalización',
 }
