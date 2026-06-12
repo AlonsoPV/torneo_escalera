@@ -51,7 +51,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Evita aplicar un perfil obsoleto si hubo cierre de sesión durante el fetch
       if (get().user?.id !== uid) return
       if (profile?.status === 'inactive') {
-        await supabase.auth.signOut()
+        await supabase.auth.signOut({ scope: 'local' })
+        clearProfileRequestCache()
         set({ session: null, user: null, profile: null, profileLoading: false })
         return
       }
@@ -65,6 +66,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 }))
 
 const profileRequests = new Map<string, Promise<Profile | null>>()
+
+/** Limpia deduplicación de perfil al cerrar sesión (evita datos obsoletos al re-entrar). */
+export function clearProfileRequestCache(): void {
+  profileRequests.clear()
+}
 
 function getProfileOnce(userId: string): Promise<Profile | null> {
   const existing = profileRequests.get(userId)
@@ -94,8 +100,13 @@ export async function initAuthListener() {
     void recoverFromAuthError(e)
   })
 
-  supabase.auth.onAuthStateChange(async (_event, session) => {
+  supabase.auth.onAuthStateChange(async (event, session) => {
     useAuthStore.getState().setSession(session)
+    if (event === 'SIGNED_OUT' || !session) {
+      clearProfileRequestCache()
+      useAuthStore.getState().setProfile(null)
+      return
+    }
     try {
       await useAuthStore.getState().refreshProfile()
     } catch (e) {

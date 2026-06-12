@@ -1,4 +1,5 @@
-import { ArrowRightLeft, CheckCircle2, ChevronRight, Eye, Grid3x3, Lock, Pencil, Trophy } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { ArrowRightLeft, CalendarClock, CheckCircle2, ChevronRight, Eye, Grid3x3, LayoutGrid, Lock, Pencil, Trophy, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -8,7 +9,6 @@ import { AdminDataTable, type AdminDataTableColumn } from '@/components/admin/sh
 import { CloseTournamentDialog } from '@/components/admin/tournaments/CloseTournamentDialog'
 import { AdminEmptyState } from '@/components/admin/shared/AdminEmptyState'
 import { AdminFormModal } from '@/components/admin/shared/AdminFormModal'
-import { AdminMetricCard, ADMIN_METRIC_GRID_4 } from '@/components/admin/shared/AdminMetricCard'
 import { AdminPageHeader } from '@/components/admin/shared/AdminPageHeader'
 import { AdminSectionTitle } from '@/components/admin/shared/AdminSectionTitle'
 import { AdminStatusBadge } from '@/components/admin/shared/AdminStatusBadge'
@@ -41,6 +41,48 @@ function sortTournamentsByCreatedDesc(tournaments: Tournament[]): Tournament[] {
 
 function canActivateTournament(status: TournamentStatus): boolean {
   return status === 'draft' || status === 'finished'
+}
+
+const operationStatToneClass = {
+  neutral: 'bg-slate-100 text-slate-700',
+  info: 'bg-sky-100 text-sky-800',
+  success: 'bg-emerald-100 text-emerald-800',
+  warning: 'bg-amber-100 text-amber-900',
+} as const
+
+function TournamentOperationStat({
+  id,
+  label,
+  value,
+  hint,
+  icon: Icon,
+  tone = 'neutral',
+}: {
+  id: string
+  label: string
+  value: string | number
+  hint?: string
+  icon: LucideIcon
+  tone?: keyof typeof operationStatToneClass
+}) {
+  return (
+    <div id={id} className="flex min-w-0 items-center gap-2 bg-white px-2.5 py-2 sm:gap-2.5 sm:px-3 sm:py-2.5">
+      <span
+        className={cn(
+          'flex size-7 shrink-0 items-center justify-center rounded-md sm:size-8',
+          operationStatToneClass[tone],
+        )}
+        aria-hidden
+      >
+        <Icon className="size-3.5" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+        <p className="text-base font-bold tabular-nums leading-tight text-slate-900 sm:text-lg">{value}</p>
+        {hint ? <p className="mt-0.5 truncate text-[10px] leading-snug text-slate-500">{hint}</p> : null}
+      </div>
+    </div>
+  )
 }
 
 type NextTournamentHeaderActionProps = {
@@ -614,51 +656,108 @@ export function AdminTournamentsPage() {
       </section>
 
       {overviewQ.isLoading ? (
-        <div id="admin-tournaments-loading" className="space-y-5 sm:space-y-8">
-          <Skeleton className="h-8 max-w-sm rounded-lg" />
-          <div className={ADMIN_METRIC_GRID_4}>
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-[5.5rem] rounded-2xl sm:h-24" />
-            ))}
-          </div>
+        <div id="admin-tournaments-loading" className="space-y-3">
+          <Skeleton className="h-24 w-full rounded-xl" />
         </div>
       ) : overview ? (
         <>
-          <section id="section-admin-tournaments-metrics-op" className="space-y-3 sm:space-y-4" aria-labelledby="tournaments-metrics-op">
-            <AdminSectionTitle
-              id="tournaments-metrics-op"
-              title="Operacion general"
-              description="Lectura rapida del torneo activo y su avance operativo."
-            />
-            <div id="admin-tournaments-metrics-operation" className={ADMIN_METRIC_GRID_4}>
-              <AdminMetricCard
-                id="admin-tournaments-metric-active-tournaments"
-                label="Torneo activo"
-                value={activeTournament?.name ?? 'Sin torneo activo'}
-                tone="success"
-                description="Torneo actualmente en operacion"
+          <section
+            id="section-admin-tournaments-metrics-op"
+            className="scroll-mt-3 space-y-2.5 rounded-xl border border-slate-200/70 bg-white p-2.5 shadow-sm sm:space-y-3 sm:rounded-2xl sm:p-3.5"
+            aria-labelledby="tournaments-metrics-op"
+          >
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+              <AdminSectionTitle
+                id="tournaments-metrics-op"
+                density="compact"
+                title="Operación general"
+                description="Torneo activo en una vista."
               />
-              <AdminMetricCard
-                id="admin-tournaments-metric-total-players"
-                label="Jugadores"
-                value={overview.totalPlayers}
-                tone="neutral"
-                description="Inscritos dentro del alcance activo"
-              />
-              <AdminMetricCard
-                id="admin-tournaments-metric-matches-progress"
-                label="Partidos por jugar"
-                value={`${overview.matchesWithoutDate}/${overview.totalMatches}`}
-                tone={overview.matchesWithoutDate > 0 ? 'warning' : 'success'}
-                description="Pendientes de marcador vs partidos totales"
-              />
-              <AdminMetricCard
-                id="admin-tournaments-metric-total-groups"
-                label="Grupos"
-                value={overview.totalGroups}
-                tone="info"
-                description="Grupos creados en el torneo activo"
-              />
+              {activeTournament ? (
+                <div
+                  id="admin-tournaments-metric-active-chip"
+                  className="flex min-w-0 max-w-full items-center gap-2 rounded-md border border-emerald-200/70 bg-emerald-50/70 px-2 py-1.5 sm:max-w-sm sm:shrink-0"
+                >
+                  <span
+                    className="flex size-7 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-800"
+                    aria-hidden
+                  >
+                    <Trophy className="size-3.5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-semibold text-slate-900" title={activeTournament.name}>
+                      {activeTournament.name}
+                    </p>
+                  </div>
+                  <AdminStatusBadge status={activeTournament.status} className="shrink-0 text-[10px]" />
+                </div>
+              ) : (
+                <p
+                  id="admin-tournaments-metric-no-active"
+                  className="rounded-md border border-dashed border-slate-200 bg-slate-50/80 px-2.5 py-1.5 text-[11px] text-slate-600 sm:shrink-0"
+                >
+                  Sin torneo activo
+                </p>
+              )}
+            </div>
+
+            <div
+              id="admin-tournaments-metrics-operation"
+              className="overflow-hidden rounded-lg border border-slate-200/80 bg-slate-50/60"
+            >
+              <div className="grid grid-cols-1 divide-y divide-slate-200/80 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+                <TournamentOperationStat
+                  id="admin-tournaments-metric-total-players"
+                  label="Jugadores"
+                  value={overview.totalPlayers}
+                  hint="Inscritos en el torneo"
+                  icon={Users}
+                  tone="neutral"
+                />
+                <TournamentOperationStat
+                  id="admin-tournaments-metric-total-groups"
+                  label="Grupos"
+                  value={overview.totalGroups}
+                  hint="En operación"
+                  icon={LayoutGrid}
+                  tone="info"
+                />
+                <TournamentOperationStat
+                  id="admin-tournaments-metric-matches-progress"
+                  label="Partidos"
+                  value={`${overview.playedMatches}/${overview.totalMatches}`}
+                  hint={
+                    overview.totalMatches > 0
+                      ? `${overview.matchesWithoutDate} pendientes · ${Math.round((overview.playedMatches / overview.totalMatches) * 100)}% jugados`
+                      : 'Sin cruces generados'
+                  }
+                  icon={CalendarClock}
+                  tone={overview.matchesWithoutDate > 0 ? 'warning' : 'success'}
+                />
+              </div>
+              {overview.totalMatches > 0 ? (
+                <div
+                  id="admin-tournaments-matches-progress-bar"
+                  className="border-t border-slate-200/80 bg-white px-2.5 py-2 sm:px-3"
+                  role="progressbar"
+                  aria-valuenow={overview.playedMatches}
+                  aria-valuemin={0}
+                  aria-valuemax={overview.totalMatches}
+                  aria-label="Partidos jugados del torneo activo"
+                >
+                  <div className="h-1 overflow-hidden rounded-full bg-slate-200/90">
+                    <div
+                      className={cn(
+                        'h-full rounded-full transition-[width] duration-500',
+                        overview.matchesWithoutDate > 0 ? 'bg-amber-500' : 'bg-emerald-600',
+                      )}
+                      style={{
+                        width: `${Math.min(100, Math.round((overview.playedMatches / overview.totalMatches) * 100))}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : null}
             </div>
           </section>
         </>

@@ -1,9 +1,12 @@
 import type { AuthError } from '@supabase/supabase-js'
+import type { QueryClient } from '@tanstack/react-query'
 
+import { clearSupabaseAuthStorage } from '@/lib/authSessionRecovery'
 import { supabase } from '@/lib/supabase'
 import { isAdminRole } from '@/lib/permissions'
 import { formatAuthPasswordError } from '@/lib/passwordPolicy'
 import { invokeResolveAuthEmailByPhone } from '@/services/authEdge'
+import { clearProfileRequestCache, useAuthStore } from '@/stores/authStore'
 import type { Profile } from '@/types/database'
 
 const GENERIC_CREDENTIALS_ERROR = 'Número o contraseña incorrectos.'
@@ -85,6 +88,33 @@ export async function signUpWithEmail(
 export async function signOut() {
   const { error } = await supabase.auth.signOut({ scope: 'local' })
   if (error) throw error
+}
+
+export type SignOutFromAppOptions = {
+  queryClient?: QueryClient
+  /** Navegación SPA inmediata tras limpiar estado en memoria. */
+  onNavigate?: () => void
+}
+
+/**
+ * Cierre de sesión optimista: limpia store y navega al login de inmediato;
+ * luego persiste signOut local en Supabase (sin round-trip global).
+ */
+export async function signOutFromApp(options?: SignOutFromAppOptions): Promise<void> {
+  clearProfileRequestCache()
+  useAuthStore.getState().setSession(null)
+  useAuthStore.getState().setProfile(null)
+
+  options?.queryClient?.cancelQueries()
+  options?.queryClient?.clear()
+  options?.onNavigate?.()
+
+  try {
+    await signOut()
+  } catch (error) {
+    clearSupabaseAuthStorage()
+    throw error
+  }
 }
 
 /** URL absoluta a la que Supabase redirige tras el enlace del correo (whitelist en el proyecto Supabase). */

@@ -24,7 +24,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Separator } from '@/components/ui/separator'
-import { signOut } from '@/lib/auth'
+import { signOutFromApp } from '@/lib/auth'
 import { isAdminRole } from '@/lib/permissions'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
@@ -65,13 +65,13 @@ export function AppHeader() {
   const emailHint = profile?.email ?? user?.email ?? null
 
   const handleSignOut = async () => {
+    if (signingOut) return
     setSigningOut(true)
     try {
-      queryClient.clear()
-      await signOut()
-      useAuthStore.getState().setSession(null)
-      useAuthStore.getState().setProfile(null)
-      navigate('/login', { replace: true })
+      await signOutFromApp({
+        queryClient,
+        onNavigate: () => navigate('/login', { replace: true }),
+      })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo cerrar sesión')
     } finally {
