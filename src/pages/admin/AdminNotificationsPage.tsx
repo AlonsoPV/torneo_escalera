@@ -1,5 +1,5 @@
 import { BarChart3, Scale } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -67,6 +67,22 @@ export function AdminNotificationsPage() {
     }
   }
 
+  const patchMatchInAdminCaches = useCallback(
+    (match: AdminMatchRecord) => {
+      const patchList = (old: AdminMatchRecord[] | undefined) =>
+        old?.map((item) => (item.id === match.id ? { ...item, ...match } : item))
+
+      qc.setQueryData<AdminMatchRecord[]>(['admin-matches'], patchList)
+      qc.setQueryData<AdminMatchRecord[]>(['admin-results'], patchList)
+      qc.setQueryData<AdminMatchRecord[]>(['admin-disputed-results'], (old) => {
+        if (!old) return old
+        if (match.status !== 'score_disputed') return old.filter((item) => item.id !== match.id)
+        return patchList(old)
+      })
+    },
+    [qc],
+  )
+
   const confirmMut = useMutation({
     mutationFn: async (match: AdminMatchRecord) => {
       if (!actorId) throw new Error('No autenticado')
@@ -82,7 +98,7 @@ export function AdminNotificationsPage() {
   const correctMut = useMutation({
     mutationFn: async (input: { match: AdminMatchRecord; sets: ScoreSet[]; closeAfter: boolean; adminNote: string }) => {
       if (!actorId) throw new Error('No autenticado')
-      await correctResult(
+      return correctResult(
         input.match,
         input.sets,
         actorId,
@@ -91,10 +107,14 @@ export function AdminNotificationsPage() {
         rulesForEditor.data ?? null,
       )
     },
-    onSuccess: async (_, input) => {
+    onSuccess: (updatedMatch, input) => {
+      const nextMatch = { ...input.match, ...updatedMatch }
+      patchMatchInAdminCaches(nextMatch)
       toast.success('Marcador corregido y validado')
       setEditingMatch(null)
-      await refreshResults({ touchedMatch: input.match })
+      void refreshResults({ touchedMatch: nextMatch }).catch((error) => {
+        console.warn('[admin-notifications] background refresh failed after score correction', error)
+      })
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Error al corregir marcador'),
   })

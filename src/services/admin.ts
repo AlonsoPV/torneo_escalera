@@ -742,7 +742,7 @@ export async function correctResult(
   closeAfter = true,
   adminNote?: string,
   rules?: TournamentRules | null,
-): Promise<void> {
+): Promise<MatchRow> {
   if (match.status === 'score_disputed') {
     if (!closeAfter) {
       throw new Error('En un partido refutado solo puedes validar o corregir y validar el marcador.')
@@ -751,14 +751,19 @@ export async function correctResult(
   } else {
     await correctAdminScore({ match, sets, actorUserId, closeAfter })
   }
-  const note = adminNote?.trim()
-  if (note) {
+  const note = adminNote?.trim() || null
+  const currentNote = match.admin_notes?.trim() || null
+  if (note !== currentNote) {
     const { error } = await supabase
       .from('matches')
       .update({ admin_notes: note, updated_by: actorUserId })
       .eq('id', match.id)
     if (error) throw error
   }
+
+  const { data, error } = await supabase.from('matches').select('*').eq('id', match.id).single()
+  if (error) throw error
+  return data as MatchRow
 }
 
 export async function getAdminUsers(): Promise<AdminUserRecord[]> {

@@ -188,10 +188,26 @@ export function AdminMatchesPage() {
     await Promise.all(invalidations)
   }
 
+  const patchMatchInAdminCaches = useCallback(
+    (match: AdminMatchRecord) => {
+      const patchList = (old: AdminMatchRecord[] | undefined) =>
+        old?.map((item) => (item.id === match.id ? { ...item, ...match } : item))
+
+      qc.setQueryData<AdminMatchRecord[]>(['admin-matches'], patchList)
+      qc.setQueryData<AdminMatchRecord[]>(['admin-results'], patchList)
+      qc.setQueryData<AdminMatchRecord[]>(['admin-disputed-results'], (old) => {
+        if (!old) return old
+        if (match.status !== 'score_disputed') return old.filter((item) => item.id !== match.id)
+        return patchList(old)
+      })
+    },
+    [qc],
+  )
+
   const resultMut = useMutation({
     mutationFn: async (input: { match: AdminMatchRecord; sets: ScoreSet[]; closeAfter: boolean; adminNote: string }) => {
       if (!actorId) throw new Error('No autenticado')
-      await correctResult(
+      return correctResult(
         input.match,
         input.sets,
         actorId,
@@ -200,9 +216,11 @@ export function AdminMatchesPage() {
         rulesForEditor.data ?? null,
       )
     },
-    onSuccess: async (_data, variables) => {
+    onSuccess: (updatedMatch, variables) => {
       const disputedValidated =
         variables.match.status === 'score_disputed' && variables.closeAfter
+      const nextMatch = { ...variables.match, ...updatedMatch }
+      patchMatchInAdminCaches(nextMatch)
       toast.success(
         disputedValidated
           ? 'Marcador corregido y validado'
@@ -211,7 +229,9 @@ export function AdminMatchesPage() {
             : 'Corrección guardada',
       )
       setEditingResult(null)
-      await refreshMatchQueries({ touchedMatch: variables.match })
+      void refreshMatchQueries({ touchedMatch: nextMatch }).catch((error) => {
+        console.warn('[admin-matches] background refresh failed after score correction', error)
+      })
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Error al editar resultado'),
   })

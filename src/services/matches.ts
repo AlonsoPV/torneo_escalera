@@ -121,7 +121,7 @@ export function preparePlayerScoreSubmissionSync(input: {
     if (!validation.ok) throw new Error(validation.errors.join(' '))
     if (resultType === 'retired') {
       if (!validation.winnerByGames) {
-        throw new Error('El marcador esta empatado en games. Usa la opcion de empate por retiro.')
+        return { winnerId: null, payload, pScoreJson: scoreSets as unknown as Json, resultType: 'retired_draw' }
       }
       winnerId = winnerSideToGroupPlayerId(validation.winnerByGames, match)
       return { winnerId, payload, pScoreJson: scoreSets as unknown as Json, resultType }
@@ -137,6 +137,7 @@ export function preparePlayerScoreSubmissionSync(input: {
 
   if (payload.game_type === 'best_of_3') {
     const validation = validateBestOf3Score(payload.score_json ?? [], {
+      allowShortDecisiveSet: true,
       gamesPerSet: rules.games_per_set ?? rules.set_points ?? 6,
     })
     if (!validation.ok || !validation.winner) throw new Error(validation.errors.join(' '))
@@ -281,8 +282,7 @@ export async function correctAdminScore(input: {
   if (input.match.status === 'score_disputed' && input.closeAfter === false) {
     throw new Error('En un partido refutado solo puedes validar o corregir y validar el marcador.')
   }
-  const explicit: MatchStatus =
-    input.match.status === 'score_disputed' && input.closeAfter === false ? 'score_disputed' : 'closed'
+  const explicit: MatchStatus = input.closeAfter === false ? 'score_submitted' : 'closed'
   return saveMatchScore({
     ...input,
     isAdmin: true,

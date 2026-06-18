@@ -147,7 +147,10 @@ export function validateTennisScore(
     const useShort = deciding && (finalFmt === 'sudden_death' || finalFmt === 'super_tiebreak')
     let err: string | null
     if (useShort) {
-      err = validateDecisiveSuperTiebreakOneZero(score[i])
+      const shortErr = validateDecisiveSuperTiebreakOneZero(score[i])
+      const classicErr =
+        games === 6 ? validateClassicSixGameSet(a, b) : validateGamesSet(a, b, games, minDiff, tbOn, tbAt)
+      err = shortErr && classicErr ? shortErr : null
     } else if (games === 6) {
       err = validateClassicSixGameSet(a, b)
     } else {

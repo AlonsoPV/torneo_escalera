@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { MatchRow } from '@/types/database'
+import type { MatchRow, TournamentRules } from '@/types/database'
 
 const rpcMock = vi.fn()
 const singleMock = vi.fn()
@@ -18,7 +18,7 @@ vi.mock('@/lib/supabase', () => ({
   },
 }))
 
-import { adminValidateDisputedWithoutChanges } from '@/services/matches'
+import { adminValidateDisputedWithoutChanges, preparePlayerScoreSubmissionSync } from '@/services/matches'
 
 function disputedMatch(overrides?: Partial<MatchRow>): MatchRow {
   return {
@@ -86,5 +86,51 @@ describe('adminValidateDisputedWithoutChanges', () => {
   it('propaga errores del RPC (p. ej. no admin)', async () => {
     rpcMock.mockResolvedValue({ error: { message: 'Solo staff', code: 'P0001' } })
     await expect(adminValidateDisputedWithoutChanges(disputedMatch())).rejects.toThrow('Solo staff')
+  })
+})
+
+describe('preparePlayerScoreSubmissionSync retirement inference', () => {
+  const rules = {
+    best_of_sets: 3,
+    games_per_set: 6,
+    set_points: 6,
+  } as TournamentRules
+
+  it('convierte retiro empatado a retired_draw sin exigir otra opcion', () => {
+    const prepared = preparePlayerScoreSubmissionSync({
+      match: disputedMatch({
+        player_a_id: 'player-a-gp',
+        player_b_id: 'player-b-gp',
+      }),
+      scorePayload: {
+        game_type: 'best_of_3',
+        score_json: [{ a: 6, b: 6 }],
+        winner: null,
+        result_type: 'retired',
+      },
+      rules,
+    })
+
+    expect(prepared.resultType).toBe('retired_draw')
+    expect(prepared.winnerId).toBeNull()
+  })
+
+  it('mantiene retiro con ganador cuando un jugador lleva mas games', () => {
+    const prepared = preparePlayerScoreSubmissionSync({
+      match: disputedMatch({
+        player_a_id: 'player-a-gp',
+        player_b_id: 'player-b-gp',
+      }),
+      scorePayload: {
+        game_type: 'best_of_3',
+        score_json: [{ a: 8, b: 6 }],
+        winner: 'a',
+        result_type: 'retired',
+      },
+      rules,
+    })
+
+    expect(prepared.resultType).toBe('retired')
+    expect(prepared.winnerId).toBe('player-a-gp')
   })
 })

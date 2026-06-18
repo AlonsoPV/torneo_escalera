@@ -66,34 +66,7 @@ function normalizeSet(set: ScoreSet): ScoreSet {
   return { a: Math.max(0, Number(set.a) || 0), b: Math.max(0, Number(set.b) || 0) }
 }
 
-type IncompleteResultMode = 'normal' | 'not_reported' | 'retired_lead' | 'retired_draw'
-
-const incompleteResultOptions: Array<{
-  value: IncompleteResultMode
-  label: string
-  description: string
-}> = [
-  {
-    value: 'normal',
-    label: 'Marcador completo',
-    description: 'Valida 2 sets ganados y puntos normales.',
-  },
-  {
-    value: 'not_reported',
-    label: 'No reportado',
-    description: '-1 punto para ambos jugadores.',
-  },
-  {
-    value: 'retired_lead',
-    label: 'Retiro - gana mas games',
-    description: '3 puntos al que lleva mas games y 1 al rival.',
-  },
-  {
-    value: 'retired_draw',
-    label: 'Retiro - empate',
-    description: '1 punto para cada jugador.',
-  },
-]
+type IncompleteResultMode = 'normal' | 'retired'
 
 const INFO_HINT_VIEWPORT_MARGIN = 10
 const INFO_HINT_GAP = 8
@@ -264,18 +237,23 @@ function GameTypeSelector({
           const selected = value === option.value
           const Icon = option.icon
           return (
-            <button
+            <div
               key={option.value}
-              type="button"
               role="radio"
+              tabIndex={0}
               aria-checked={selected}
               className={cn(
-                'group relative min-h-[3.25rem] touch-manipulation overflow-visible rounded-xl border-2 px-2.5 py-2 text-left transition active:scale-[0.99] sm:min-h-[3.5rem] sm:px-3',
+                'group relative min-h-[3.25rem] cursor-pointer touch-manipulation overflow-visible rounded-xl border-2 px-2.5 py-2 text-left transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1F5A4C]/25 sm:min-h-[3.5rem] sm:px-3',
                 selected
                   ? 'border-[#1F5A4C] bg-[#1F5A4C]/[0.09] shadow-sm ring-2 ring-[#1F5A4C]/15'
                   : 'border-border/60 bg-gradient-to-b from-white to-muted/30 hover:border-[#1F5A4C]/45 hover:bg-muted/40',
               )}
               onClick={() => onChange(option.value)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return
+                event.preventDefault()
+                onChange(option.value)
+              }}
             >
               <span className="flex items-center gap-2">
                 <span
@@ -306,7 +284,7 @@ function GameTypeSelector({
                   {selected ? <Check className="size-3" strokeWidth={2.8} /> : null}
                 </span>
               </span>
-            </button>
+            </div>
           )
         })}
       </div>
@@ -503,13 +481,27 @@ function ScoreInputs({
       ) : null}
       {visibleSets.map((set, index) => {
         const setTitle = gameType === 'long_set' ? 'Set largo' : `Set ${index + 1}`
+        const isBo3DecisiveThird =
+          gameType === 'best_of_3' &&
+          index === 2 &&
+          shouldShowThirdSet(visibleSets.slice(0, 2))
+
         return (
         <div key={index} className="space-y-3 overflow-hidden rounded-2xl border border-border/60 bg-card p-3 shadow-sm sm:space-y-3.5 sm:p-4">
           <div className="space-y-1">
             <p className="text-sm font-bold leading-snug text-foreground sm:text-base">{setTitle}</p>
             <p className="text-pretty text-[11px] leading-relaxed text-muted-foreground sm:text-xs">
-              Cada casilla indica si eres <span className="font-medium text-foreground">Tú</span> o{' '}
-              <span className="font-medium text-foreground">Rival</span> y el nombre en el torneo (jugador A/B del cruce).
+              {isBo3DecisiveThird ? (
+                <>
+                  Van 1-1 en sets. Captura el marcador del set (p. ej. 6-2 o 1-0 si fue super tie-break).
+                </>
+              ) : (
+                <>
+                  Cada casilla indica si eres <span className="font-medium text-foreground">Tú</span> o{' '}
+                  <span className="font-medium text-foreground">Rival</span> y el nombre en el torneo (jugador A/B
+                  del cruce).
+                </>
+              )}
             </p>
           </div>
           <div className="rounded-xl border border-border/50 bg-muted/20 p-2 sm:p-3">
@@ -591,21 +583,15 @@ export function ScoreSubmissionModal({
   const [gameType, setGameType] = useState<MatchGameType>('best_of_3')
   const [sets, setSets] = useState<ScoreSet[]>([{ a: 0, b: 0 }, { a: 0, b: 0 }])
   const [incompleteMode, setIncompleteMode] = useState<IncompleteResultMode>('normal')
+  const [submitAttempted, setSubmitAttempted] = useState(false)
 
   useEffect(() => {
     if (!open || !match) return
     /* eslint-disable react-hooks/set-state-in-effect -- sincronizar estado local del diálogo con `match` al abrir */
     const nextType = match.game_type ?? 'best_of_3'
+    setSubmitAttempted(false)
     setGameType(nextType)
-    setIncompleteMode(
-      match.result_type === 'not_reported'
-        ? 'not_reported'
-        : match.result_type === 'retired'
-          ? 'retired_lead'
-          : match.result_type === 'retired_draw'
-            ? 'retired_draw'
-            : 'normal',
-    )
+    setIncompleteMode(match.result_type === 'retired' || match.result_type === 'retired_draw' ? 'retired' : 'normal')
     if (nextType === 'sudden_death') {
       const raw = match.score_raw
       const decisive =
@@ -637,38 +623,21 @@ export function ScoreSubmissionModal({
   const retirementScoreSets = normalizedSets
     .slice(0, 3)
     .filter((set) => set.a > 0 || set.b > 0)
-  const isIncompleteMode = gameType === 'best_of_3' && incompleteMode !== 'normal'
+  const isIncompleteMode = gameType === 'best_of_3' && incompleteMode === 'retired'
   const incompleteValidation = validateIncompleteBestOf3Score(retirementScoreSets)
   const suddenDecisiveSet = gameType === 'sudden_death' ? normalizedSets[0] : null
   const validation = (() => {
-    if (gameType === 'best_of_3' && incompleteMode === 'not_reported') {
-      return { ok: true, errors: [], winner: null as ScoreWinnerSide | null }
-    }
-    if (gameType === 'best_of_3' && incompleteMode === 'retired_lead') {
+    if (gameType === 'best_of_3' && incompleteMode === 'retired') {
       const errors = [...incompleteValidation.errors]
-      if (incompleteValidation.ok && !incompleteValidation.winnerByGames) {
-        errors.push('El partido esta empatado en games. Usa Retiro - empate.')
-      }
       return {
-        ok: errors.length === 0 && incompleteValidation.winnerByGames != null,
+        ok: errors.length === 0,
         errors,
         winner: incompleteValidation.winnerByGames,
       }
     }
-    if (gameType === 'best_of_3' && incompleteMode === 'retired_draw') {
-      const errors = [...incompleteValidation.errors]
-      if (incompleteValidation.ok && incompleteValidation.games.a !== incompleteValidation.games.b) {
-        errors.push('Para empate por retiro, ambos jugadores deben tener la misma cantidad de games.')
-      }
-      return {
-        ok: errors.length === 0,
-        errors,
-        winner: null as ScoreWinnerSide | null,
-      }
-    }
     if (gameType === 'best_of_3')
       return validateBestOf3Score(bestOf3Sets, {
-        allowShortDecisiveSet: match?.game_type === 'best_of_3_short_tiebreak',
+        allowShortDecisiveSet: true,
         gamesPerSet: rules?.games_per_set ?? rules?.set_points ?? 6,
       })
     if (gameType === 'long_set') return validateLongSetScore(normalizedSets[0])
@@ -696,9 +665,7 @@ export function ScoreSubmissionModal({
         ? []
         : [normalizedSets[0]]
   const scoreLabel =
-    incompleteMode === 'not_reported'
-      ? 'sin marcador'
-      : gameType === 'sudden_death'
+    gameType === 'sudden_death'
       ? suddenDecisiveSet && validation.winner
         ? formatScoreCompact([suddenDecisiveSet])
         : 'muerte súbita'
@@ -749,6 +716,7 @@ export function ScoreSubmissionModal({
   const nombrePerdedorResumen = winner != null ? (youWon ? rivalName : yourName) : ''
 
   const setValue = (index: number, side: keyof ScoreSet, value: string) => {
+    setSubmitAttempted(false)
     const next = [...sets]
     const num = Math.max(0, Number(value) || 0)
     next[index] = { ...(next[index] ?? { a: 0, b: 0 }), [side]: num }
@@ -759,6 +727,7 @@ export function ScoreSubmissionModal({
   }
 
   const pickSuddenDeathThirdSetWinner = (viewerWins: boolean) => {
+    setSubmitAttempted(false)
     const row = { ...(sets[0] ?? { a: 0, b: 0 }) }
     if (viewerCanonicalSide === 'a') {
       row.a = viewerWins ? 1 : 0
@@ -785,21 +754,16 @@ export function ScoreSubmissionModal({
   }
 
   const handleSubmit = async () => {
+    setSubmitAttempted(true)
     if (isIncompleteMode) {
       if (!validation.ok) {
         toast.error(validation.errors[0] ?? 'Resultado incompleto invalido')
         return
       }
-      if (incompleteMode === 'retired_lead' && !winner) {
-        toast.error('No se pudo determinar el ganador por games.')
-        return
-      }
       const payload: ScorePayload =
-        incompleteMode === 'not_reported'
-          ? { game_type: 'best_of_3', score_json: null, winner: null, result_type: 'not_reported' }
-          : incompleteMode === 'retired_draw'
-            ? { game_type: 'best_of_3', score_json: scoreForPayload, winner: null, result_type: 'retired_draw' }
-            : { game_type: 'best_of_3', score_json: scoreForPayload, winner, result_type: 'retired' }
+        winner == null
+          ? { game_type: 'best_of_3', score_json: scoreForPayload, winner: null, result_type: 'retired_draw' }
+          : { game_type: 'best_of_3', score_json: scoreForPayload, winner, result_type: 'retired' }
       await onSubmit(payload)
       return
     }
@@ -822,11 +786,9 @@ export function ScoreSubmissionModal({
 
   const calculatedWinnerName = winner != null ? (winner === 'a' ? names.a : names.b) : null
   const incompleteSummary =
-    incompleteMode === 'not_reported'
-      ? 'No reportado: ambos jugadores reciben -1 punto.'
-      : incompleteMode === 'retired_draw'
+    incompleteMode === 'retired' && incompleteValidation.ok && incompleteValidation.winnerByGames == null
         ? 'Empate por retiro: ambos jugadores reciben 1 punto.'
-        : incompleteMode === 'retired_lead' && calculatedWinnerName
+        : incompleteMode === 'retired' && calculatedWinnerName
           ? `Retiro: gana ${calculatedWinnerName} por mayor cantidad de games.`
           : null
 
@@ -891,41 +853,34 @@ export function ScoreSubmissionModal({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Partido incompleto / retiro
+                    Retiro
                   </p>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    Usalo cuando el partido no termina o no se reporta completo.
+                    Marca solo si el partido inicio pero no pudo terminar.
                   </p>
                 </div>
-                {incompleteMode !== 'normal' && incompleteMode !== 'not_reported' ? (
+                {incompleteMode === 'retired' ? (
                   <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-800 ring-1 ring-emerald-200">
                     Games {incompleteValidation.games.a}-{incompleteValidation.games.b}
                   </span>
                 ) : null}
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {incompleteResultOptions.map((option) => {
-                  const active = incompleteMode === option.value
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={cn(
-                        'min-h-16 rounded-xl border px-3 py-2 text-left transition-colors',
-                        active
-                          ? 'border-[#1F5A4C] bg-emerald-50 text-[#12372F] shadow-sm'
-                          : 'border-border/70 bg-muted/20 text-foreground hover:bg-muted/50',
-                      )}
-                      onClick={() => setIncompleteMode(option.value)}
-                    >
-                      <span className="block text-sm font-semibold leading-tight">{option.label}</span>
-                      <span className="mt-1 block text-[11px] leading-snug text-muted-foreground">
-                        {option.description}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
+              <button
+                type="button"
+                className={cn(
+                  'flex min-h-12 w-full items-center justify-center rounded-xl border px-3 py-2 text-sm font-semibold transition-colors',
+                  incompleteMode === 'retired'
+                    ? 'border-[#1F5A4C] bg-emerald-50 text-[#12372F] shadow-sm'
+                    : 'border-border/70 bg-muted/20 text-foreground hover:bg-muted/50',
+                )}
+                aria-pressed={incompleteMode === 'retired'}
+                onClick={() => {
+                  setSubmitAttempted(false)
+                  setIncompleteMode((mode) => (mode === 'retired' ? 'normal' : 'retired'))
+                }}
+              >
+                {incompleteMode === 'retired' ? 'Retiro marcado' : 'Marcar como retiro'}
+              </button>
             </section>
           ) : null}
 
@@ -1023,7 +978,7 @@ export function ScoreSubmissionModal({
             )}
           </div>
 
-          {!validation.ok ? (
+          {submitAttempted && !validation.ok ? (
             <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
               <p className="flex items-center gap-1.5 font-semibold">
                 <AlertCircle className="size-4" />
@@ -1036,14 +991,14 @@ export function ScoreSubmissionModal({
                 ))}
               </ul>
             </div>
-          ) : (
+          ) : validation.ok ? (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
               <p className="flex items-center gap-1.5 font-semibold">
                 <CheckCircle2 className="size-4" />
                 Marcador listo para enviar
               </p>
             </div>
-          )}
+          ) : null}
         </div>
 
         <DialogFooter className="shrink-0 flex-col-reverse gap-2 rounded-b-2xl border-t border-border/70 bg-background/95 px-3 pt-3 backdrop-blur-sm supports-[backdrop-filter]:bg-background/85 sm:flex-row sm:justify-end sm:gap-3 sm:px-5 sm:pt-3.5 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">

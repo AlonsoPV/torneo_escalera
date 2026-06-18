@@ -141,8 +141,13 @@ export function validateIncompleteBestOf3Score(scoreSets: ScoreSet[]): {
   }
 }
 
+/** «2 de 3 sets» y variante con super tie-break en el set decisivo. */
+export function allowsShortDecisiveThirdSet(gameType: string): boolean {
+  return gameType === 'best_of_3' || gameType === 'best_of_3_short_tiebreak'
+}
+
 export type ValidateBestOf3Options = {
-  /** Tercer set 1-1 con formato corto: solo 1-0 a favor del ganador (super tie-break). */
+  /** Tercer set 1-1: acepta 1-0 (super tie-break) además del formato clásico por games. */
   allowShortDecisiveSet?: boolean
   /** Reservado para compatibilidad; ya no cambia la validación del 3.er set corto. */
   shortDecisiveSetNoMinDifference?: boolean
@@ -208,11 +213,13 @@ export function validateBestOf3Score(
       const set = sets[i]
       const isThird = i === 2 && sets.length === 3
       const firstTwoSplit = getSetsWon(sets.slice(0, 2))
-      const thirdIsShortDecider =
-        isThird && firstTwoSplit.a === 1 && firstTwoSplit.b === 1 && opts?.allowShortDecisiveSet === true
+      const thirdAtOneOne = isThird && firstTwoSplit.a === 1 && firstTwoSplit.b === 1
       let error: string | null
-      if (thirdIsShortDecider) {
-        error = validateDecisiveSuperTiebreakOneZero(set)
+      if (thirdAtOneOne && opts?.allowShortDecisiveSet === true) {
+        const classicErr =
+          gamesPs === 6 ? validateClassicSixGameSet(set.a, set.b) : validateNormalSet(set)
+        const shortErr = validateDecisiveSuperTiebreakOneZero(set)
+        error = classicErr && shortErr ? shortErr : null
       } else if (gamesPs === 6) {
         error = validateClassicSixGameSet(set.a, set.b)
       } else {
