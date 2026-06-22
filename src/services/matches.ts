@@ -111,28 +111,48 @@ export function preparePlayerScoreSubmissionSync(input: {
   const resultType = payload.result_type ?? 'normal'
 
   if (resultType !== 'normal') {
-    if (payload.game_type !== 'best_of_3') {
-      throw new Error('El retiro solo aplica para partidos 2 de 3 sets.')
-    }
     if (resultType === 'not_reported') {
       return { winnerId: null, payload, pScoreJson: IMPORT_ADMIN_PENALTY_SCORE as unknown as Json, resultType }
     }
-    const validation = validateIncompleteBestOf3Score(payload.score_json ?? [])
+    if (resultType === 'wo') {
+      if (!payload.winner) throw new Error('W.O.: indica quien gano el partido.')
+      winnerId = winnerSideToGroupPlayerId(payload.winner, match)
+      return { winnerId, payload, pScoreJson: null, resultType }
+    }
+    if (resultType !== 'retired' && resultType !== 'retired_draw') {
+      throw new Error('Tipo de resultado no soportado para envio de jugador.')
+    }
+    if (payload.game_type !== 'best_of_3' && payload.game_type !== 'sudden_death') {
+      throw new Error('El retiro solo aplica para partidos 2 de 3 sets o muerte subita.')
+    }
+    const scoreForRetirement =
+      payload.game_type === 'best_of_3' ? (payload.score_json ?? []) : []
+    const validation =
+      payload.game_type === 'best_of_3'
+        ? validateIncompleteBestOf3Score(scoreForRetirement)
+        : { ok: true, errors: [] as string[], winnerByGames: null, games: { a: 0, b: 0 } }
     if (!validation.ok) throw new Error(validation.errors.join(' '))
     if (resultType === 'retired') {
-      if (!validation.winnerByGames) {
+      const retirementWinner = payload.winner ?? validation.winnerByGames
+      if (!retirementWinner) {
         return { winnerId: null, payload, pScoreJson: scoreSets as unknown as Json, resultType: 'retired_draw' }
       }
-      winnerId = winnerSideToGroupPlayerId(validation.winnerByGames, match)
-      return { winnerId, payload, pScoreJson: scoreSets as unknown as Json, resultType }
+      winnerId = winnerSideToGroupPlayerId(retirementWinner, match)
+      return {
+        winnerId,
+        payload,
+        pScoreJson: payload.game_type === 'sudden_death' ? null : (scoreSets as unknown as Json),
+        resultType,
+      }
     }
     if (resultType === 'retired_draw') {
-      if (validation.games.a !== validation.games.b) {
-        throw new Error('Para empate por retiro, ambos jugadores deben tener la misma cantidad de games.')
+      return {
+        winnerId: null,
+        payload,
+        pScoreJson: payload.game_type === 'sudden_death' ? null : (scoreSets as unknown as Json),
+        resultType,
       }
-      return { winnerId: null, payload, pScoreJson: scoreSets as unknown as Json, resultType }
     }
-    throw new Error('Tipo de resultado no soportado para envio de jugador.')
   }
 
   if (payload.game_type === 'best_of_3') {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { LucideIcon } from 'lucide-react'
-import { AlertCircle, Check, CheckCircle2, Flame, Info, Layers, Timer } from 'lucide-react'
+import { AlertCircle, Check, CheckCircle2, Flame, Info, Layers, Timer, Trophy, UserX } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -66,7 +66,8 @@ function normalizeSet(set: ScoreSet): ScoreSet {
   return { a: Math.max(0, Number(set.a) || 0), b: Math.max(0, Number(set.b) || 0) }
 }
 
-type IncompleteResultMode = 'normal' | 'retired'
+type SpecialResultMode = 'normal' | 'retired' | 'wo'
+type RetirementActor = ScoreWinnerSide | 'both' | null
 
 const INFO_HINT_VIEWPORT_MARGIN = 10
 const INFO_HINT_GAP = 8
@@ -582,7 +583,9 @@ export function ScoreSubmissionModal({
 }) {
   const [gameType, setGameType] = useState<MatchGameType>('best_of_3')
   const [sets, setSets] = useState<ScoreSet[]>([{ a: 0, b: 0 }, { a: 0, b: 0 }])
-  const [incompleteMode, setIncompleteMode] = useState<IncompleteResultMode>('normal')
+  const [specialMode, setSpecialMode] = useState<SpecialResultMode>('normal')
+  const [retirementActor, setRetirementActor] = useState<RetirementActor>(null)
+  const [walkoverWinner, setWalkoverWinner] = useState<ScoreWinnerSide | null>(null)
   const [submitAttempted, setSubmitAttempted] = useState(false)
 
   useEffect(() => {
@@ -591,7 +594,15 @@ export function ScoreSubmissionModal({
     const nextType = match.game_type ?? 'best_of_3'
     setSubmitAttempted(false)
     setGameType(nextType)
-    setIncompleteMode(match.result_type === 'retired' || match.result_type === 'retired_draw' ? 'retired' : 'normal')
+    setSpecialMode(
+      match.result_type === 'retired' || match.result_type === 'retired_draw'
+        ? 'retired'
+        : match.result_type === 'wo'
+          ? 'wo'
+          : 'normal',
+    )
+    setRetirementActor(match.result_type === 'retired_draw' ? 'both' : null)
+    setWalkoverWinner(match.result_type === 'wo' && match.winner_id === match.player_b_id ? 'b' : match.result_type === 'wo' && match.winner_id === match.player_a_id ? 'a' : null)
     if (nextType === 'sudden_death') {
       const raw = match.score_raw
       const decisive =
@@ -623,16 +634,29 @@ export function ScoreSubmissionModal({
   const retirementScoreSets = normalizedSets
     .slice(0, 3)
     .filter((set) => set.a > 0 || set.b > 0)
-  const isIncompleteMode = gameType === 'best_of_3' && incompleteMode === 'retired'
+  const retirementWinner: ScoreWinnerSide | null =
+    retirementActor === 'a' ? 'b' : retirementActor === 'b' ? 'a' : null
+  const isRetirementMode =
+    (gameType === 'best_of_3' || gameType === 'sudden_death') && specialMode === 'retired'
+  const isWalkoverMode = specialMode === 'wo'
   const incompleteValidation = validateIncompleteBestOf3Score(retirementScoreSets)
   const suddenDecisiveSet = gameType === 'sudden_death' ? normalizedSets[0] : null
   const validation = (() => {
-    if (gameType === 'best_of_3' && incompleteMode === 'retired') {
+    if (isWalkoverMode) {
+      return {
+        ok: walkoverWinner != null,
+        errors: walkoverWinner ? [] : ['Indica quien gana por W.O.'],
+        winner: walkoverWinner,
+      }
+    }
+    if (isRetirementMode) {
       const errors = [...incompleteValidation.errors]
+      if (gameType === 'sudden_death') errors.length = 0
+      if (!retirementActor) errors.push('Indica quien se retira o si se retiran ambos.')
       return {
         ok: errors.length === 0,
         errors,
-        winner: incompleteValidation.winnerByGames,
+        winner: retirementWinner,
       }
     }
     if (gameType === 'best_of_3')
@@ -658,7 +682,7 @@ export function ScoreSubmissionModal({
   const winner = validation.winner
   const scoreForPayload =
     gameType === 'best_of_3'
-      ? isIncompleteMode
+      ? isRetirementMode
         ? retirementScoreSets
         : bestOf3Sets
       : gameType === 'sudden_death'
@@ -743,7 +767,10 @@ export function ScoreSubmissionModal({
     if (nextType === gameType) return
     toast.message('Cambiar el tipo de juego limpiará el marcador actual.')
     setGameType(nextType)
-    setIncompleteMode('normal')
+    setSpecialMode('normal')
+    setRetirementActor(null)
+    setWalkoverWinner(null)
+    setSubmitAttempted(false)
     setSets(
       nextType === 'long_set'
         ? [{ a: 0, b: 0 }]
@@ -755,15 +782,39 @@ export function ScoreSubmissionModal({
 
   const handleSubmit = async () => {
     setSubmitAttempted(true)
-    if (isIncompleteMode) {
+    if (isRetirementMode) {
       if (!validation.ok) {
         toast.error(validation.errors[0] ?? 'Resultado incompleto invalido')
         return
       }
       const payload: ScorePayload =
         winner == null
-          ? { game_type: 'best_of_3', score_json: scoreForPayload, winner: null, result_type: 'retired_draw' }
-          : { game_type: 'best_of_3', score_json: scoreForPayload, winner, result_type: 'retired' }
+          ? {
+              game_type: gameType === 'sudden_death' ? 'sudden_death' : 'best_of_3',
+              score_json: gameType === 'sudden_death' ? null : scoreForPayload,
+              winner: null,
+              result_type: 'retired_draw',
+            }
+          : {
+              game_type: gameType === 'sudden_death' ? 'sudden_death' : 'best_of_3',
+              score_json: gameType === 'sudden_death' ? null : scoreForPayload,
+              winner,
+              result_type: 'retired',
+            }
+      await onSubmit(payload)
+      return
+    }
+    if (isWalkoverMode) {
+      if (!validation.ok || !winner) {
+        toast.error(validation.errors[0] ?? 'Indica quien gana por W.O.')
+        return
+      }
+      const payload: ScorePayload = {
+        game_type: gameType === 'sudden_death' ? 'sudden_death' : 'best_of_3',
+        score_json: null,
+        winner,
+        result_type: 'wo',
+      }
       await onSubmit(payload)
       return
     }
@@ -786,10 +837,12 @@ export function ScoreSubmissionModal({
 
   const calculatedWinnerName = winner != null ? (winner === 'a' ? names.a : names.b) : null
   const incompleteSummary =
-    incompleteMode === 'retired' && incompleteValidation.ok && incompleteValidation.winnerByGames == null
-        ? 'Empate por retiro: ambos jugadores reciben 1 punto.'
-        : incompleteMode === 'retired' && calculatedWinnerName
-          ? `Retiro: gana ${calculatedWinnerName} por mayor cantidad de games.`
+    specialMode === 'retired' && retirementActor === 'both'
+      ? 'Retiro de ambos: ambos jugadores reciben 1 punto.'
+      : specialMode === 'retired' && calculatedWinnerName
+        ? `Retiro: gana ${calculatedWinnerName}.`
+        : specialMode === 'wo' && calculatedWinnerName
+          ? `W.O.: gana ${calculatedWinnerName}.`
           : null
 
   if (!match || !rules) return null
@@ -848,39 +901,120 @@ export function ScoreSubmissionModal({
           />
           </div>
 
-          {gameType === 'best_of_3' ? (
-            <section className="space-y-2 rounded-xl border border-border/70 bg-background/80 p-3">
+          {(gameType === 'best_of_3' || gameType === 'sudden_death') ? (
+            <section className="space-y-3 rounded-xl border border-border/70 bg-background/80 p-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Retiro
+                    Resultado especial
                   </p>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    Marca solo si el partido inicio pero no pudo terminar.
+                    Usa retiro si el partido inicio y no pudo terminar; usa W.O. si no se jugo.
                   </p>
                 </div>
-                {incompleteMode === 'retired' ? (
+                {specialMode === 'retired' && gameType === 'best_of_3' ? (
                   <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-800 ring-1 ring-emerald-200">
                     Games {incompleteValidation.games.a}-{incompleteValidation.games.b}
                   </span>
                 ) : null}
               </div>
-              <button
-                type="button"
-                className={cn(
-                  'flex min-h-12 w-full items-center justify-center rounded-xl border px-3 py-2 text-sm font-semibold transition-colors',
-                  incompleteMode === 'retired'
-                    ? 'border-[#1F5A4C] bg-emerald-50 text-[#12372F] shadow-sm'
-                    : 'border-border/70 bg-muted/20 text-foreground hover:bg-muted/50',
-                )}
-                aria-pressed={incompleteMode === 'retired'}
-                onClick={() => {
-                  setSubmitAttempted(false)
-                  setIncompleteMode((mode) => (mode === 'retired' ? 'normal' : 'retired'))
-                }}
-              >
-                {incompleteMode === 'retired' ? 'Retiro marcado' : 'Marcar como retiro'}
-              </button>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  className={cn(
+                    'flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors',
+                    specialMode === 'retired'
+                      ? 'border-[#1F5A4C] bg-emerald-50 text-[#12372F] shadow-sm'
+                      : 'border-border/70 bg-muted/20 text-foreground hover:bg-muted/50',
+                  )}
+                  aria-pressed={specialMode === 'retired'}
+                  onClick={() => {
+                    setSubmitAttempted(false)
+                    setWalkoverWinner(null)
+                    setSpecialMode((mode) => (mode === 'retired' ? 'normal' : 'retired'))
+                  }}
+                >
+                  <UserX className="size-4" aria-hidden />
+                  {specialMode === 'retired' ? 'Retiro marcado' : 'Marcar como retiro'}
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    'flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors',
+                    specialMode === 'wo'
+                      ? 'border-[#1F5A4C] bg-emerald-50 text-[#12372F] shadow-sm'
+                      : 'border-border/70 bg-muted/20 text-foreground hover:bg-muted/50',
+                  )}
+                  aria-pressed={specialMode === 'wo'}
+                  onClick={() => {
+                    setSubmitAttempted(false)
+                    setRetirementActor(null)
+                    setSpecialMode((mode) => (mode === 'wo' ? 'normal' : 'wo'))
+                  }}
+                >
+                  <Trophy className="size-4" aria-hidden />
+                  {specialMode === 'wo' ? 'W.O. marcado' : 'Victoria por W.O.'}
+                </button>
+              </div>
+
+              {specialMode === 'retired' ? (
+                <div className="space-y-2 rounded-xl border border-border/60 bg-muted/20 p-2.5">
+                  <p className="text-xs font-semibold text-foreground">Quien se retira</p>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {[
+                      { value: 'a' as const, label: names.a },
+                      { value: 'b' as const, label: names.b },
+                      { value: 'both' as const, label: 'Ambos' },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={cn(
+                          'min-h-11 rounded-lg border px-2 py-2 text-xs font-semibold transition-colors',
+                          retirementActor === option.value
+                            ? 'border-[#1F5A4C] bg-white text-[#12372F] shadow-sm'
+                            : 'border-border/70 bg-white/70 text-muted-foreground hover:text-foreground',
+                        )}
+                        onClick={() => {
+                          setSubmitAttempted(false)
+                          setRetirementActor(option.value)
+                        }}
+                      >
+                        {option.value === 'both' ? option.label : `${option.label} se retira`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {specialMode === 'wo' ? (
+                <div className="space-y-2 rounded-xl border border-border/60 bg-muted/20 p-2.5">
+                  <p className="text-xs font-semibold text-foreground">Ganador por W.O.</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {[
+                      { value: 'a' as const, label: names.a },
+                      { value: 'b' as const, label: names.b },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={cn(
+                          'min-h-11 rounded-lg border px-2 py-2 text-xs font-semibold transition-colors',
+                          walkoverWinner === option.value
+                            ? 'border-[#1F5A4C] bg-white text-[#12372F] shadow-sm'
+                            : 'border-border/70 bg-white/70 text-muted-foreground hover:text-foreground',
+                        )}
+                        onClick={() => {
+                          setSubmitAttempted(false)
+                          setWalkoverWinner(option.value)
+                        }}
+                      >
+                        Gana {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </section>
           ) : null}
 
@@ -900,12 +1034,14 @@ export function ScoreSubmissionModal({
           <div className="rounded-xl border border-border/70 bg-muted/20 p-3 sm:p-4">
             <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Antes de enviar</p>
 
-            {isIncompleteMode && incompleteSummary ? (
+            {(isRetirementMode || isWalkoverMode) && incompleteSummary ? (
               <div className="mt-3 rounded-lg border border-emerald-600/15 bg-emerald-50/80 px-3 py-3">
                 <p className="text-sm font-semibold leading-snug text-emerald-950">{incompleteSummary}</p>
-                <p className="mt-1 text-xs leading-relaxed text-emerald-900/80">
-                  Marcador registrado: {scoreLabel}
-                </p>
+                {isRetirementMode && gameType === 'best_of_3' ? (
+                  <p className="mt-1 text-xs leading-relaxed text-emerald-900/80">
+                    Marcador registrado: {scoreLabel}
+                  </p>
+                ) : null}
               </div>
             ) : winner == null ? (
               gameType !== 'long_set' && numericYouFirst && numericRivalFirst ? (
@@ -1012,7 +1148,7 @@ export function ScoreSubmissionModal({
           </Button>
           <Button
             type="button"
-            disabled={submitting || !validation.ok}
+            disabled={submitting}
             className="w-full min-h-12 touch-manipulation sm:min-h-10 sm:w-auto"
             onClick={handleSubmit}
           >

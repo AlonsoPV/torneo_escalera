@@ -60,7 +60,7 @@ export type ScorePayload =
       /** Tres sets obligatorios para resultado normal; `null` solo legado / W.O. sin marcador. */
       game_type: 'sudden_death'
       score_json: ScoreSet[] | null
-      winner: ScoreWinnerSide
+      winner: ScoreWinnerSide | null
       result_type?: MatchResultType
     }
   | {

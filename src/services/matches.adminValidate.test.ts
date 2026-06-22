@@ -133,4 +133,66 @@ describe('preparePlayerScoreSubmissionSync retirement inference', () => {
     expect(prepared.resultType).toBe('retired')
     expect(prepared.winnerId).toBe('player-a-gp')
   })
+
+  it('permite retiro en muerte subita indicando ganador por retiro del rival', () => {
+    const prepared = preparePlayerScoreSubmissionSync({
+      match: disputedMatch({
+        player_a_id: 'player-a-gp',
+        player_b_id: 'player-b-gp',
+        game_type: 'sudden_death',
+      }),
+      scorePayload: {
+        game_type: 'sudden_death',
+        score_json: null,
+        winner: 'b',
+        result_type: 'retired',
+      },
+      rules,
+    })
+
+    expect(prepared.resultType).toBe('retired')
+    expect(prepared.winnerId).toBe('player-b-gp')
+    expect(prepared.pScoreJson).toBeNull()
+  })
+
+  it('permite retiro de ambos en muerte subita sin ganador', () => {
+    const prepared = preparePlayerScoreSubmissionSync({
+      match: disputedMatch({
+        player_a_id: 'player-a-gp',
+        player_b_id: 'player-b-gp',
+        game_type: 'sudden_death',
+      }),
+      scorePayload: {
+        game_type: 'sudden_death',
+        score_json: null,
+        winner: null,
+        result_type: 'retired_draw',
+      },
+      rules,
+    })
+
+    expect(prepared.resultType).toBe('retired_draw')
+    expect(prepared.winnerId).toBeNull()
+    expect(prepared.pScoreJson).toBeNull()
+  })
+
+  it('permite W.O. con ganador y sin marcador', () => {
+    const prepared = preparePlayerScoreSubmissionSync({
+      match: disputedMatch({
+        player_a_id: 'player-a-gp',
+        player_b_id: 'player-b-gp',
+      }),
+      scorePayload: {
+        game_type: 'best_of_3',
+        score_json: null,
+        winner: 'a',
+        result_type: 'wo',
+      },
+      rules,
+    })
+
+    expect(prepared.resultType).toBe('wo')
+    expect(prepared.winnerId).toBe('player-a-gp')
+    expect(prepared.pScoreJson).toBeNull()
+  })
 })
