@@ -57,7 +57,7 @@ import {
 import { getTournamentClosureBlockers } from '@/services/tournamentClosure'
 import { listTournaments } from '@/services/tournaments'
 import { useAuthStore } from '@/stores/authStore'
-import type { TournamentMovementType, TournamentStatus } from '@/types/database'
+import type { TournamentMovementType } from '@/types/database'
 
 const WIZARD_STEPS = [
   { id: 1, label: 'Torneo base', short: '1' },
@@ -179,7 +179,6 @@ export function NextTournamentWizard() {
   const [baseId, setBaseId] = useState<string | null>(fromParam || null)
   const [newName, setNewName] = useState('')
   const [periodLabel, setPeriodLabel] = useState('')
-  const [newStatus, setNewStatus] = useState<TournamentStatus>('draft')
   const [copyRules, setCopyRules] = useState(true)
   const [previewFilter, setPreviewFilter] = useState<PreviewFilter>('all')
   const [groupFilterFromId, setGroupFilterFromId] = useState<string | 'all'>('all')
@@ -325,7 +324,7 @@ export function NextTournamentWizard() {
       baseTournamentId: baseId,
       name: newName.trim(),
       periodLabel: periodLabel.trim() || null,
-      status: newStatus,
+      status: 'draft' as const,
       copyRules,
       createdBy: userId,
       groupSize: GROUP_SIZE,
@@ -425,7 +424,6 @@ export function NextTournamentWizard() {
     userId,
     newName,
     periodLabel,
-    newStatus,
     copyRules,
     previewRows,
     groupPlan,
@@ -974,21 +972,8 @@ export function NextTournamentWizard() {
                 autoComplete="off"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="admin-next-tournament-select-initial-status">Estado inicial</Label>
-              <Select value={newStatus} onValueChange={(v) => setNewStatus(v as TournamentStatus)}>
-                <SelectTrigger id="admin-next-tournament-select-initial-status" className="min-w-[180px] w-auto">
-                  <SelectValue placeholder="Estado inicial" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem data-item-id="admin-next-tournament-status-draft" value="draft" label="Borrador">
-                    Borrador
-                  </SelectItem>
-                  <SelectItem data-item-id="admin-next-tournament-status-active" value="active" label="Activo">
-                    Activo
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-950">
+              El torneo se creará como borrador para revisar altas, bajas y balance antes de publicarlo.
             </div>
             <div className="flex items-center gap-2">
               <input
@@ -1004,8 +989,7 @@ export function NextTournamentWizard() {
               </Label>
             </div>
             <p className="text-xs text-slate-500">
-              Tamaño de grupo fijo: {GROUP_SIZE} jugadores. Los grupos completos generan round robin automáticamente
-              al inscribir el último jugador.
+              Tamaño de grupo fijo: {GROUP_SIZE} jugadores. Los cruces round robin se generan al publicar el borrador.
             </p>
           </CardContent>
         </Card>
@@ -1062,8 +1046,8 @@ export function NextTournamentWizard() {
                 <li>{creationSummary.totalPlayers} jugador(es) en total.</li>
                 <li>
                   {creationSummary.estimatedMatches > 0
-                    ? `Unos ${creationSummary.estimatedMatches} partido(s) se generarán automáticamente en grupos completos.`
-                    : 'No hay grupos completos: no se generarán partidos automáticamente.'}
+                    ? `Unos ${creationSummary.estimatedMatches} partido(s) quedarán listos para generarse al publicar.`
+                    : 'No hay grupos completos: no se generarán partidos hasta completar y publicar.'}
                 </li>
                 <li>{creationSummary.movementCount} movimiento(s) se guardarán en el historial.</li>
               </ul>

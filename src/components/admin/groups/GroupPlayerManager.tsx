@@ -52,7 +52,15 @@ export function GroupPlayerManager({
   profiles: Profile[]
   open: boolean
   onOpenChange: (open: boolean) => void
-  onAssign: (input: { groupId: string; userId: string; displayName: string; seedOrder?: number }) => void
+  onAssign: (input: {
+    groupId: string
+    userId: string
+    displayName: string
+    seedOrder?: number
+    isLocked?: boolean
+    lockedReason?: string | null
+    entryType?: 'carryover' | 'new_entry' | 'manual_entry'
+  }) => void
   onRemove: (groupPlayerId: string) => void
   onSaveGroupDetails: (
     groupId: string,
@@ -89,7 +97,10 @@ export function GroupPlayerManager({
 
   if (!group) return null
 
+  const isDraft = group.tournament?.status === 'draft'
+  const lockedCount = group.players.filter((player) => player.is_locked).length
   const isFull = group.players.length >= group.max_players
+  const isAssignBlocked = isDraft ? lockedCount >= group.max_players : isFull
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -184,7 +195,19 @@ export function GroupPlayerManager({
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-[#102A43]">{player.display_name}</p>
-                        <p className="truncate text-xs text-[#64748B]">{player.profile?.email ?? 'Sin email'}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-1">
+                          <p className="truncate text-xs text-[#64748B]">{player.profile?.email ?? 'Sin email'}</p>
+                          {player.entry_type === 'new_entry' ? (
+                            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">
+                              Nuevo
+                            </span>
+                          ) : null}
+                          {player.is_locked ? (
+                            <span className="rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-800">
+                              Fijo
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                       <Button variant="ghost" size="icon-sm" onClick={() => onRemove(player.id)}>
                         <Trash2 className="size-4" />
@@ -208,6 +231,9 @@ export function GroupPlayerManager({
                 userId: selectedUserId,
                 displayName: displayName || profile?.full_name || profile?.email || 'Jugador',
                 seedOrder,
+                isLocked: isDraft,
+                lockedReason: isDraft ? 'admin_placed_new_player' : null,
+                entryType: isDraft ? 'new_entry' : 'manual_entry',
               })
               setSelectedUserId('')
               setDisplayName('')
@@ -221,9 +247,9 @@ export function GroupPlayerManager({
               </span>
             </div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <Select value={selectedUserId} onValueChange={(value) => setSelectedUserId(value ?? '')} disabled={isFull}>
+              <Select value={selectedUserId} onValueChange={(value) => setSelectedUserId(value ?? '')} disabled={isAssignBlocked}>
                 <SelectTrigger className="h-11 min-w-[180px] w-full">
-                  <SelectValue placeholder={isFull ? 'Grupo completo' : 'Selecciona jugador'} />
+                  <SelectValue placeholder={isAssignBlocked ? 'Grupo sin espacio fijo' : 'Selecciona jugador'} />
                 </SelectTrigger>
                 <SelectContent>
                   {availableProfiles.map((profile) => (
@@ -237,7 +263,7 @@ export function GroupPlayerManager({
                 value={displayName}
                 onChange={(event) => setDisplayName(event.target.value)}
                 placeholder="Nombre visible opcional"
-                disabled={isFull}
+                disabled={isAssignBlocked}
                 className="h-11"
               />
               <Input
@@ -245,12 +271,17 @@ export function GroupPlayerManager({
                 value={seedOrder}
                 onChange={(event) => setSeedOrder(Number(event.target.value))}
                 placeholder="Seed"
-                disabled={isFull}
+                disabled={isAssignBlocked}
                 className="h-11"
               />
             </div>
-            <Button type="submit" className="w-full sm:w-auto" disabled={isFull || !selectedUserId}>
-              Asignar jugador
+            {isDraft ? (
+              <p className="text-xs leading-relaxed text-[#64748B]">
+                En borrador, cada alta manual queda como jugador nuevo y fijo en este grupo.
+              </p>
+            ) : null}
+            <Button type="submit" className="w-full sm:w-auto" disabled={isAssignBlocked || !selectedUserId}>
+              {isDraft ? 'Asignar fijo' : 'Asignar jugador'}
             </Button>
           </form>
 

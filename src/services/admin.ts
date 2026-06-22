@@ -589,6 +589,9 @@ export async function assignPlayerToGroup(input: {
   userId: string
   displayName: string
   seedOrder?: number
+  isLocked?: boolean
+  lockedReason?: string | null
+  entryType?: 'carryover' | 'new_entry' | 'manual_entry'
 }): Promise<GroupPlayer> {
   return addGroupPlayer(input)
 }

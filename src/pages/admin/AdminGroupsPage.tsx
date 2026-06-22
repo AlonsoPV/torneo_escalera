@@ -37,6 +37,12 @@ import {
   profileLabelForDistribution,
   sortAdminGroupsForDistribution,
 } from '@/services/adminGroupQuickDistribution'
+import {
+  applyDraftTournamentRebalance,
+  previewDraftTournamentRebalance,
+  publishDraftTournament,
+  recordDraftPlayerRemoval,
+} from '@/services/draftTournamentAdjustments'
 import { createGroup, createMissingGroupsOnePerCategory } from '@/services/groups'
 import { generateRoundRobinMatches, type GenerateRrMode } from '@/services/matches'
 import { listProfilesForAdmin } from '@/services/profiles'
@@ -369,6 +375,104 @@ function CreateGroupModal({
   )
 }
 
+function DraftTournamentAdjustmentsPanel({
+  tournamentId,
+  isDraft,
+  preview,
+  loading,
+  disabled,
+  onPreview,
+  onApply,
+  onPublish,
+}: {
+  tournamentId: string | null
+  isDraft: boolean
+  preview: Awaited<ReturnType<typeof previewDraftTournamentRebalance>> | null
+  loading: boolean
+  disabled?: boolean
+  onPreview: () => void
+  onApply: () => void
+  onPublish: () => void
+}) {
+  if (!tournamentId || !isDraft) return null
+
+  const pendingIssues = preview?.balance.filter((row) => row.status !== 'ok') ?? []
+
+  return (
+    <section className="rounded-2xl border border-[#BED4CA] bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#1F5A4C]">
+            Ajustes antes de publicar torneo
+          </p>
+          <h2 className="mt-1 text-lg font-semibold text-[#102A43]">Altas, bajas y rebalanceo</h2>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[#64748B]">
+            Los jugadores agregados manualmente quedan fijos en su grupo. El rebalanceo solo mueve jugadores no fijos y
+            deja el torneo listo para publicar con grupos de 5.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button type="button" variant="outline" disabled={disabled || loading} onClick={onPreview}>
+            Vista previa
+          </Button>
+          <Button type="button" variant="secondary" disabled={disabled || loading || !preview || preview.moves.length === 0 || preview.conflicts.length > 0} onClick={onApply}>
+            Rebalancear automáticamente
+          </Button>
+          <Button type="button" className="bg-[#1F5A4C] hover:bg-[#174a3f]" disabled={disabled || loading || !preview || pendingIssues.length > 0 || preview.conflicts.length > 0} onClick={onPublish}>
+            Publicar torneo
+          </Button>
+        </div>
+      </div>
+
+      {preview ? (
+        <div className="mt-4 grid gap-3 lg:grid-cols-[0.8fr_1.2fr]">
+          <div className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-3">
+            <p className="text-sm font-semibold text-[#102A43]">Balance de grupos</p>
+            <div className="mt-2 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-1">
+              {preview.balance.map((row) => (
+                <div key={row.groupId} className="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 text-sm">
+                  <span className="truncate font-medium text-[#102A43]">{row.groupName}</span>
+                  <span className={row.status === 'ok' ? 'text-emerald-700' : row.status === 'missing_players' ? 'text-amber-700' : 'text-red-700'}>
+                    {row.playerCount}/5
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-[#E2E8F0] bg-white p-3">
+            <p className="text-sm font-semibold text-[#102A43]">Movimientos sugeridos</p>
+            {preview.conflicts.length > 0 ? (
+              <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">
+                {preview.conflicts[0]}
+              </div>
+            ) : preview.moves.length === 0 ? (
+              <p className="mt-2 text-sm text-[#64748B]">No hay movimientos pendientes.</p>
+            ) : (
+              <div className="mt-2 max-h-72 overflow-auto rounded-lg border border-[#E2E8F0]">
+                {preview.moves.map((move) => (
+                  <div key={`${move.groupPlayerId}-${move.destinationGroupId}`} className="grid gap-1 border-b border-[#E2E8F0] px-3 py-2 text-sm last:border-b-0 sm:grid-cols-[1fr_0.8fr_0.8fr]">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-[#102A43]">{move.playerName}</p>
+                      <p className="text-xs text-[#64748B]">{move.type === 'rebalance_up' ? 'Rebalanceo: sube' : 'Rebalanceo: baja'}</p>
+                    </div>
+                    <p className="text-xs text-[#64748B]">{move.currentGroupName}</p>
+                    <p className="text-xs font-medium text-[#1F5A4C]">{move.destinationGroupName}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <p className="mt-4 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-sm text-[#64748B]">
+          Genera una vista previa para validar vacantes, excesos y conflictos antes de aplicar cambios.
+        </p>
+      )}
+    </section>
+  )
+}
+
 export function AdminGroupsPage() {
   const qc = useQueryClient()
   const currentUserId = useAuthStore((s) => s.user?.id ?? null)
@@ -376,6 +480,7 @@ export function AdminGroupsPage() {
   const [tournamentId, setTournamentId] = useState<string | null>(null)
   const [managedGroup, setManagedGroup] = useState<AdminGroupRecord | null>(null)
   const [managerOpen, setManagerOpen] = useState(false)
+  const [draftPreview, setDraftPreview] = useState<Awaited<ReturnType<typeof previewDraftTournamentRebalance>> | null>(null)
   const managedGroupIdRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -386,6 +491,7 @@ export function AdminGroupsPage() {
     const handle = window.setTimeout(() => {
       setManagedGroup(null)
       setManagerOpen(false)
+      setDraftPreview(null)
     }, 0)
     return () => window.clearTimeout(handle)
   }, [tournamentId])
@@ -456,6 +562,10 @@ export function AdminGroupsPage() {
 
   const categoriesForManager = modalGroupCategoriesQ.data ?? []
   const categoriesLoadingForManager = modalGroupCategoriesQ.isFetching && categoriesForManager.length === 0
+  const selectedTournament = useMemo(
+    () => (tournamentsQ.data ?? []).find((tournament) => tournament.id === tournamentId) ?? null,
+    [tournamentId, tournamentsQ.data],
+  )
 
   useEffect(() => {
     if (!managedGroup) return
@@ -472,6 +582,14 @@ export function AdminGroupsPage() {
     ])
   }
 
+  const refreshDraftPreview = async () => {
+    if (!tournamentId || selectedTournament?.status !== 'draft') {
+      setDraftPreview(null)
+      return
+    }
+    setDraftPreview(await previewDraftTournamentRebalance(tournamentId))
+  }
+
   const refreshCategories = async () => {
     await qc.invalidateQueries({ queryKey: ['group-categories'] })
   }
@@ -481,6 +599,7 @@ export function AdminGroupsPage() {
     onSuccess: async () => {
       toast.success('Grupo actualizado')
       await refreshGroups()
+      await refreshDraftPreview()
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Error al actualizar grupo'),
   })
@@ -564,6 +683,49 @@ export function AdminGroupsPage() {
       ])
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Error al generar cruces'),
+  })
+
+  const draftPreviewMut = useMutation({
+    mutationFn: async () => {
+      if (!tournamentId) throw new Error('Selecciona un torneo.')
+      return previewDraftTournamentRebalance(tournamentId)
+    },
+    onSuccess: (preview) => setDraftPreview(preview),
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'No se pudo calcular el balance'),
+  })
+
+  const draftRebalanceMut = useMutation({
+    mutationFn: async () => {
+      if (!tournamentId) throw new Error('Selecciona un torneo.')
+      if (!currentUserId) throw new Error('No se encontró el administrador actual.')
+      return applyDraftTournamentRebalance({ tournamentId, adminId: currentUserId })
+    },
+    onSuccess: async ({ movesApplied }) => {
+      toast.success(movesApplied === 1 ? 'Se aplicó 1 movimiento.' : `Se aplicaron ${movesApplied} movimientos.`)
+      await refreshGroups()
+      await refreshDraftPreview()
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'No se pudo rebalancear el torneo'),
+  })
+
+  const publishDraftMut = useMutation({
+    mutationFn: async () => {
+      if (!tournamentId) throw new Error('Selecciona un torneo.')
+      return publishDraftTournament({ tournamentId, adminId: currentUserId })
+    },
+    onSuccess: async ({ matchesInserted }) => {
+      toast.success(`Torneo publicado. Se generaron ${matchesInserted} partido(s).`)
+      setDraftPreview(null)
+      await Promise.all([
+        refreshGroups(),
+        qc.invalidateQueries({ queryKey: ['admin-tournaments'] }),
+        qc.invalidateQueries({ queryKey: ['tournaments'] }),
+        qc.invalidateQueries({ queryKey: ['admin-matches'] }),
+        qc.invalidateQueries({ queryKey: ['matches'] }),
+        qc.invalidateQueries({ queryKey: ['tournament-dashboard'] }),
+      ])
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'No se pudo publicar el torneo'),
   })
 
   const deleteGroupMut = useMutation({
@@ -817,6 +979,19 @@ export function AdminGroupsPage() {
       ) : null}
 
       {tournamentId ? (
+        <DraftTournamentAdjustmentsPanel
+          tournamentId={tournamentId}
+          isDraft={selectedTournament?.status === 'draft'}
+          preview={draftPreview}
+          loading={draftPreviewMut.isPending || draftRebalanceMut.isPending || publishDraftMut.isPending}
+          disabled={groupsQ.isLoading}
+          onPreview={() => draftPreviewMut.mutate()}
+          onApply={() => draftRebalanceMut.mutate()}
+          onPublish={() => publishDraftMut.mutate()}
+        />
+      ) : null}
+
+      {tournamentId && selectedTournament?.status !== 'draft' ? (
         <FreePlayersPanel
           freeCount={freePlayers.length}
           incompleteCount={incompleteGroups.length}
@@ -830,7 +1005,7 @@ export function AdminGroupsPage() {
         />
       ) : null}
 
-      {tournamentId && groupsInTournament.length > 0 ? (
+      {tournamentId && selectedTournament?.status !== 'draft' && groupsInTournament.length > 0 ? (
         <section className="space-y-4" aria-labelledby="bulk-rr-heading">
           <AdminSectionTitle
             id="bulk-rr-heading"
@@ -928,6 +1103,10 @@ export function AdminGroupsPage() {
         onAssign={(input) =>
           actionMut.mutate(async () => {
             await assignPlayerToGroup(input)
+            if (managedGroup?.tournament?.status === 'draft') {
+              toast.success('Jugador fijo agregado al borrador.')
+              return
+            }
             const groupWillBeComplete = managedGroup && managedGroup.players.length + 1 === managedGroup.max_players
             if (groupWillBeComplete) {
               toast.success('Grupo completo. Partidos generados correctamente.')
@@ -936,7 +1115,13 @@ export function AdminGroupsPage() {
             }
           })
         }
-        onRemove={(groupPlayerId) => actionMut.mutate(() => removePlayerFromGroup(groupPlayerId))}
+        onRemove={(groupPlayerId) =>
+          actionMut.mutate(() =>
+            managedGroup?.tournament?.status === 'draft' && currentUserId
+              ? recordDraftPlayerRemoval({ groupPlayerId, adminId: currentUserId })
+              : removePlayerFromGroup(groupPlayerId),
+          )
+        }
         onGenerateMatches={(group, mode) => generateMut.mutate({ group, mode })}
         currentUserId={currentUserId}
       />

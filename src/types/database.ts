@@ -8,6 +8,10 @@ export type TournamentMovementType =
   | 'demote'
   | 'capped_top'
   | 'capped_bottom'
+  | 'player_removed'
+  | 'new_entry'
+  | 'rebalance_up'
+  | 'rebalance_down'
 
 export type TournamentMovementReason =
   | 'top_2_promote'
@@ -252,6 +256,10 @@ export interface Database {
           to_group_id: string | null
           from_group_order_index: number | null
           to_group_order_index: number | null
+          removed_by_admin_id: string | null
+          removed_at: string | null
+          applied_by_admin_id: string | null
+          applied_at: string | null
           created_at: string
         }
         Insert: {
@@ -272,6 +280,10 @@ export interface Database {
           movement_type: TournamentMovementType
           movement_reason?: TournamentMovementReason | null
           raw_movement?: string | null
+          removed_by_admin_id?: string | null
+          removed_at?: string | null
+          applied_by_admin_id?: string | null
+          applied_at?: string | null
           created_at?: string
         }
         Update: {
@@ -288,6 +300,10 @@ export interface Database {
           movement_type?: TournamentMovementType
           movement_reason?: TournamentMovementReason | null
           raw_movement?: string | null
+          removed_by_admin_id?: string | null
+          removed_at?: string | null
+          applied_by_admin_id?: string | null
+          applied_at?: string | null
         }
       }
       tournament_rules: {
@@ -441,6 +457,9 @@ export interface Database {
           user_id: string
           display_name: string
           seed_order: number
+          is_locked?: boolean
+          locked_reason?: string | null
+          entry_type?: 'carryover' | 'new_entry' | 'manual_entry'
           created_at: string
         }
         Insert: {
@@ -449,11 +468,18 @@ export interface Database {
           user_id: string
           display_name: string
           seed_order?: number
+          is_locked?: boolean
+          locked_reason?: string | null
+          entry_type?: 'carryover' | 'new_entry' | 'manual_entry'
           created_at?: string
         }
         Update: {
+          group_id?: string
           display_name?: string
           seed_order?: number
+          is_locked?: boolean
+          locked_reason?: string | null
+          entry_type?: 'carryover' | 'new_entry' | 'manual_entry'
         }
       }
       matches: {

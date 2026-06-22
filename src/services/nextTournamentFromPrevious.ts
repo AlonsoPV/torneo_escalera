@@ -742,7 +742,7 @@ export async function createNextTournamentWithProgress(
       description: payload.description ?? undefined,
       category: payload.category ?? undefined,
       season: payload.season ?? undefined,
-      status: payload.status ?? 'draft',
+      status: 'draft',
       createdBy: payload.createdBy,
       previousTournamentId: payload.baseTournamentId,
       periodLabel: payload.periodLabel ?? undefined,
@@ -867,11 +867,6 @@ export async function createNextTournamentWithProgress(
     currentStep = 'generating_matches'
     cb.onStepStart?.(currentStep)
     const completeIndices: number[] = []
-    planned.forEach((_, i) => {
-      const gid = (createdGroups[i] as { id: string }).id
-      const players = byGroupId.get(gid) ?? []
-      if (players.length === groupSize) completeIndices.push(i)
-    })
 
     const perGroupMatchCount = (groupSize * (groupSize - 1)) / 2
     const matchesExpectedTotal = completeIndices.length * perGroupMatchCount
@@ -881,7 +876,7 @@ export async function createNextTournamentWithProgress(
       label:
         matchesExpectedTotal > 0
           ? `Generando ${matchesExpectedTotal} partidos…`
-          : 'Sin grupos completos para partidos',
+          : 'Cruces pendientes hasta publicar',
       groupsSaved: groupsTotal,
       groupsTotal,
       playersAssigned: playersAssignTotal,
@@ -1026,7 +1021,7 @@ export async function createNextTournamentWithProgress(
       matchesGenerated: matchesInsertedTotal,
     })
 
-    const fullGroupsWithMatches = planned.filter((p) => p.players.length === groupSize).length
+    const fullGroupsWithMatches = 0
     const incompleteGroups = planned.filter((p) => p.players.length < groupSize).length
 
     const partialFailure = groupErrors.length > 0 || Boolean(movementSaveError)

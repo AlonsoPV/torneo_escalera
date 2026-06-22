@@ -172,7 +172,7 @@ export async function findGroupPlayerInTournament(
 ): Promise<GroupMembership | null> {
   const { data, error } = await supabase
     .from('group_players')
-    .select('id, user_id, group_id, display_name, seed_order, created_at, group:groups(*)')
+    .select('id, user_id, group_id, display_name, seed_order, is_locked, locked_reason, entry_type, created_at, group:groups(*)')
     .eq('user_id', userId)
   if (error) throw error
   for (const row of data ?? []) {
@@ -185,6 +185,9 @@ export async function findGroupPlayerInTournament(
         group_id: row.group_id,
         display_name: row.display_name,
         seed_order: row.seed_order,
+        is_locked: row.is_locked,
+        locked_reason: row.locked_reason,
+        entry_type: row.entry_type,
         created_at: row.created_at,
       }
       return { group: g, membership }
@@ -210,16 +213,29 @@ export async function addGroupPlayer(input: {
   userId: string
   displayName: string
   seedOrder?: number
+  isLocked?: boolean
+  lockedReason?: string | null
+  entryType?: 'carryover' | 'new_entry' | 'manual_entry'
 }): Promise<GroupPlayer> {
   const { data: g, error: gErr } = await supabase
     .from('groups')
-    .select('id, tournament_id, max_players')
+    .select('id, tournament_id, max_players, tournament:tournaments(status)')
     .eq('id', input.groupId)
     .single()
   if (gErr) throw gErr
   const current = await listGroupPlayers(input.groupId)
   const cap = g?.max_players ?? 5
-  if (current.length >= cap) {
+  const tournament = Array.isArray(g.tournament) ? g.tournament[0] : g.tournament
+  const isDraftLockedNewEntry =
+    tournament?.status === 'draft' &&
+    input.isLocked === true &&
+    input.lockedReason === 'admin_placed_new_player' &&
+    input.entryType === 'new_entry'
+  const lockedCount = current.filter((p) => p.is_locked).length
+  if (isDraftLockedNewEntry && lockedCount >= cap) {
+    throw new Error('Este grupo ya tiene 5 jugadores fijos. Libera un espacio antes de agregar otro jugador.')
+  }
+  if (current.length >= cap && !isDraftLockedNewEntry) {
     throw new Error(`El grupo alcanzó el máximo de ${cap} jugadores`)
   }
   if (current.some((p) => p.user_id === input.userId)) {
@@ -232,12 +248,15 @@ export async function addGroupPlayer(input: {
       user_id: input.userId,
       display_name: input.displayName,
       seed_order: input.seedOrder ?? 0,
+      is_locked: input.isLocked ?? false,
+      locked_reason: input.lockedReason ?? null,
+      entry_type: input.entryType ?? 'manual_entry',
     })
     .select('*')
     .single()
   if (error) throw new Error(mapGroupPlayerError(error))
   const inserted = data as GroupPlayer
-  if (current.length + 1 === cap) {
+  if (tournament?.status !== 'draft' && current.length + 1 === cap) {
     await generateMatchesForGroupIfComplete({ groupId: input.groupId, createdBy: input.userId })
   }
   return inserted
