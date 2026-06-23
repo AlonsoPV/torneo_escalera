@@ -50,6 +50,18 @@ export type PreparedPlayerScoreSubmission = {
   resultType: NonNullable<ScorePayload['result_type']>
 }
 
+export function administrativeWalkoverScore(winner: ScoreWinnerSide): ScoreSet[] {
+  return winner === 'a'
+    ? [
+        { a: 6, b: 3 },
+        { a: 6, b: 3 },
+      ]
+    : [
+        { a: 3, b: 6 },
+        { a: 3, b: 6 },
+      ]
+}
+
 /**
  * Validación + payload RPC para marcador (sincrónico). Usado por saveMatchScore y por la UI para parchear cache sin otro round-trip.
  */
@@ -117,7 +129,12 @@ export function preparePlayerScoreSubmissionSync(input: {
     if (resultType === 'wo') {
       if (!payload.winner) throw new Error('W.O.: indica quien gano el partido.')
       winnerId = winnerSideToGroupPlayerId(payload.winner, match)
-      return { winnerId, payload, pScoreJson: null, resultType }
+      return {
+        winnerId,
+        payload,
+        pScoreJson: administrativeWalkoverScore(payload.winner) as unknown as Json,
+        resultType,
+      }
     }
     if (resultType !== 'retired' && resultType !== 'retired_draw') {
       throw new Error('Tipo de resultado no soportado para envio de jugador.')

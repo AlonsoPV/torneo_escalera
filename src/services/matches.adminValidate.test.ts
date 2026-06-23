@@ -176,7 +176,7 @@ describe('preparePlayerScoreSubmissionSync retirement inference', () => {
     expect(prepared.pScoreJson).toBeNull()
   })
 
-  it('permite W.O. con ganador y sin marcador', () => {
+  it('permite W.O. con ganador y marcador administrativo 6-3, 6-3', () => {
     const prepared = preparePlayerScoreSubmissionSync({
       match: disputedMatch({
         player_a_id: 'player-a-gp',
@@ -193,6 +193,32 @@ describe('preparePlayerScoreSubmissionSync retirement inference', () => {
 
     expect(prepared.resultType).toBe('wo')
     expect(prepared.winnerId).toBe('player-a-gp')
-    expect(prepared.pScoreJson).toBeNull()
+    expect(prepared.pScoreJson).toEqual([
+      { a: 6, b: 3 },
+      { a: 6, b: 3 },
+    ])
+  })
+
+  it('orienta el marcador administrativo W.O. si gana jugador B', () => {
+    const prepared = preparePlayerScoreSubmissionSync({
+      match: disputedMatch({
+        player_a_id: 'player-a-gp',
+        player_b_id: 'player-b-gp',
+      }),
+      scorePayload: {
+        game_type: 'best_of_3',
+        score_json: null,
+        winner: 'b',
+        result_type: 'wo',
+      },
+      rules,
+    })
+
+    expect(prepared.resultType).toBe('wo')
+    expect(prepared.winnerId).toBe('player-b-gp')
+    expect(prepared.pScoreJson).toEqual([
+      { a: 3, b: 6 },
+      { a: 3, b: 6 },
+    ])
   })
 })

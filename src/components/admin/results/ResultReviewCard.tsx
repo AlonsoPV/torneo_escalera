@@ -9,6 +9,13 @@ function formatScore(match: AdminMatchRecord) {
   return match.score_raw?.map((set) => `${set.a}-${set.b}`).join(' · ') ?? 'Sin marcador'
 }
 
+function formatWinnerScore(match: AdminMatchRecord) {
+  if (!match.score_raw?.length) return 'Sin marcador'
+  if (!match.winner_id) return formatScore(match)
+  const winnerIsB = match.winner_id === match.player_b_id
+  return match.score_raw.map((set) => (winnerIsB ? `${set.b}-${set.a}` : `${set.a}-${set.b}`)).join(' Â· ')
+}
+
 function shortDate(iso: string | null) {
   if (!iso) return '—'
   const d = new Date(iso)
@@ -51,7 +58,7 @@ export function ResultReviewCard({
           <div className="rounded-2xl bg-[#F8FAFC] p-3">
             <p className="text-xs text-[#64748B]">Marcador</p>
             <p className="mt-1 break-words font-mono text-lg font-semibold tracking-tight text-[#102A43]">
-              {formatScore(match)}
+              {formatWinnerScore(match)}
             </p>
           </div>
           <div className="rounded-2xl bg-[#F8FAFC] p-3">

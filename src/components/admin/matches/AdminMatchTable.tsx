@@ -39,6 +39,13 @@ function formatScore(match: AdminMatchRecord) {
   return match.score_raw?.map((set) => `${set.a}-${set.b}`).join(' · ') ?? '—'
 }
 
+function formatWinnerScore(match: AdminMatchRecord) {
+  if (!match.score_raw?.length) return 'â€”'
+  if (!match.winner_id) return formatScore(match)
+  const winnerIsB = match.winner_id === match.player_b_id
+  return match.score_raw.map((set) => (winnerIsB ? `${set.b}-${set.a}` : `${set.a}-${set.b}`)).join(' Â· ')
+}
+
 function formatWhen(iso: string | null | undefined) {
   if (!iso) return '—'
   const d = new Date(iso)
@@ -197,7 +204,7 @@ export function AdminMatchTable({
                         <span className="text-slate-400"> vs </span>
                         <span className="font-semibold text-slate-950">{match.playerBName}</span>
                       </TableCell>
-                      <TableCell className="font-mono text-xs font-semibold tabular-nums">{formatScore(match)}</TableCell>
+                      <TableCell className="font-mono text-xs font-semibold tabular-nums">{formatWinnerScore(match)}</TableCell>
                       <TableCell className="max-w-[8rem] truncate text-xs text-slate-800">{winnerLabel(match)}</TableCell>
                       <TableCell>
                         <StatusBadge match={match} />
@@ -361,7 +368,7 @@ export function AdminMatchTable({
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
                   <p className="text-[11px] text-[#64748B]">Marcador</p>
-                  <p className="font-mono font-semibold text-[#102A43]">{formatScore(match)}</p>
+                  <p className="font-mono font-semibold text-[#102A43]">{formatWinnerScore(match)}</p>
                 </div>
                 <div>
                   <p className="text-[11px] text-[#64748B]">Ganador</p>
