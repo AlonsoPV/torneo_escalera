@@ -43,6 +43,39 @@ function mapPostgresError(e: { message: string; code?: string; details?: string 
   return msg
 }
 
+const SCORE_SUBMIT_TIMEOUT_MS = 18_000
+
+function isTimeoutLikeError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const e = error as { name?: string; message?: string }
+  return (
+    e.name === 'AbortError' ||
+    e.name === 'TimeoutError' ||
+    (typeof e.message === 'string' && /abort|timeout|timed out/i.test(e.message))
+  )
+}
+
+function scoreSubmitTimeoutError(): Error {
+  return new Error(
+    'El envío tardó demasiado. Revisa tu conexión e intenta de nuevo; si el marcador aparece registrado, no lo dupliques.',
+  )
+}
+
+async function withScoreSubmitTimeout<T>(promise: Promise<T>): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(scoreSubmitTimeoutError()), SCORE_SUBMIT_TIMEOUT_MS)
+  })
+  try {
+    return await Promise.race([promise, timeout])
+  } catch (error) {
+    if (isTimeoutLikeError(error)) throw scoreSubmitTimeoutError()
+    throw error
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
+  }
+}
+
 export type PreparedPlayerScoreSubmission = {
   winnerId: string | null
   payload: ScorePayload
@@ -258,26 +291,26 @@ export async function saveMatchScore(input: {
 
   if (input.isAdmin) {
     const targetStatus = inferAdminSaveTargetStatus(input.match, input.adminStatus)
-    const { error } = await supabase.rpc('admin_set_match_result', {
+    const { error } = await withScoreSubmitTimeout(Promise.resolve(supabase.rpc('admin_set_match_result', {
       p_match_id: input.match.id,
       p_score: pScoreJson,
       p_winner_id: winnerId,
       p_status: targetStatus,
       p_result_type: resultType,
       p_game_type: payload.game_type,
-    })
+    })))
     if (error) throw new Error(mapPostgresError(error))
     return undefined
   }
 
   const tRpc = isPlayerSubmitPerfEnabled() ? performance.now() : 0
-  const { data, error } = await supabase.rpc('submit_player_match_result', {
+  const { data, error } = await withScoreSubmitTimeout(Promise.resolve(supabase.rpc('submit_player_match_result', {
     p_match_id: input.match.id,
     p_score: pScoreJson,
     p_result_type: resultType,
     p_winner_group_player_id: winnerId,
     p_game_type: payload.game_type,
-  })
+  })))
   if (isPlayerSubmitPerfEnabled()) {
     console.debug(`[perf] submit_player_match_result RPC ${Math.round(performance.now() - tRpc)}ms`)
   }

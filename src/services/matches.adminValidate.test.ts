@@ -96,6 +96,33 @@ describe('preparePlayerScoreSubmissionSync retirement inference', () => {
     set_points: 6,
   } as TournamentRules
 
+  it('prepara marcador normal 2-6, 6-4, 7-5 con ganador del lado izquierdo', () => {
+    const prepared = preparePlayerScoreSubmissionSync({
+      match: disputedMatch({
+        player_a_id: 'player-a-gp',
+        player_b_id: 'player-b-gp',
+      }),
+      scorePayload: {
+        game_type: 'best_of_3',
+        score_json: [
+          { a: 2, b: 6 },
+          { a: 6, b: 4 },
+          { a: 7, b: 5 },
+        ],
+        winner: 'a',
+      },
+      rules,
+    })
+
+    expect(prepared.resultType).toBe('normal')
+    expect(prepared.winnerId).toBe('player-a-gp')
+    expect(prepared.pScoreJson).toEqual([
+      { a: 2, b: 6 },
+      { a: 6, b: 4 },
+      { a: 7, b: 5 },
+    ])
+  })
+
   it('convierte retiro empatado a retired_draw sin exigir otra opcion', () => {
     const prepared = preparePlayerScoreSubmissionSync({
       match: disputedMatch({

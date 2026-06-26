@@ -3,9 +3,21 @@ import type { QueryClient } from '@tanstack/react-query'
 import type { PlayerDashboardData } from '@/services/dashboardPlayer'
 import { buildPlayerViewModel, type PlayerViewModel } from '@/services/playerViewModel'
 import type { PreparedPlayerScoreSubmission } from '@/services/matches'
-import type { MatchRow } from '@/types/database'
+import type { Json, MatchRow, ScoreSet } from '@/types/database'
 import { computeGroupRanking } from '@/utils/ranking'
 import { scorePayloadToSets } from '@/utils/score'
+
+function jsonToScoreSets(value: Json): ScoreSet[] | null {
+  if (!Array.isArray(value)) return null
+  const sets: ScoreSet[] = []
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return null
+    const raw = item as Record<string, Json | undefined>
+    if (typeof raw.a !== 'number' || typeof raw.b !== 'number') return null
+    sets.push({ a: raw.a, b: raw.b })
+  }
+  return sets
+}
 
 /**
  * Fusiona el partido como tras `submit_player_match_result` (optimista alineado con BD: `closed`).
@@ -17,9 +29,12 @@ export function mergeMatchAfterPlayerSubmit(
 ): MatchRow {
   const now = new Date().toISOString()
   const sets = scorePayloadToSets(prepared.payload)
+  const serverLikeSets = jsonToScoreSets(prepared.pScoreJson)
   const score_raw: MatchRow['score_raw'] =
     prepared.resultType === 'not_reported'
       ? null
+      : prepared.resultType === 'wo'
+      ? serverLikeSets
       : prepared.payload.game_type === 'sudden_death'
       ? sets.length === 3
         ? sets
