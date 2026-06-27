@@ -153,22 +153,22 @@ export function preparePlayerScoreSubmissionSync(input: {
     inputPayload ??
     (() => {
       if (match.game_type === 'sudden_death') {
-        const three =
-          inputSets?.length === 3
+        const suddenScore =
+          inputSets?.length === 1 || inputSets?.length === 3
             ? inputSets
-            : match.score_raw?.length === 3
+            : match.score_raw?.length === 1 || match.score_raw?.length === 3
               ? match.score_raw
               : null
-        const winnerFromThree = three ? getSuddenDeathWinnerSide(three) : null
+        const winnerFromScore = suddenScore ? getSuddenDeathWinnerSide(suddenScore) : null
         const winnerSide: ScoreWinnerSide | null =
-          winnerFromThree ??
+          winnerFromScore ??
           (match.winner_id === match.player_b_id ? 'b' : match.winner_id === match.player_a_id ? 'a' : null)
         if (!winnerSide) {
           throw new Error('No se pudo determinar el ganador para muerte súbita.')
         }
         return {
           game_type: 'sudden_death',
-          score_json: three,
+          score_json: suddenScore,
           winner: winnerSide,
         }
       }
@@ -228,7 +228,7 @@ export function preparePlayerScoreSubmissionSync(input: {
       return {
         winnerId,
         payload,
-        pScoreJson: payload.game_type === 'sudden_death' ? null : (scoreSets as unknown as Json),
+        pScoreJson: (scoreSets.length ? scoreSets : null) as unknown as Json,
         resultType,
       }
     }
@@ -236,7 +236,7 @@ export function preparePlayerScoreSubmissionSync(input: {
       return {
         winnerId: null,
         payload,
-        pScoreJson: payload.game_type === 'sudden_death' ? null : (scoreSets as unknown as Json),
+        pScoreJson: (scoreSets.length ? scoreSets : null) as unknown as Json,
         resultType,
       }
     }
@@ -277,7 +277,11 @@ export function preparePlayerScoreSubmissionSync(input: {
   }
 
   const pScore =
-    payload.game_type === 'sudden_death' ? (scoreSets.length === 3 ? scoreSets : null) : scoreSets
+    payload.game_type === 'sudden_death'
+      ? scoreSets.length === 1 || scoreSets.length === 3
+        ? scoreSets
+        : null
+      : scoreSets
   const pScoreJson = pScore as unknown as Json
 
   return { winnerId, payload, pScoreJson, resultType }

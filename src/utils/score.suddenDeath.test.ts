@@ -8,12 +8,12 @@ import {
 } from '@/utils/score'
 
 describe('validateSuddenDeathThirdSet', () => {
-  it('solo acepta 1-0 o 0-1', () => {
+  it('acepta cualquier set decisivo entero sin empate', () => {
     expect(validateSuddenDeathThirdSet({ a: 1, b: 0 })).toBeNull()
     expect(validateSuddenDeathThirdSet({ a: 0, b: 1 })).toBeNull()
-    expect(validateSuddenDeathThirdSet({ a: 7, b: 0 })).not.toBeNull()
-    expect(validateSuddenDeathThirdSet({ a: 10, b: 8 })).not.toBeNull()
-    expect(validateSuddenDeathThirdSet({ a: 6, b: 5 })).not.toBeNull()
+    expect(validateSuddenDeathThirdSet({ a: 7, b: 0 })).toBeNull()
+    expect(validateSuddenDeathThirdSet({ a: 10, b: 8 })).toBeNull()
+    expect(validateSuddenDeathThirdSet({ a: 6, b: 5 })).toBeNull()
   })
 
   it('rechaza empate', () => {
@@ -23,7 +23,14 @@ describe('validateSuddenDeathThirdSet', () => {
 })
 
 describe('validateSuddenDeathMatchScore', () => {
-  it('exige exactamente 3 sets', () => {
+  it('acepta solo el set decisivo', () => {
+    const one = validateSuddenDeathMatchScore([{ a: 10, b: 8 }], null)
+    expect(one.ok).toBe(true)
+    expect(one.winner).toBe('a')
+    expect(getSuddenDeathWinnerSide([{ a: 10, b: 8 }])).toBe('a')
+  })
+
+  it('rechaza un marcador intermedio de 2 sets', () => {
     const two = validateSuddenDeathMatchScore(
       [
         { a: 6, b: 4 },
@@ -32,7 +39,7 @@ describe('validateSuddenDeathMatchScore', () => {
       null,
     )
     expect(two.ok).toBe(false)
-    expect(two.errors.some((e) => e.includes('3'))).toBe(true)
+    expect(two.errors.some((e) => e.includes('set decisivo'))).toBe(true)
   })
 
   it('el ganador del partido es solo el del set 3 (aunque vaya 0-2 en sets)', () => {
@@ -66,6 +73,16 @@ describe('validateSuddenDeathMatchScore', () => {
       winner: 'a',
     })
     expect(bad.ok).toBe(false)
-    expect(bad.errors.some((e) => e.includes('tercer set'))).toBe(true)
+    expect(bad.errors.some((e) => e.includes('set decisivo'))).toBe(true)
+  })
+
+  it('validateSuddenDeathScore acepta set decisivo con winner lateral coherente', () => {
+    const ok = validateSuddenDeathScore({
+      game_type: 'sudden_death',
+      score_json: [{ a: 7, b: 5 }],
+      winner: 'a',
+    })
+    expect(ok.ok).toBe(true)
+    expect(ok.winner).toBe('a')
   })
 })

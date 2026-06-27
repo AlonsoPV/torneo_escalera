@@ -27,6 +27,18 @@ describe('validateTennisScore — set decisivo', () => {
     expect(result.ok).toBe(true)
   })
 
+  it('acepta marcador corto distinto de 1-0 en set 3', () => {
+    const result = validateTennisScore(
+      [
+        { a: 6, b: 4 },
+        { a: 4, b: 6 },
+        { a: 10, b: 8 },
+      ],
+      bo3Rules,
+    )
+    expect(result.ok).toBe(true)
+  })
+
   it('acepta marcador clásico 6-2 en set 3', () => {
     const result = validateTennisScore(
       [

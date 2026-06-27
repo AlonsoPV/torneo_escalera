@@ -44,7 +44,7 @@ const gameTypeOptions: Array<{
   {
     value: 'sudden_death',
     label: 'Muerte súbita',
-    description: 'Mini tie-break: marca quién ganó el set decisivo (1-0).',
+    description: 'Marca el resultado del set decisivo; ese set define al ganador.',
     icon: Flame,
   },
   {
@@ -350,79 +350,6 @@ function ColumnFieldLegend({
   )
 }
 
-function SuddenDeathThirdSetPicker({
-  leftHint,
-  rightHint,
-  set,
-  viewerCanonicalSide,
-  onPick,
-}: {
-  leftHint: { perspective: string; playerName: string }
-  rightHint: { perspective: string; playerName: string }
-  set: ScoreSet
-  viewerCanonicalSide: 'a' | 'b'
-  onPick: (viewerWins: boolean) => void
-}) {
-  const viewerWins =
-    viewerCanonicalSide === 'a' ? set.a === 1 && set.b === 0 : set.b === 1 && set.a === 0
-  const rivalWins =
-    viewerCanonicalSide === 'a' ? set.a === 0 && set.b === 1 : set.b === 0 && set.a === 1
-
-  const pickButtonClass = (selected: boolean) =>
-    cn(
-      'flex min-h-[4.25rem] w-full touch-manipulation flex-col items-center justify-center gap-1 rounded-xl border-2 px-2 py-2 transition active:scale-[0.99] sm:min-h-16',
-      selected
-        ? 'border-[#1F5A4C] bg-[#1F5A4C]/10 text-[#1F5A4C] shadow-sm ring-2 ring-[#1F5A4C]/15'
-        : 'border-border/60 bg-background hover:border-[#1F5A4C]/40 hover:bg-muted/30',
-    )
-
-  return (
-    <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-2 sm:gap-3">
-      <button
-        type="button"
-        className={pickButtonClass(viewerWins)}
-        aria-pressed={viewerWins}
-        aria-label={`Ganó el mini tie-break: ${leftHint.playerName}`}
-        onClick={() => onPick(true)}
-      >
-        <span className="flex items-center gap-1.5">
-          {viewerWins ? (
-            <CheckCircle2 className="size-5 shrink-0" aria-hidden />
-          ) : (
-            <span className="size-5 shrink-0 rounded-full border-2 border-muted-foreground/35" aria-hidden />
-          )}
-          <span className="text-xs font-bold uppercase">{leftHint.perspective}</span>
-        </span>
-        <span className="line-clamp-2 text-center text-[11px] font-medium leading-snug text-muted-foreground">
-          {leftHint.playerName}
-        </span>
-      </button>
-      <span className="flex items-center justify-center px-0.5 text-xs font-bold uppercase text-muted-foreground">
-        vs
-      </span>
-      <button
-        type="button"
-        className={pickButtonClass(rivalWins)}
-        aria-pressed={rivalWins}
-        aria-label={`Ganó el mini tie-break: ${rightHint.playerName}`}
-        onClick={() => onPick(false)}
-      >
-        <span className="flex items-center gap-1.5">
-          {rivalWins ? (
-            <CheckCircle2 className="size-5 shrink-0" aria-hidden />
-          ) : (
-            <span className="size-5 shrink-0 rounded-full border-2 border-muted-foreground/35" aria-hidden />
-          )}
-          <span className="text-xs font-bold uppercase">{rightHint.perspective}</span>
-        </span>
-        <span className="line-clamp-2 text-center text-[11px] font-medium leading-snug text-muted-foreground">
-          {rightHint.playerName}
-        </span>
-      </button>
-    </div>
-  )
-}
-
 function ScoreInputs({
   gameType,
   sets,
@@ -430,48 +357,17 @@ function ScoreInputs({
   /** Lado canónico (A o B en el cruce) del jugador que envía el marcador; siempre columna izquierda. */
   viewerCanonicalSide,
   onSetValue,
-  onPickSuddenDeathThirdSetWinner,
 }: {
   gameType: MatchGameType
   sets: ScoreSet[]
   columnHints: { a: { perspective: string; playerName: string }; b: { perspective: string; playerName: string } }
   viewerCanonicalSide: 'a' | 'b'
   onSetValue: (index: number, side: keyof ScoreSet, value: string) => void
-  onPickSuddenDeathThirdSetWinner: (viewerWins: boolean) => void
 }) {
   const leftSide = viewerCanonicalSide
   const rightSide: 'a' | 'b' = viewerCanonicalSide === 'a' ? 'b' : 'a'
 
-  if (gameType === 'sudden_death') {
-    const set = sets[0] ?? { a: 0, b: 0 }
-    return (
-      <section className="space-y-2.5 sm:space-y-3">
-        <p className="rounded-xl border border-border/60 bg-muted/25 p-2.5 text-[11px] leading-relaxed text-muted-foreground sm:p-3 sm:text-xs">
-          Marca con <Check className="inline size-3.5 align-[-2px]" aria-hidden /> quién ganó el mini tie-break.
-          No hace falta capturar los sets anteriores.
-        </p>
-        <div className="space-y-3 overflow-hidden rounded-2xl border border-border/60 bg-card p-3 shadow-sm sm:space-y-3.5 sm:p-4">
-          <div className="space-y-1">
-            <p className="text-sm font-bold leading-snug text-foreground sm:text-base">Muerte súbita</p>
-            <p className="text-pretty text-[11px] leading-relaxed text-muted-foreground sm:text-xs">
-              Se registrará como 1-0 a favor del ganador del mini tie-break.
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/50 bg-muted/20 p-2 sm:p-3">
-            <SuddenDeathThirdSetPicker
-              leftHint={columnHints[leftSide]}
-              rightHint={columnHints[rightSide]}
-              set={set}
-              viewerCanonicalSide={viewerCanonicalSide}
-              onPick={onPickSuddenDeathThirdSetWinner}
-            />
-          </div>
-        </div>
-      </section>
-    )
-  }
-
-  const visibleSets = gameType === 'long_set' ? sets.slice(0, 1) : sets
+  const visibleSets = gameType === 'long_set' || gameType === 'sudden_death' ? sets.slice(0, 1) : sets
 
   return (
     <section className="space-y-2.5 sm:space-y-3">
@@ -480,8 +376,14 @@ function ScoreInputs({
           Set largo: introduce el marcador completo del set (sin empates). No hay límite máximo de juegos en la captura.
         </p>
       ) : null}
+      {gameType === 'sudden_death' ? (
+        <p className="rounded-xl border border-border/60 bg-muted/25 p-2.5 text-[11px] leading-relaxed text-muted-foreground sm:p-3 sm:text-xs">
+          Muerte subita: captura el resultado real del set decisivo. No puede quedar empatado.
+        </p>
+      ) : null}
       {visibleSets.map((set, index) => {
-        const setTitle = gameType === 'long_set' ? 'Set largo' : `Set ${index + 1}`
+        const setTitle =
+          gameType === 'long_set' ? 'Set largo' : gameType === 'sudden_death' ? 'Set decisivo' : `Set ${index + 1}`
         const isBo3DecisiveThird =
           gameType === 'best_of_3' &&
           index === 2 &&
@@ -667,13 +569,13 @@ export function ScoreSubmissionModal({
     if (gameType === 'long_set') return validateLongSetScore(normalizedSets[0])
     if (gameType === 'sudden_death') {
       if (!suddenDecisiveSet) {
-        return { ok: false, errors: ['Marca quién ganó el mini tie-break.'], winner: null as ScoreWinnerSide | null }
+        return { ok: false, errors: ['Captura el resultado del set decisivo.'], winner: null as ScoreWinnerSide | null }
       }
       const thirdErr = validateSuddenDeathThirdSet(suddenDecisiveSet)
       const sdWinner = thirdErr ? null : getSetWinner(suddenDecisiveSet)
       return {
         ok: !thirdErr && sdWinner != null,
-        errors: thirdErr ? [thirdErr] : sdWinner ? [] : ['Marca quién ganó el mini tie-break.'],
+        errors: thirdErr ? [thirdErr] : sdWinner ? [] : ['Captura el resultado del set decisivo.'],
         winner: sdWinner,
       }
     }
@@ -686,7 +588,9 @@ export function ScoreSubmissionModal({
         ? retirementScoreSets
         : bestOf3Sets
       : gameType === 'sudden_death'
-        ? []
+        ? suddenDecisiveSet
+          ? [suddenDecisiveSet]
+          : []
         : [normalizedSets[0]]
   const scoreLabel =
     gameType === 'sudden_death'
@@ -750,19 +654,6 @@ export function ScoreSubmissionModal({
     setSets(next)
   }
 
-  const pickSuddenDeathThirdSetWinner = (viewerWins: boolean) => {
-    setSubmitAttempted(false)
-    const row = { ...(sets[0] ?? { a: 0, b: 0 }) }
-    if (viewerCanonicalSide === 'a') {
-      row.a = viewerWins ? 1 : 0
-      row.b = viewerWins ? 0 : 1
-    } else {
-      row.b = viewerWins ? 1 : 0
-      row.a = viewerWins ? 0 : 1
-    }
-    setSets([row])
-  }
-
   const changeGameType = (nextType: MatchGameType) => {
     if (nextType === gameType) return
     toast.message('Cambiar el tipo de juego limpiará el marcador actual.')
@@ -791,13 +682,13 @@ export function ScoreSubmissionModal({
         winner == null
           ? {
               game_type: gameType === 'sudden_death' ? 'sudden_death' : 'best_of_3',
-              score_json: gameType === 'sudden_death' ? null : scoreForPayload,
+              score_json: scoreForPayload,
               winner: null,
               result_type: 'retired_draw',
             }
           : {
               game_type: gameType === 'sudden_death' ? 'sudden_death' : 'best_of_3',
-              score_json: gameType === 'sudden_death' ? null : scoreForPayload,
+              score_json: scoreForPayload,
               winner,
               result_type: 'retired',
             }
@@ -826,7 +717,7 @@ export function ScoreSubmissionModal({
       gameType === 'sudden_death'
         ? {
             game_type: 'sudden_death',
-            score_json: null,
+            score_json: scoreForPayload,
             winner,
           }
         : gameType === 'long_set'
@@ -896,8 +787,7 @@ export function ScoreSubmissionModal({
             }
             columnHints={columnHints}
             viewerCanonicalSide={viewerCanonicalSide}
-            onSetValue={setValue}
-            onPickSuddenDeathThirdSetWinner={pickSuddenDeathThirdSetWinner}
+            onSetValue={setValue}
           />
           </div>
 
@@ -1076,7 +966,7 @@ export function ScoreSubmissionModal({
                   {youWon ? 'Victoria para ti' : `Victoria para ${rivalName}`}
                   <span className="mt-1 block text-xs font-normal leading-relaxed text-muted-foreground">
                     {gameType === 'sudden_death'
-                      ? `Resultado: ${scoreLabel} (mini tie-break).`
+                      ? `Resultado: ${scoreLabel}.`
                       : `Marcador en torneo (jug. A vs B): ${scoreLabel}`}
                   </span>
                 </p>
@@ -1159,3 +1049,4 @@ export function ScoreSubmissionModal({
     </Dialog>
   )
 }
+

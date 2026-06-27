@@ -36,7 +36,7 @@ export function mergeMatchAfterPlayerSubmit(
       : prepared.resultType === 'wo'
       ? serverLikeSets
       : prepared.payload.game_type === 'sudden_death'
-      ? sets.length === 3
+      ? sets.length > 0
         ? sets
         : match.score_raw
       : sets

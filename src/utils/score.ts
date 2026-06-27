@@ -247,12 +247,13 @@ export function validateBestOf3Score(
   return { ok: errors.length === 0 && winner != null, errors, winner }
 }
 
-/** Tercer set (muerte súbita en partido MS): siempre 1-0 al ganador del mini tie-break. */
+/** Set decisivo de muerte subita: enteros no negativos, sin empate. */
 export function validateSuddenDeathThirdSet(set: ScoreSet): string | null {
   return validateDecisiveSuperTiebreakOneZero(set)
 }
 
 export function getSuddenDeathWinnerSide(sets: ScoreSet[]): ScoreWinnerSide | null {
+  if (sets.length === 1) return getSetWinner(sets[0])
   if (sets.length < 3) return null
   return getSetWinner(sets[2])
 }
@@ -268,9 +269,16 @@ export function validateSuddenDeathMatchScore(
   opts?: ValidateSuddenDeathMatchScoreOptions,
 ): { ok: boolean; errors: string[]; winner: ScoreWinnerSide | null } {
   const errors: string[] = []
-  if (sets.length !== 3) {
-    errors.push('La muerte súbita debe capturar 3 sets.')
+  if (sets.length !== 1 && sets.length !== 3) {
+    errors.push('La muerte subita debe capturar el set decisivo o los 3 sets historicos.')
     return { ok: false, errors, winner: null }
+  }
+
+  if (sets.length === 1) {
+    const err = validateSuddenDeathThirdSet(sets[0])
+    if (err) errors.push(err)
+    const winner = errors.length === 0 ? getSetWinner(sets[0]) : null
+    return { ok: errors.length === 0 && winner != null, errors, winner }
   }
 
   const flex = opts?.historicalFlexibleSets === true
@@ -308,7 +316,7 @@ export function validateSuddenDeathScore(input: {
     }
     return {
       ok: false,
-      errors: ['Captura los 3 sets o indica el ganador (solo resultados sin marcador).'],
+      errors: ['Captura el set decisivo o indica el ganador (solo resultados sin marcador).'],
       winner: null,
     }
   }
@@ -321,7 +329,7 @@ export function validateSuddenDeathScore(input: {
   if (input.winner != null && input.winner !== v.winner) {
     return {
       ok: false,
-      errors: ['El ganador no coincide con el tercer set.'],
+      errors: ['El ganador no coincide con el set decisivo.'],
       winner: null,
     }
   }
@@ -373,7 +381,7 @@ export function scorePayloadToSets(payload: ScorePayload): ScoreSet[] {
 export function formatScoreForDisplay(match: MatchRow, perspectivePlayerId?: string | null): string {
   const sets = match.score_raw ?? []
   if (match.game_type === 'sudden_death') {
-    if (sets.length >= 3) {
+    if (sets.length > 0) {
       const perspectiveSets =
         perspectivePlayerId === match.player_b_id ? invertScoreSets(sets) : sets
       return formatScoreCompact(perspectiveSets)

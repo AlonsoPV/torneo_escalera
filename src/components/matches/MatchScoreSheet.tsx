@@ -322,7 +322,7 @@ export function MatchScoreSheet(props: {
       : null
 
   const sdPreview =
-    isSuddenDeathMatch && watchedList.length >= 3
+    isSuddenDeathMatch && watchedList.length > 0
       ? validateSuddenDeathMatchScore(watchedList.slice(0, 3), rules)
       : null
   const sheetPreviewRulesOk = isSuddenDeathMatch
@@ -435,7 +435,7 @@ export function MatchScoreSheet(props: {
                   {isAdmin
                     ? `Como staff puedes ajustar el marcador. Al guardar se cierra oficialmente el partido (ranking).`
                     : isSuddenDeathMatch
-                      ? `Este partido es muerte súbita: captura 3 sets; los dos primeros como marcador del set y el tercero decide el partido. El ganador del encuentro es quien gana el set 3.`
+                      ? `Este partido es muerte subita: captura el set decisivo. Si necesitas conservar un marcador historico, puedes capturar hasta 3 sets.`
                       : hasPointsDecider
                         ? `Introduce hasta ${effectiveMaxSets} sets; los primeros van por games y el decisivo por puntos si aplica. Envía el marcador cuando el partido haya terminado.`
                         : `Introduce games por set (hasta ${effectiveMaxSets} sets). Envía el marcador cuando el partido haya terminado.`}{' '}

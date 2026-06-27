@@ -692,8 +692,8 @@ export async function buildMatchResultsImportPreview(
             'game_type sudden_death requiere set_1…set_3 para resultado normal (o modo histórico con winner_id y sin sets).',
           )
         }
-      } else if (setsSd.length !== 3) {
-        messages.push('Muerte súbita: indica exactamente 3 sets (set_1_a/b … set_3_a/b).')
+      } else if (setsSd.length !== 1 && setsSd.length !== 3) {
+        messages.push('Muerte subita: indica el set decisivo o 3 sets historicos.')
       } else {
         const rulesRow = rulesByTournamentId.get(tournamentId) ?? null
         const valSd = validateSuddenDeathMatchScore(setsSd, rulesRow, {
@@ -708,7 +708,7 @@ export async function buildMatchResultsImportPreview(
                 ? 'b'
                 : undefined
           if (forcedSd && valSd.winner && forcedSd !== valSd.winner) {
-            messages.push('El winner_id no coincide con el ganador del tercer set (muerte súbita).')
+            messages.push('El winner_id no coincide con el ganador del set decisivo (muerte subita).')
           } else {
             scoreRaw = setsSd
             if (
@@ -718,7 +718,7 @@ export async function buildMatchResultsImportPreview(
             ) {
               winnerGroupPlayerId =
                 valSd.winner === 'a' ? match.player_a_id : match.player_b_id
-              infoMessages.push('Ganador inferido por tercer set (muerte súbita).')
+              infoMessages.push('Ganador inferido por set decisivo (muerte subita).')
               bumpKind('normalized')
             }
           }

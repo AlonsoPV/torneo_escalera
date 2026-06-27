@@ -64,14 +64,13 @@ export function validateClassicSixGameSet(a: number, b: number): string | null {
   return 'Marcador de set no válido (válidos: 6-0 … 6-4, 7-5, 7-6).'
 }
 
-/** Set decisivo por muerte súbita / super tie-break: siempre 1-0 al ganador (sin registrar puntos del mini break). */
+/** Set decisivo por muerte subita / super tie-break: enteros no negativos, sin empate. */
 export function validateDecisiveSuperTiebreakOneZero(set: ScoreSet): string | null {
   if (!Number.isInteger(set.a) || !Number.isInteger(set.b) || set.a < 0 || set.b < 0) {
-    return 'El set decisivo solo acepta enteros ≥ 0.'
+    return 'El set decisivo solo acepta enteros >= 0.'
   }
-  const ok = (set.a === 1 && set.b === 0) || (set.a === 0 && set.b === 1)
-  if (!ok) {
-    return 'El set decisivo (muerte súbita) se registra como 1-0 a favor del ganador.'
+  if (set.a === set.b) {
+    return 'El set decisivo no puede terminar empatado.'
   }
   return null
 }
@@ -189,3 +188,4 @@ export function isSuddenDeathRowIndex(index: number, rules: TournamentRules): bo
   if (ms === 5 && index === 4) return true
   return false
 }
+
