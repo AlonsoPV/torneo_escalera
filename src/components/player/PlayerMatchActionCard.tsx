@@ -145,6 +145,24 @@ export function PlayerMatchActionCard({
           if (submitInFlightRef.current) return
           submitInFlightRef.current = true
           setBusy(true)
+          const debugSubmit = import.meta.env.DEV
+          if (debugSubmit) {
+            console.groupCollapsed('SUBMIT SCORE START')
+            console.log({
+              match_id: match.id,
+              game_type: scorePayload.game_type,
+              score_json: scorePayload.score_json,
+              winner: scorePayload.winner,
+              result_type: scorePayload.result_type ?? 'normal',
+              currentUserId: userId,
+              matchPlayerAUserId: match.player_a_user_id,
+              matchPlayerBUserId: match.player_b_user_id,
+              matchPlayerAId: match.player_a_id,
+              matchPlayerBId: match.player_b_id,
+              currentStatus: match.status,
+            })
+            console.time('submit-score')
+          }
           try {
             const prepared = preparePlayerScoreSubmissionSync({ match, scorePayload, rules })
             const serverRow = await submitPlayerScore({ match, scorePayload, actorUserId: userId, rules })
@@ -158,10 +176,20 @@ export function PlayerMatchActionCard({
                 : 'Marcador registrado · ya cuenta como oficial en la tabla.',
             )
             setScoreOpen(false)
-            onAfterMatchMutation({ match: merged })
+            try {
+              onAfterMatchMutation({ match: merged })
+            } catch (postSubmitError) {
+              if (debugSubmit) console.error('SUBMIT SCORE POST-SUCCESS SYNC ERROR', postSubmitError)
+            }
+            if (debugSubmit) console.log('SUBMIT SCORE SUCCESS', merged)
           } catch (error) {
+            if (debugSubmit) console.error('SUBMIT SCORE ERROR', error)
             toast.error(error instanceof Error ? error.message : 'No se pudo enviar el marcador')
           } finally {
+            if (debugSubmit) {
+              console.timeEnd('submit-score')
+              console.groupEnd()
+            }
             submitInFlightRef.current = false
             setBusy(false)
           }

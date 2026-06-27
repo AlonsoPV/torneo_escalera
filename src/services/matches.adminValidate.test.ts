@@ -182,6 +182,26 @@ describe('preparePlayerScoreSubmissionSync retirement inference', () => {
     expect(prepared.pScoreJson).toBeNull()
   })
 
+  it('permite muerte subita normal con solo ganador y sin score_json', () => {
+    const prepared = preparePlayerScoreSubmissionSync({
+      match: disputedMatch({
+        player_a_id: 'player-a-gp',
+        player_b_id: 'player-b-gp',
+        game_type: 'sudden_death',
+      }),
+      scorePayload: {
+        game_type: 'sudden_death',
+        score_json: null,
+        winner: 'a',
+      },
+      rules,
+    })
+
+    expect(prepared.resultType).toBe('normal')
+    expect(prepared.winnerId).toBe('player-a-gp')
+    expect(prepared.pScoreJson).toBeNull()
+  })
+
   it('permite retiro de ambos en muerte subita sin ganador', () => {
     const prepared = preparePlayerScoreSubmissionSync({
       match: disputedMatch({
