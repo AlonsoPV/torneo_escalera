@@ -1,5 +1,5 @@
 /** Tiempo máximo por petición HTTP (Supabase REST, Auth, Storage, Edge invoke). */
-export const DEFAULT_REQUEST_TIMEOUT_MS = 15_000
+export const DEFAULT_REQUEST_TIMEOUT_MS = 25_000
 
 export function isAbortLike(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false

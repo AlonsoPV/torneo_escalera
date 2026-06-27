@@ -43,7 +43,7 @@ function mapPostgresError(e: { message: string; code?: string; details?: string 
   return msg
 }
 
-const SCORE_SUBMIT_TIMEOUT_MS = 18_000
+const SCORE_SUBMIT_TIMEOUT_MS = 25_000
 
 function isTimeoutLikeError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
