@@ -1,7 +1,70 @@
--- Align player submit with the UI/ranking model:
--- sudden_death can be submitted with only a winner and no score_raw.
+-- Fast, stable player score submit endpoint.
+-- This avoids depending on older overwritten versions of submit_player_match_result.
 
-create or replace function public.submit_player_match_result(
+create or replace function public.notify_staff_on_player_score_submitted()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_event text;
+  v_title text;
+  v_body text;
+  v_meta jsonb;
+begin
+  if current_setting('app.skip_staff_notifications', true) = 'true' then
+    return new;
+  end if;
+
+  if tg_op <> 'UPDATE' then
+    return new;
+  end if;
+
+  if new.score_submitted_by is null then
+    return new;
+  end if;
+
+  if new.status = 'closed'
+     and old.status is distinct from 'closed'
+     and old.status = 'pending_score' then
+    v_event := 'player_match_closed';
+    v_title := 'Resultado oficial registrado por jugador';
+  elsif new.status = 'score_submitted'
+     and old.status is distinct from 'score_submitted'
+     and old.status = 'pending_score' then
+    v_event := 'player_score_submitted';
+    v_title := 'Resultado provisional registrado por jugador';
+  else
+    return new;
+  end if;
+
+  v_body := 'Resultado registrado por jugador. Revisa el detalle del partido en administracion.';
+  v_meta := jsonb_build_object(
+    'match_id', new.id,
+    'tournament_id', new.tournament_id,
+    'group_id', new.group_id,
+    'previous_status', old.status,
+    'status', new.status,
+    'result_type', new.result_type,
+    'game_type', new.game_type,
+    'winner_id', new.winner_id,
+    'score_raw', new.score_raw,
+    'score_submitted_by', new.score_submitted_by,
+    'score_submitted_at', new.score_submitted_at
+  );
+
+  insert into public.staff_match_notifications (
+    match_id, tournament_id, group_id, event_type, title, body, metadata
+  ) values (
+    new.id, new.tournament_id, new.group_id, v_event, v_title, v_body, v_meta
+  );
+
+  return new;
+end;
+$$;
+
+create or replace function public.submit_player_match_result_fast(
   p_match_id uuid,
   p_score jsonb,
   p_result_type text default 'normal',
@@ -13,7 +76,7 @@ language plpgsql
 security definer
 set search_path = public
 set lock_timeout = '5s'
-set statement_timeout = '20s'
+set statement_timeout = '12s'
 as $$
 declare
   m_old public.matches%rowtype;
@@ -46,9 +109,10 @@ begin
   end if;
 
   if not exists (
-    select 1 from public.tournament_rules r2
-    where r2.tournament_id = m_old.tournament_id
-      and r2.allow_player_score_entry = true
+    select 1
+    from public.tournament_rules r
+    where r.tournament_id = m_old.tournament_id
+      and r.allow_player_score_entry = true
   ) then
     raise exception 'La captura de marcador por jugadores no esta habilitada para este torneo';
   end if;
@@ -61,7 +125,7 @@ begin
     raise exception 'Solo puedes registrar marcador desde pendiente de marcador; si hubo disputa, contacta a organizacion.';
   end if;
 
-  if v_result_type not in ('normal', 'not_reported', 'retired', 'retired_draw', 'wo') then
+  if v_result_type not in ('normal', 'not_reported', 'retired', 'retired_draw', 'wo', 'def') then
     raise exception 'Tipo de resultado invalido para envio de jugador';
   end if;
 
@@ -69,7 +133,7 @@ begin
     raise exception 'Tipo de juego invalido';
   end if;
 
-  if v_result_type in ('normal', 'wo') and (
+  if v_result_type in ('normal', 'wo', 'def', 'retired') and (
     p_winner_group_player_id is null
     or p_winner_group_player_id not in (m_old.player_a_id, m_old.player_b_id)
   ) then
@@ -84,6 +148,10 @@ begin
     );
   end if;
 
+  if v_result_type = 'not_reported' then
+    v_score := null;
+  end if;
+
   if v_result_type in ('retired', 'retired_draw') then
     if v_game_type not in ('best_of_3', 'sudden_death') then
       raise exception 'El retiro solo aplica para partidos 2 de 3 sets o muerte subita';
@@ -93,40 +161,23 @@ begin
       if v_score is null or jsonb_typeof(v_score) <> 'array' or jsonb_array_length(v_score) = 0 or jsonb_array_length(v_score) > 3 then
         raise exception 'Retiro: indica entre 1 y 3 sets jugados';
       end if;
-      if exists (
-        select 1
-        from jsonb_array_elements(v_score) as s(value)
-        where jsonb_typeof(value->'a') is distinct from 'number'
-           or jsonb_typeof(value->'b') is distinct from 'number'
-           or (value->>'a')::numeric < 0
-           or (value->>'b')::numeric < 0
-           or (value->>'a')::numeric <> trunc((value->>'a')::numeric)
-           or (value->>'b')::numeric <> trunc((value->>'b')::numeric)
-      ) then
-        raise exception 'Retiro: los games deben ser enteros mayores o iguales a 0';
-      end if;
 
       select
         coalesce(sum((value->>'a')::integer), 0),
         coalesce(sum((value->>'b')::integer), 0)
       into v_a_games, v_b_games
-      from jsonb_array_elements(v_score) as s(value);
+      from jsonb_array_elements(v_score) as s(value)
+      where jsonb_typeof(value->'a') = 'number'
+        and jsonb_typeof(value->'b') = 'number';
 
       if v_a_games + v_b_games <= 0 then
         raise exception 'Retiro: debe existir al menos un game jugado';
       end if;
     end if;
-
-    if v_result_type = 'retired' and (
-      p_winner_group_player_id is null
-      or p_winner_group_player_id not in (m_old.player_a_id, m_old.player_b_id)
-    ) then
-      raise exception 'Retiro: indica el ganador';
-    end if;
   end if;
 
-  if v_result_type = 'normal' and v_game_type = 'best_of_3' then
-    if v_score is null or jsonb_array_length(v_score) = 0 then
+  if v_result_type = 'normal' and v_game_type in ('best_of_3', 'best_of_3_short_tiebreak') then
+    if v_score is null or jsonb_typeof(v_score) <> 'array' or jsonb_array_length(v_score) = 0 then
       raise exception 'Indica el marcador por sets';
     end if;
     perform public.validate_match_score_against_tournament_rules(
@@ -136,6 +187,12 @@ begin
       m_old.player_a_id,
       m_old.player_b_id
     );
+  end if;
+
+  if v_result_type = 'normal' and v_game_type = 'long_set' then
+    if v_score is null or jsonb_typeof(v_score) <> 'array' or jsonb_array_length(v_score) <> 1 then
+      raise exception 'Set largo: indica exactamente 1 set';
+    end if;
   end if;
 
   if v_result_type = 'normal' and v_game_type = 'sudden_death' then
@@ -153,6 +210,8 @@ begin
     end if;
   end if;
 
+  perform set_config('app.skip_staff_notifications', 'true', true);
+
   log_action := case
     when uid = m_old.player_b_user_id then 'player_b_submit'
     else 'player_a_submit'
@@ -160,10 +219,7 @@ begin
 
   update public.matches
   set
-    score_raw = case
-      when v_result_type = 'not_reported' then null
-      else v_score
-    end,
+    score_raw = v_score,
     winner_id = case
       when v_result_type in ('not_reported', 'retired_draw') then null
       else p_winner_group_player_id
@@ -195,7 +251,7 @@ begin
     p_match_id,
     log_action,
     m_old.score_raw,
-    case when v_result_type = 'not_reported' then null else v_score end,
+    v_score,
     'closed',
     uid,
     m_old.status
@@ -205,4 +261,5 @@ begin
 end;
 $$;
 
-grant execute on function public.submit_player_match_result(uuid, jsonb, text, uuid, text) to authenticated;
+revoke all on function public.submit_player_match_result_fast(uuid, jsonb, text, uuid, text) from public;
+grant execute on function public.submit_player_match_result_fast(uuid, jsonb, text, uuid, text) to authenticated;

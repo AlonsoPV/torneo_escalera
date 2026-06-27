@@ -803,6 +803,16 @@ export interface Database {
         }
         Returns: Json
       }
+      submit_player_match_result_fast: {
+        Args: {
+          p_match_id: string
+          p_score: Json
+          p_result_type: string
+          p_winner_group_player_id: string | null
+          p_game_type?: MatchGameType
+        }
+        Returns: Json
+      }
       admin_set_match_result: {
         Args: {
           p_match_id: string

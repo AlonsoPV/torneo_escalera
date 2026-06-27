@@ -61,6 +61,12 @@ function scoreSubmitTimeoutError(): Error {
   )
 }
 
+function shouldFallbackToLegacySubmitRpc(error: { message?: string; code?: string; details?: string } | null): boolean {
+  if (!error) return false
+  const haystack = `${error.code ?? ''} ${error.message ?? ''} ${error.details ?? ''}`
+  return /PGRST202|schema cache|Could not find the function|submit_player_match_result_fast/i.test(haystack)
+}
+
 async function withScoreSubmitTimeout<T>(promise: Promise<T>): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | null = null
   const timeout = new Promise<never>((_, reject) => {
@@ -303,18 +309,52 @@ export async function saveMatchScore(input: {
     return undefined
   }
 
-  const tRpc = isPlayerSubmitPerfEnabled() ? performance.now() : 0
-  const { data, error } = await withScoreSubmitTimeout(Promise.resolve(supabase.rpc('submit_player_match_result', {
+  const rpcArgs = {
     p_match_id: input.match.id,
     p_score: pScoreJson,
     p_result_type: resultType,
     p_winner_group_player_id: winnerId,
     p_game_type: payload.game_type,
-  })))
+  }
+
+  const tRpc = isPlayerSubmitPerfEnabled() ? performance.now() : 0
+  let { data, error } = await withScoreSubmitTimeout(Promise.resolve(supabase.rpc('submit_player_match_result_fast', rpcArgs)))
+  if (error && shouldFallbackToLegacySubmitRpc(error)) {
+    ;({ data, error } = await withScoreSubmitTimeout(Promise.resolve(supabase.rpc('submit_player_match_result', rpcArgs))))
+  }
   if (isPlayerSubmitPerfEnabled()) {
     console.debug(`[perf] submit_player_match_result RPC ${Math.round(performance.now() - tRpc)}ms`)
   }
-  if (error) throw new Error(mapPostgresError(error))
+  if (error) {
+    const mapped = mapPostgresError(error)
+    if (/Usa el flujo de administrador/i.test(mapped)) {
+      const { error: adminError } = await withScoreSubmitTimeout(Promise.resolve(supabase.rpc('admin_set_match_result', {
+        p_match_id: input.match.id,
+        p_score: pScoreJson,
+        p_winner_id: winnerId,
+        p_status: 'closed',
+        p_result_type: resultType,
+        p_game_type: payload.game_type,
+      })))
+      if (adminError) throw new Error(mapPostgresError(adminError))
+
+      const now = new Date().toISOString()
+      const { data: patched, error: patchError } = await supabase
+        .from('matches')
+        .update({
+          score_submitted_by: input.actorUserId,
+          score_submitted_at: now,
+          confirmed_by: input.actorUserId,
+          confirmed_at: now,
+        })
+        .eq('id', input.match.id)
+        .select('*')
+        .single()
+      if (patchError) throw new Error(mapPostgresError(patchError))
+      return patched as MatchRow
+    }
+    throw new Error(mapped)
+  }
   return parseMatchRowFromRpc(data)
 }
 
