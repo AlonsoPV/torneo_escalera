@@ -158,14 +158,14 @@ export function matchDisplayStatus(m: MatchRow): string {
   return m.status
 }
 
-function playersByIdMap(players: GroupPlayer[]) {
+function playersByIdMap<T extends GroupPlayer>(players: T[]) {
   return new Map(players.map((p) => [p.id, p] as const))
 }
 
-export function getOpponentInMatch(
+export function getOpponentInMatch<T extends GroupPlayer>(
   m: MatchRow,
   myGroupPlayerId: string,
-  players: GroupPlayer[],
+  players: T[],
 ) {
   const byId = playersByIdMap(players)
   const otherId = m.player_a_id === myGroupPlayerId ? m.player_b_id : m.player_a_id

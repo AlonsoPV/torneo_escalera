@@ -1,6 +1,7 @@
 import { LeaderboardList } from '@/components/dashboard/LeaderboardList'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
+import type { GroupPlayerContact } from '@/types/database'
 import type { TournamentLeaderboardEntry } from '@/services/dashboard/tournamentDashboardService'
 import type { RankingRow } from '@/utils/ranking'
 
@@ -8,6 +9,7 @@ type Props = {
   groupId: string
   groupName: string
   ranking: RankingRow[]
+  players: GroupPlayerContact[]
   currentUserId: string | null
   className?: string
 }
@@ -24,10 +26,12 @@ export function PlayerGroupSection({
   groupId,
   groupName,
   ranking,
+  players,
   currentUserId,
   className,
 }: Props) {
   const rows = rowsForLeaderboard(ranking, groupId, groupName)
+  const phoneByUserId = new Map(players.map((player) => [player.user_id, player.phone ?? null] as const))
 
   return (
     <section id="player-section-group" data-name="player-section-group" className={cn(className)}>
@@ -40,7 +44,7 @@ export function PlayerGroupSection({
           </CardDescription>
         </CardHeader>
         <CardContent className="px-3 pb-4 pt-0 sm:px-4 sm:pb-5">
-          <LeaderboardList rows={rows} highlightUserId={currentUserId} />
+          <LeaderboardList rows={rows} highlightUserId={currentUserId} phoneByUserId={phoneByUserId} />
         </CardContent>
       </Card>
     </section>

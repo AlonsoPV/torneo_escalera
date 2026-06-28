@@ -4,25 +4,26 @@ import { useMemo } from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
+import { PlayerNameWithPhoneCopy } from '@/components/player/PlayerNameWithPhoneCopy'
 import { useRankPositionFlashKeys } from '@/lib/useRankPositionFlash'
 import { cn } from '@/lib/utils'
-import type { GroupPlayer } from '@/types/database'
+import type { GroupPlayerContact } from '@/types/database'
 import type { RankingRow } from '@/utils/ranking'
 
 type Props = {
   groupName: string
-  players: GroupPlayer[]
+  players: GroupPlayerContact[]
   ranking: RankingRow[]
   currentUserId: string
   groupDetailHref: string
   className?: string
 }
 
-function orderPlayers(players: GroupPlayer[], ranking: RankingRow[]): (GroupPlayer & { position?: number })[] {
+function orderPlayers(players: GroupPlayerContact[], ranking: RankingRow[]): (GroupPlayerContact & { position?: number })[] {
   if (ranking.length === 0) {
     return [...players].sort(
       (a, b) => a.seed_order - b.seed_order || a.display_name.localeCompare(b.display_name),
-    ) as (GroupPlayer & { position?: number })[]
+    ) as (GroupPlayerContact & { position?: number })[]
   }
   const byUser = new Map(ranking.map((r) => [r.userId, r.position] as const))
   return [...players]
@@ -92,9 +93,11 @@ export function PlayerGroupCard({
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#F6F3EE] text-xs font-semibold text-[#64748B]">
                   {pos}
                 </span>
-                <span className={cn('truncate text-sm', isYou ? 'font-semibold text-[#102A43]' : 'text-[#102A43]')}>
-                  {p.display_name}
-                </span>
+                <PlayerNameWithPhoneCopy
+                  name={p.display_name}
+                  phone={p.phone}
+                  nameClassName={cn('text-sm', isYou ? 'font-semibold text-[#102A43]' : 'text-[#102A43]')}
+                />
               </div>
               {isYou ? (
                 <Badge variant="outline" className="shrink-0 border-[#1F5A4C]/25 bg-[#1F5A4C]/8 text-[#1F5A4C]">

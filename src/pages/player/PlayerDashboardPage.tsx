@@ -256,6 +256,7 @@ export function PlayerDashboardPage() {
         groupId={g.id}
         groupName={g.name}
         ranking={data.ranking}
+        players={players}
         currentUserId={userId}
       />
 

@@ -3,6 +3,7 @@ import {
   KeyRound,
   Pencil,
   RotateCcw,
+  Smartphone,
   Trash2,
   UserPlus,
   Users,
@@ -100,6 +101,57 @@ function userMatchesGroupFilter(user: AdminUserRecord, groupFilter: string): boo
   const gid = user.group?.id
   if (!gid) return false
   return groupFilter.split('|').filter(Boolean).includes(gid)
+}
+
+async function copyPhoneToClipboard(phone: string, displayName: string) {
+  const normalizedPhone = phone.trim()
+  if (!normalizedPhone) return
+
+  try {
+    if (!navigator.clipboard?.writeText) {
+      throw new Error('Clipboard API unavailable')
+    }
+    await navigator.clipboard.writeText(normalizedPhone)
+    toast.success('Celular copiado', {
+      description: `${displayName}: ${normalizedPhone}`,
+    })
+  } catch {
+    toast.error('No se pudo copiar el celular', {
+      description: normalizedPhone,
+    })
+  }
+}
+
+function UserNameWithPhoneCopy({ user }: { user: AdminUserRecord }) {
+  const displayName = user.full_name ?? user.phone ?? 'Sin nombre'
+  const phone = user.phone?.trim() ?? ''
+  const hasPhone = phone.length > 0
+
+  return (
+    <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 align-middle">
+      <span className="min-w-0 truncate text-xs font-medium leading-tight text-[#102A43]" title={displayName}>
+        {displayName}
+      </span>
+      <button
+        type="button"
+        className={cn(
+          'inline-flex size-6 shrink-0 items-center justify-center rounded-lg border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1F5A4C]/30',
+          hasPhone
+            ? 'border-emerald-200 bg-emerald-50 text-[#1F5A4C] shadow-sm hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-900'
+            : 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-300',
+        )}
+        disabled={!hasPhone}
+        title={hasPhone ? `Copiar celular: ${phone}` : 'Sin celular registrado'}
+        aria-label={hasPhone ? `Copiar celular de ${displayName}` : `${displayName} no tiene celular registrado`}
+        onClick={(event) => {
+          event.stopPropagation()
+          void copyPhoneToClipboard(phone, displayName)
+        }}
+      >
+        <Smartphone className="size-3.5" aria-hidden />
+      </button>
+    </span>
+  )
 }
 
 export function AdminUsersPage() {
@@ -337,9 +389,7 @@ export function AdminUsersPage() {
         key: 'name',
         header: 'Nombre',
         sortable: true,
-        render: (user) => (
-          <span className="text-xs font-medium leading-tight text-[#102A43]">{user.full_name ?? 'Sin nombre'}</span>
-        ),
+        render: (user) => <UserNameWithPhoneCopy user={user} />,
       },
       {
         key: 'phone',
@@ -960,7 +1010,9 @@ export function AdminUsersPage() {
                       />
                       <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
                         <div className="min-w-0 flex-1 space-y-2">
-                          <p className="font-semibold text-[#102A43]">{user.full_name ?? user.phone ?? '—'}</p>
+                          <div className="flex max-w-full items-center">
+                            <UserNameWithPhoneCopy user={user} />
+                          </div>
                           <p className="font-mono text-xs tabular-nums text-[#64748B]">
                             ID: {user.external_id ?? '—'}
                           </p>

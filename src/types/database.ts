@@ -838,6 +838,15 @@ export interface Database {
         }
         Returns: undefined
       }
+      get_group_player_contacts: {
+        Args: {
+          p_group_id: string
+        }
+        Returns: {
+          user_id: string
+          phone: string | null
+        }[]
+      }
     }
     Enums: Record<string, never>
   }
@@ -850,6 +859,7 @@ export type TournamentRules =
 export type Group = Database['public']['Tables']['groups']['Row']
 export type GroupCategory = Database['public']['Tables']['group_categories']['Row']
 export type GroupPlayer = Database['public']['Tables']['group_players']['Row']
+export type GroupPlayerContact = GroupPlayer & { phone?: string | null }
 export type TournamentMovement = Database['public']['Tables']['tournament_movements']['Row']
 export type MatchRow = Database['public']['Tables']['matches']['Row']
 export type MatchScoreLog = Database['public']['Tables']['match_score_logs']['Row']

@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronUp, Crown, Medal, Trophy } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
+import { PlayerNameWithPhoneCopy } from '@/components/player/PlayerNameWithPhoneCopy'
 import type { TournamentLeaderboardEntry } from '@/services/dashboard/tournamentDashboardService'
 import { useRankPositionFlashKeys } from '@/lib/useRankPositionFlash'
 import { cn } from '@/lib/utils'
@@ -130,10 +131,12 @@ function LeaderboardDesktopHeader() {
 export function LeaderboardList({
   rows,
   highlightUserId,
+  phoneByUserId,
 }: {
   rows: TournamentLeaderboardEntry[]
   /** Resalta la fila del jugador actual (p. ej. vista `/player`). */
   highlightUserId?: string | null
+  phoneByUserId?: ReadonlyMap<string, string | null>
 }) {
   const [expanded, setExpanded] = useState(false)
   const hasMore = rows.length > INITIAL_LEADERBOARD_VISIBLE
@@ -144,7 +147,9 @@ export function LeaderboardList({
   )
 
   useEffect(() => {
-    setExpanded(false)
+    queueMicrotask(() => {
+      setExpanded(false)
+    })
   }, [rows.length])
 
   if (rows.length === 0) {
@@ -192,7 +197,11 @@ export function LeaderboardList({
                   <div className="flex min-w-0 flex-1 items-start gap-3">
                     <RankBadge position={r.position} />
                     <div className="min-w-0 pt-0.5">
-                      <p className="truncate text-[15px] font-semibold leading-tight text-foreground">{r.displayName}</p>
+                      <PlayerNameWithPhoneCopy
+                        name={r.displayName}
+                        phone={phoneByUserId?.get(r.userId)}
+                        nameClassName="text-[15px] font-semibold leading-tight text-foreground"
+                      />
                       <p className="mt-1 truncate text-xs text-muted-foreground">{r.groupName}</p>
                     </div>
                   </div>
@@ -228,7 +237,11 @@ export function LeaderboardList({
               <div className="hidden min-w-0 flex-1 items-center gap-2 sm:flex md:gap-3">
                 <RankBadge position={r.position} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-foreground">{r.displayName}</p>
+                  <PlayerNameWithPhoneCopy
+                    name={r.displayName}
+                    phone={phoneByUserId?.get(r.userId)}
+                    nameClassName="font-semibold text-foreground"
+                  />
                   <p className="truncate text-xs text-muted-foreground">{r.groupName}</p>
                 </div>
                 <StatCell label="PJ" value={r.played} />

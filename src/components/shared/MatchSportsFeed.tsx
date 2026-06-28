@@ -207,6 +207,8 @@ export function MatchFeedCompactHeader({
   tournamentName,
   playerAName,
   playerBName,
+  playerANameContent,
+  playerBNameContent,
   dateLabel,
   scoreLabel,
   winnerName,
@@ -215,6 +217,8 @@ export function MatchFeedCompactHeader({
   tournamentName: string
   playerAName: string
   playerBName: string
+  playerANameContent?: ReactNode
+  playerBNameContent?: ReactNode
   dateLabel?: string | null
   scoreLabel?: string | null
   winnerName?: string | null
@@ -228,9 +232,9 @@ export function MatchFeedCompactHeader({
         </span>
       </div>
       <h3 className="text-pretty text-[15px] font-bold leading-snug tracking-tight text-[#102A43]">
-        {playerAName}
+        {playerANameContent ?? playerAName}
         <span className="mx-1.5 font-normal text-slate-400">vs</span>
-        {playerBName}
+        {playerBNameContent ?? playerBName}
       </h3>
       {scoreLabel || winnerName ? (
         <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs leading-snug text-slate-600">

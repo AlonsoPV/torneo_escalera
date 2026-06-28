@@ -2,8 +2,9 @@ import { ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import { buttonVariants } from '@/components/ui/button'
+import { PlayerNameWithPhoneCopy } from '@/components/player/PlayerNameWithPhoneCopy'
 import { canPlayerACaptureScore, canPlayerBRespondToScore, getOpponentInMatch } from '@/lib/matchStatus'
-import type { GroupPlayer, MatchRow, TournamentRules } from '@/types/database'
+import type { GroupPlayerContact, MatchRow, TournamentRules } from '@/types/database'
 import { tournamentPathWithGroup } from '@/lib/tournamentUrl'
 import { cn } from '@/lib/utils'
 
@@ -19,7 +20,7 @@ function statusLine(m: MatchRow): string {
 
 type Props = {
   matches: MatchRow[]
-  players: GroupPlayer[]
+  players: GroupPlayerContact[]
   myGroupPlayerId: string
   userId: string
   tournamentId: string
@@ -87,7 +88,14 @@ export function NextMatchesCard({
                   className="flex flex-col gap-3 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-3 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0">
-                    <p className="font-semibold text-[#102A43]">vs. {rival?.display_name ?? 'Rival'}</p>
+                    <div className="flex max-w-full items-center">
+                      <PlayerNameWithPhoneCopy
+                        name={rival?.display_name ?? 'Rival'}
+                        phone={rival?.phone}
+                        prefix="vs."
+                        nameClassName="font-semibold text-[#102A43]"
+                      />
+                    </div>
                     <p className="mt-0.5 text-xs text-[#64748B]">
                       {groupName} · {statusLine(m)}
                     </p>

@@ -1,5 +1,6 @@
 import { History } from 'lucide-react'
 
+import { PlayerNameWithPhoneCopy } from '@/components/player/PlayerNameWithPhoneCopy'
 import { getOpponentInMatch, matchStatusLabels, matchStatusToneClasses } from '@/lib/matchStatus'
 import {
   importResultTypeBothPenalized,
@@ -12,7 +13,7 @@ import {
   getPointsForPlayerInMatch,
 } from '@/lib/playerDashboard'
 import { getPlayerPerspectiveScore } from '@/lib/matchUserPerspective'
-import type { GroupPlayer, MatchResultType, MatchRow, MatchStatus, TournamentRules } from '@/types/database'
+import type { GroupPlayerContact, MatchResultType, MatchRow, MatchStatus, TournamentRules } from '@/types/database'
 import { cn } from '@/lib/utils'
 
 const HISTORY_SECTION_ORDER: MatchStatus[] = [
@@ -89,7 +90,7 @@ function groupMatchesByStatusForHistory(matches: MatchRow[]): Map<MatchStatus, M
 
 type Props = {
   matches: MatchRow[]
-  players: GroupPlayer[]
+  players: GroupPlayerContact[]
   myGroupPlayerId: string
   rules: Pick<
     TournamentRules,
@@ -138,7 +139,14 @@ export function MatchHistoryCard({
       >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <p className="text-sm font-bold text-[#102A43]">vs. {rival?.display_name ?? 'Rival'}</p>
+            <div className="flex max-w-full items-center">
+              <PlayerNameWithPhoneCopy
+                name={rival?.display_name ?? 'Rival'}
+                phone={rival?.phone}
+                prefix="vs."
+                nameClassName="text-sm font-bold text-[#102A43]"
+              />
+            </div>
             <p className="mt-1 font-mono text-lg font-bold tracking-tight text-[#102A43]">{label}</p>
             <p className="mt-1 text-sm font-medium text-[#64748B]">
               {cancelled ? 'Partido cancelado' : official ? out : 'En proceso'}

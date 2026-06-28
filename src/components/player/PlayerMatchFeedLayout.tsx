@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { MatchScoreTimeline } from '@/components/player/MatchScoreTimeline'
+import { PlayerNameWithPhoneCopy } from '@/components/player/PlayerNameWithPhoneCopy'
 import {
   MatchFeedActionBar,
   MatchFeedCard,
@@ -19,7 +20,7 @@ import {
 } from '@/components/shared/MatchSportsFeed'
 import { buildPlayerLogEntries, buildPlayerWorkflowSteps, resolveMatchPlayerNames } from '@/lib/playerMatchFeed'
 import { cn } from '@/lib/utils'
-import type { GroupPlayer, MatchRow } from '@/types/database'
+import type { GroupPlayerContact, MatchRow } from '@/types/database'
 
 export function PlayerMatchFeedLayout({
   match,
@@ -37,7 +38,7 @@ export function PlayerMatchFeedLayout({
   id,
 }: {
   match: MatchRow
-  players: GroupPlayer[]
+  players: GroupPlayerContact[]
   userId: string
   groupName: string
   metaLabel: string
@@ -54,6 +55,8 @@ export function PlayerMatchFeedLayout({
   const isRefutedPending = match.status === 'pending_score' && Boolean(match.disputed_by)
   const visualState = resolveMatchFeedVisualState(match.status, isRefutedPending)
   const { playerAName, playerBName } = resolveMatchPlayerNames(match, players)
+  const playerA = players.find((p) => p.id === match.player_a_id)
+  const playerB = players.find((p) => p.id === match.player_b_id)
   const scoreLabel = formatCompactMatchScore(match.score_raw)
   const winnerName = resolveFeedWinnerName(
     match.winner_id,
@@ -77,6 +80,20 @@ export function PlayerMatchFeedLayout({
           tournamentName={metaLabel}
           playerAName={playerAName}
           playerBName={playerBName}
+          playerANameContent={
+            <PlayerNameWithPhoneCopy
+              name={playerAName}
+              phone={playerA?.phone}
+              nameClassName="font-bold text-[#102A43]"
+            />
+          }
+          playerBNameContent={
+            <PlayerNameWithPhoneCopy
+              name={playerBName}
+              phone={playerB?.phone}
+              nameClassName="font-bold text-[#102A43]"
+            />
+          }
           dateLabel={dateLabel}
           scoreLabel={scoreLabel}
           winnerName={winnerName}

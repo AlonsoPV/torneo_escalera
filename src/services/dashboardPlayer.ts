@@ -2,14 +2,14 @@ import { supabase } from '@/lib/supabase'
 import { listGroupPlayers } from '@/services/groups'
 import { listMatchesForGroup } from '@/services/matches'
 import { getTournamentRules } from '@/services/tournaments'
-import type { Group, GroupPlayer, MatchRow, Tournament, TournamentRules, TournamentStatus } from '@/types/database'
+import type { Group, GroupPlayer, GroupPlayerContact, MatchRow, Tournament, TournamentRules, TournamentStatus } from '@/types/database'
 import { computeGroupRanking, type RankingRow } from '@/utils/ranking'
 
 export type PlayerDashboardData = {
   tournament: Tournament
   group: Group
   membership: GroupPlayer
-  players: GroupPlayer[]
+  players: GroupPlayerContact[]
   matches: MatchRow[]
   rules: TournamentRules
   ranking: RankingRow[]
@@ -22,6 +22,11 @@ export type PlayerDashboardContextSummary = {
 }
 
 type JoinRow = GroupPlayer & { group: (Group & { tournament?: Tournament | Tournament[] | null }) | null }
+type GroupPlayerContactRow = { user_id: string; phone: string | null }
+
+function withoutKey<T extends Record<string, unknown>, K extends keyof T>(obj: T, key: K): Omit<T, K> {
+  return Object.fromEntries(Object.entries(obj).filter(([k]) => k !== key)) as Omit<T, K>
+}
 
 function tournamentStatusRank(status: TournamentStatus): number {
   if (status === 'active') return 0
@@ -43,8 +48,8 @@ export async function listPlayerDashboardContexts(userId: string): Promise<Playe
     const tRaw = g.tournament
     const t = (Array.isArray(tRaw) ? tRaw[0] : tRaw) as Tournament | null | undefined
     if (!t) continue
-    const { tournament: _emb, ...groupRow } = g
-    const { group: _g, ...rest } = raw
+    const groupRow = withoutKey(g, 'tournament')
+    const rest = withoutKey(raw, 'group')
     const membership = rest as GroupPlayer
     out.push({
       group: groupRow as Group,
@@ -66,6 +71,22 @@ export function defaultGroupIdFromContexts(contexts: PlayerDashboardContextSumma
   return contexts[0].group.id
 }
 
+async function listGroupPlayerContacts(groupId: string): Promise<Map<string, string | null>> {
+  const { data, error } = await supabase.rpc('get_group_player_contacts', { p_group_id: groupId })
+  if (error) throw error
+  return new Map(((data ?? []) as GroupPlayerContactRow[]).map((row) => [row.user_id, row.phone]))
+}
+
+async function listGroupPlayersWithContact(groupId: string): Promise<GroupPlayerContact[]> {
+  const players = await listGroupPlayers(groupId)
+  if (players.length === 0) return []
+  const phonesByUser = await listGroupPlayerContacts(groupId)
+  return players.map((player) => ({
+    ...player,
+    phone: phonesByUser.get(player.user_id) ?? null,
+  }))
+}
+
 export async function getPlayerDashboardDataForGroup(
   userId: string,
   groupId: string,
@@ -83,10 +104,10 @@ export async function getPlayerDashboardDataForGroup(
   const tRaw = g.tournament
   const t = (Array.isArray(tRaw) ? tRaw[0] : tRaw) as Tournament | null | undefined
   if (!t) return null
-  const { tournament: _emb, ...groupRow } = g
-  const { group: _g, ...rest } = raw
+  const groupRow = withoutKey(g, 'tournament')
+  const rest = withoutKey(raw, 'group')
   const membership = rest as GroupPlayer
-  const players = await listGroupPlayers(g.id)
+  const players = await listGroupPlayersWithContact(g.id)
   const matches = await listMatchesForGroup(g.id)
   const rules = await getTournamentRules(t.id)
   if (!rules) return null
