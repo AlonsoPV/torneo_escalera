@@ -68,6 +68,7 @@ function normalizeSet(set: ScoreSet): ScoreSet {
 
 type SpecialResultMode = 'normal' | 'retired' | 'wo'
 type RetirementActor = ScoreWinnerSide | 'both' | null
+type CapturePerspective = 'viewer' | 'rival'
 
 const INFO_HINT_VIEWPORT_MARGIN = 10
 const INFO_HINT_GAP = 8
@@ -355,17 +356,17 @@ function ScoreInputs({
   sets,
   columnHints,
   /** Lado canónico (A o B en el cruce) del jugador que envía el marcador; siempre columna izquierda. */
-  viewerCanonicalSide,
+  primaryCanonicalSide,
   onSetValue,
 }: {
   gameType: MatchGameType
   sets: ScoreSet[]
   columnHints: { a: { perspective: string; playerName: string }; b: { perspective: string; playerName: string } }
-  viewerCanonicalSide: 'a' | 'b'
+  primaryCanonicalSide: 'a' | 'b'
   onSetValue: (index: number, side: keyof ScoreSet, value: string) => void
 }) {
-  const leftSide = viewerCanonicalSide
-  const rightSide: 'a' | 'b' = viewerCanonicalSide === 'a' ? 'b' : 'a'
+  const leftSide = primaryCanonicalSide
+  const rightSide: 'a' | 'b' = primaryCanonicalSide === 'a' ? 'b' : 'a'
 
   const visibleSets = gameType === 'long_set' || gameType === 'sudden_death' ? sets.slice(0, 1) : sets
 
@@ -489,12 +490,14 @@ export function ScoreSubmissionModal({
   const [retirementActor, setRetirementActor] = useState<RetirementActor>(null)
   const [walkoverWinner, setWalkoverWinner] = useState<ScoreWinnerSide | null>(null)
   const [submitAttempted, setSubmitAttempted] = useState(false)
+  const [capturePerspective, setCapturePerspective] = useState<CapturePerspective>('viewer')
 
   useEffect(() => {
     if (!open || !match) return
     /* eslint-disable react-hooks/set-state-in-effect -- sincronizar estado local del diálogo con `match` al abrir */
     const nextType = match.game_type ?? 'best_of_3'
     setSubmitAttempted(false)
+    setCapturePerspective('viewer')
     setGameType(nextType)
     setSpecialMode(
       match.result_type === 'retired' || match.result_type === 'retired_draw'
@@ -524,6 +527,9 @@ export function ScoreSubmissionModal({
 
   const isYouA = match != null && match.player_a_id === viewerGroupPlayerId
   const viewerCanonicalSide = isYouA ? ('a' as const) : ('b' as const)
+  const rivalCanonicalSide: 'a' | 'b' = viewerCanonicalSide === 'a' ? 'b' : 'a'
+  const capturePrimarySide = capturePerspective === 'viewer' ? viewerCanonicalSide : rivalCanonicalSide
+  const captureSecondarySide: 'a' | 'b' = capturePrimarySide === 'a' ? 'b' : 'a'
   const columnHints = {
     a: { perspective: isYouA ? 'Tú' : 'Rival', playerName: names.a },
     b: { perspective: isYouA ? 'Rival' : 'Tú', playerName: names.b },
@@ -662,6 +668,7 @@ export function ScoreSubmissionModal({
     setRetirementActor(null)
     setWalkoverWinner(null)
     setSubmitAttempted(false)
+    setCapturePerspective('viewer')
     setSets(
       nextType === 'long_set'
         ? [{ a: 0, b: 0 }]
@@ -771,11 +778,43 @@ export function ScoreSubmissionModal({
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))] [-webkit-overflow-scrolling:touch] sm:space-y-6 sm:px-5 sm:py-4 sm:pb-4">
           <GameTypeSelector value={gameType} onChange={changeGameType} />
           <PlayersPerspectiveHeader
-            leftHead={columnHints[viewerCanonicalSide]}
-            rightHead={columnHints[viewerCanonicalSide === 'a' ? 'b' : 'a']}
+            leftHead={columnHints[capturePrimarySide]}
+            rightHead={columnHints[captureSecondarySide]}
           />
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Marcador</p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Marcador</p>
+              <div className="grid grid-cols-2 gap-1 rounded-xl border border-border/70 bg-muted/30 p-1">
+                {[
+                  { value: 'viewer' as const, label: 'Tu primero', side: viewerCanonicalSide },
+                  { value: 'rival' as const, label: 'Rival primero', side: rivalCanonicalSide },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={cn(
+                      'min-h-9 rounded-lg px-2.5 text-xs font-semibold transition-colors',
+                      capturePerspective === option.value
+                        ? 'bg-white text-[#12372F] shadow-sm ring-1 ring-border/60'
+                        : 'text-muted-foreground hover:bg-background/60 hover:text-foreground',
+                    )}
+                    aria-pressed={capturePerspective === option.value}
+                    onClick={() => {
+                      setSubmitAttempted(false)
+                      setCapturePerspective(option.value)
+                    }}
+                  >
+                    {option.label}
+                    <span className="block truncate text-[10px] font-medium text-muted-foreground">
+                      {columnHints[option.side].playerName}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="rounded-xl border border-border/60 bg-muted/25 p-2.5 text-[11px] leading-relaxed text-muted-foreground">
+              El primer numero de cada set pertenece a la columna izquierda. Cambia a Rival primero si vas a capturar el marcador desde la vista del rival o ganador.
+            </p>
             <ScoreInputs
             gameType={gameType}
             sets={
@@ -786,8 +825,8 @@ export function ScoreSubmissionModal({
                   : sets
             }
             columnHints={columnHints}
-            viewerCanonicalSide={viewerCanonicalSide}
-            onSetValue={setValue}
+            primaryCanonicalSide={capturePrimarySide}
+            onSetValue={setValue}
           />
           </div>
 
