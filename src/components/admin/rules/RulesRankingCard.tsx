@@ -1,4 +1,5 @@
 import { useFormContext } from 'react-hook-form'
+import { ListOrdered } from 'lucide-react'
 
 import type { TournamentRulesFormValues } from '@/domain/tournamentRulesForm'
 
@@ -16,6 +17,8 @@ export function RulesRankingCard() {
       id="card-rules-ranking"
       title="Criterios de clasificación"
       description="Estos criterios se usarán para ordenar jugadores con el mismo puntaje (MVP: preferencia guardada; orden fijo por producto)."
+      icon={ListOrdered}
+      eyebrow="05 - Desempates"
     >
       <FieldHint>Orden de desempate recomendado. Puedes desactivar criterios que no quieras usar en tu torneo.</FieldHint>
       <ol className="mt-3 space-y-2">

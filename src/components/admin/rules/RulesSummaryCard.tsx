@@ -1,4 +1,4 @@
-import { CalendarClock, Shield } from 'lucide-react'
+import { CalendarClock, Edit3, Shield, Swords, Trophy } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { MATCH_FORMAT_LABEL } from '@/lib/matchRulesLabels'
 import type { Tournament, TournamentRules } from '@/types/database'
 
 export function RulesSummaryCard({
@@ -74,6 +75,40 @@ export function RulesSummaryCard({
             </SelectContent>
           </Select>
         </div>
+
+        {rules ? (
+          <div className="grid grid-cols-1 gap-3">
+            <div className="flex gap-3 rounded-xl border border-emerald-100 bg-emerald-50/70 p-3">
+              <Trophy className="mt-0.5 size-5 shrink-0 text-emerald-700" aria-hidden />
+              <div>
+                <p className="text-xs font-medium text-emerald-700">Puntuación</p>
+                <p className="mt-0.5 text-sm font-semibold text-emerald-950">
+                  Victoria {rules.points_per_win} pts · Derrota {rules.points_per_loss} pts
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="flex gap-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
+                <Swords className="mt-0.5 size-5 shrink-0 text-slate-500" aria-hidden />
+                <div>
+                  <p className="text-xs font-medium text-slate-500">Formato</p>
+                  <p className="mt-0.5 text-sm font-semibold text-slate-900">
+                    {MATCH_FORMAT_LABEL[rules.match_format ?? 'best_of_3'] ?? '2 de 3 sets'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
+                <Edit3 className="mt-0.5 size-5 shrink-0 text-slate-500" aria-hidden />
+                <div>
+                  <p className="text-xs font-medium text-slate-500">Captura</p>
+                  <p className="mt-0.5 text-sm font-semibold text-slate-900">
+                    {rules.allow_player_score_entry ? 'Jugadores habilitados' : 'Solo staff/admin'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="flex gap-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3">

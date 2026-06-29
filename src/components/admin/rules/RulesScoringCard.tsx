@@ -1,4 +1,5 @@
 import { useFormContext } from 'react-hook-form'
+import { Trophy } from 'lucide-react'
 
 import type { TournamentRulesFormValues } from '@/domain/tournamentRulesForm'
 
@@ -19,6 +20,8 @@ export function RulesScoringCard() {
       id="card-rules-scoring"
       title="Reglas de puntuación"
       description="Define cuántos puntos de ranking otorgan los resultados de partido. Estos valores alimentan la clasificación del grupo."
+      icon={Trophy}
+      eyebrow="01 - Puntos"
     >
       <NumberFieldRow
         label="Partido ganado"

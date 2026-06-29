@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Table,
   TableBody,
@@ -39,8 +40,9 @@ import {
 import { listGroupCategories } from '@/services/groupCategories'
 import { listTournamentOptionsForDashboard } from '@/services/dashboard/tournamentDashboardService'
 import { getAdminMatches } from '@/services/admin'
+import { getTournamentRules } from '@/services/tournaments'
 import { tournamentStatusLabel } from '@/services/playerViewModel'
-import { downloadMatchResultsExportCsv, matchToImportCompatibleRow } from '@/lib/matchResultsExport'
+import { downloadMatchResultsMatrixExcel, matchToImportCompatibleRow } from '@/lib/matchResultsExport'
 import { cn } from '@/lib/utils'
 
 const CAT_ALL = '__all__'
@@ -171,9 +173,11 @@ function ExportRankingPreview({
   })
 
   useEffect(() => {
-    setExpanded(true)
-    setVisibleCount(PREVIEW_PAGE_SIZE)
-    setSort({ key: 'nombre', direction: 'asc' })
+    queueMicrotask(() => {
+      setExpanded(true)
+      setVisibleCount(PREVIEW_PAGE_SIZE)
+      setSort({ key: 'nombre', direction: 'asc' })
+    })
   }, [resetKey])
 
   const sortedRows = useMemo(() => {
@@ -299,8 +303,10 @@ function ExportMatchResultsPreview({
   const [visibleCount, setVisibleCount] = useState(PREVIEW_PAGE_SIZE)
 
   useEffect(() => {
-    setExpanded(true)
-    setVisibleCount(PREVIEW_PAGE_SIZE)
+    queueMicrotask(() => {
+      setExpanded(true)
+      setVisibleCount(PREVIEW_PAGE_SIZE)
+    })
   }, [resetKey])
 
   const visibleRows = rows.slice(0, visibleCount)
@@ -435,6 +441,13 @@ export function AdminExportsPage() {
     staleTime: 30_000,
   })
 
+  const tournamentRulesQ = useQuery({
+    queryKey: ['admin-export-tournament-rules', tournamentId],
+    queryFn: () => getTournamentRules(tournamentId),
+    enabled: Boolean(tournamentId.trim()),
+    staleTime: 60_000,
+  })
+
   const filteredGroupOptions = useMemo(() => {
     const rows = exportGroupsQ.data ?? []
     if (divisionId === CAT_ALL) return rows
@@ -496,15 +509,17 @@ export function AdminExportsPage() {
   const matchResultsExportMut = useMutation({
     mutationFn: async () => {
       if (!matchResultsRows.length) throw new Error('Sin partidos para exportar con estos filtros')
+      const rules = tournamentRulesQ.data
+      if (!rules) throw new Error('No se encontraron reglas del torneo para calcular PG/PP/PTS/POS.')
       const groupLabel =
         groupId !== GRP_ALL
           ? filteredGroupOptions.find((g) => g.id === groupId)?.name
           : divisionId !== CAT_ALL
             ? groupCategoriesQ.data?.find((c) => c.id === divisionId)?.name
             : null
-      downloadMatchResultsExportCsv(matchResultsRows, [slugForFiles, groupLabel, 'partidos-resultados'].filter(Boolean).join(' '))
+      downloadMatchResultsMatrixExcel(matchResultsRows, rules, [slugForFiles, groupLabel, 'matriz-partidos'].filter(Boolean).join(' '))
     },
-    onSuccess: () => toast.success(`${matchResultsRows.length} partido(s) exportado(s) para importar resultados.`),
+    onSuccess: () => toast.success(`${matchResultsRows.length} partido(s) exportado(s) en matriz por grupo.`),
     onError: (e) => toast.error(e instanceof Error ? e.message : 'No se pudo exportar partidos/resultados'),
   })
 
@@ -697,8 +712,8 @@ export function AdminExportsPage() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base text-slate-900">3. Vista previa</CardTitle>
           <CardDescription>
-            Un panel colapsable por tipo de exportación. Por defecto se muestran {PREVIEW_PAGE_SIZE} filas; usa «Ver más»
-            para el resto. Los jugadores se pueden ordenar por ID, nombre o grupo.
+            Revisa los datos antes de exportar. Cada pestaña muestra {PREVIEW_PAGE_SIZE} filas por defecto; usa «Ver más»
+            para el resto. En jugadores puedes ordenar por ID, nombre o grupo.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -711,46 +726,76 @@ export function AdminExportsPage() {
 
           {!tournamentId.trim() ? (
             <p className="text-sm text-muted-foreground">Selecciona un torneo para preparar la exportación.</p>
-          ) : exportQ.data && totalReady === 0 ? (
-            <p className="text-sm text-muted-foreground">No hay jugadores para los filtros seleccionados.</p>
-          ) : null}
+          ) : (
+            <Tabs defaultValue="players" className="w-full">
+              <TabsList
+                variant="line"
+                className="mb-0 flex h-auto min-h-10 w-full flex-wrap justify-start gap-0 rounded-none border-b border-slate-200 bg-transparent p-0"
+              >
+                <TabsTrigger
+                  value="players"
+                  className="rounded-none border-b-2 border-transparent px-3 py-2.5 text-sm data-active:border-[#1F5A4C] data-active:text-[#1F5A4C]"
+                >
+                  <Users className="size-4 shrink-0 opacity-70" aria-hidden />
+                  Jugadores
+                  <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px] tabular-nums">
+                    {totalReady}
+                  </Badge>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="matches"
+                  className="rounded-none border-b-2 border-transparent px-3 py-2.5 text-sm data-active:border-[#1F5A4C] data-active:text-[#1F5A4C]"
+                >
+                  <Trophy className="size-4 shrink-0 opacity-70" aria-hidden />
+                  Partidos y resultados
+                  <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px] tabular-nums">
+                    {matchesQ.isLoading ? '…' : matchResultsRows.length}
+                  </Badge>
+                </TabsTrigger>
+              </TabsList>
 
-          <div className="grid gap-3 lg:grid-cols-3">
-            <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Jugadores</p>
-              <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-950">{totalReady}</p>
-              <p className="mt-1 text-xs text-slate-600">jugador(es) listos para Excel/CSV</p>
-            </div>
-            <div className="rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-sky-800">Partidos/resultados</p>
-              <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-950">
-                {matchesQ.isLoading ? '...' : matchResultsRows.length}
-              </p>
-              <p className="mt-1 text-xs text-slate-600">cruces compatibles con importación</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Identificadores</p>
-              <p className="mt-1 text-sm font-semibold text-slate-900">external_id primero</p>
-              <p className="mt-1 text-xs text-slate-600">si falta, se usa el UUID interno del jugador en grupo</p>
-            </div>
-          </div>
+              <TabsContent value="players" className="mt-4 space-y-4 outline-none">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Jugadores</p>
+                    <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-950">{totalReady}</p>
+                    <p className="mt-1 text-xs text-slate-600">listos para Excel/CSV</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Identificadores</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">external_id primero</p>
+                    <p className="mt-1 text-xs text-slate-600">si falta, se usa el UUID interno del jugador en grupo</p>
+                  </div>
+                </div>
 
-          <div className="grid gap-4 xl:grid-cols-2">
-            {allPreviewRows.length > 0 ? (
-              <ExportRankingPreview rows={allPreviewRows} resetKey={previewResetKey} />
-            ) : tournamentId.trim() && exportQ.data ? (
-              <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center text-sm text-slate-500">
-                No hay jugadores para los filtros seleccionados.
-              </p>
-            ) : null}
+                {exportQ.data && totalReady === 0 ? (
+                  <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center text-sm text-slate-500">
+                    No hay jugadores para los filtros seleccionados.
+                  </p>
+                ) : allPreviewRows.length > 0 ? (
+                  <ExportRankingPreview rows={allPreviewRows} resetKey={previewResetKey} />
+                ) : exportQ.isFetching ? (
+                  <Skeleton className="h-72 rounded-xl" />
+                ) : null}
+              </TabsContent>
 
-            {matchesQ.isLoading ? (
-              <Skeleton className="h-72 rounded-xl" />
-            ) : (
-              <ExportMatchResultsPreview rows={matchResultsPreviewRows} resetKey={previewResetKey} />
-            )}
-          </div>
+              <TabsContent value="matches" className="mt-4 space-y-4 outline-none">
+                <div className="rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-sky-800">Partidos/resultados</p>
+                  <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-950">
+                    {matchesQ.isLoading ? '…' : matchResultsRows.length}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-600">cruces para matriz por grupo</p>
+                </div>
 
+                {matchesQ.isLoading ? (
+                  <Skeleton className="h-72 rounded-xl" />
+                ) : (
+                  <ExportMatchResultsPreview rows={matchResultsPreviewRows} resetKey={previewResetKey} />
+                )}
+              </TabsContent>
+            </Tabs>
+          )}
         </CardContent>
       </Card>
 
@@ -758,7 +803,7 @@ export function AdminExportsPage() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base text-slate-900">4. Exportar</CardTitle>
           <CardDescription>
-            Exporta rankings o descarga partidos/resultados con la misma estructura de la plantilla de importación.
+            Exporta rankings o descarga la matriz de partidos por grupo con liga, grupo, resultados y posiciones.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 lg:grid-cols-[1fr_1fr]">
@@ -793,19 +838,23 @@ export function AdminExportsPage() {
           <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/40 p-3">
             <p className="text-sm font-semibold text-slate-900">Partidos y resultados</p>
             <p className="mt-1 text-xs leading-relaxed text-slate-600">
-              CSV compatible con la plantilla de importar resultados: cruces, jugadores, sets, ganador, tipo de
-              resultado y estado.
+              Excel visual tipo matriz: liga, torneo, grupo, jugadores, resultados cruzados, PG, PP, PTS y POS.
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
                 className="gap-2 border-emerald-300 bg-white text-emerald-950 hover:bg-emerald-50"
-                disabled={matchesQ.isLoading || matchResultsExportMut.isPending || !matchResultsRows.length}
+                disabled={
+                  matchesQ.isLoading ||
+                  tournamentRulesQ.isLoading ||
+                  matchResultsExportMut.isPending ||
+                  !matchResultsRows.length
+                }
                 onClick={() => matchResultsExportMut.mutate()}
               >
                 <Download className="size-4" />
-                Exportar partidos/resultados
+                Exportar matriz Excel
               </Button>
               <span className="text-xs font-medium tabular-nums text-emerald-900">
                 {matchesQ.isLoading ? 'Cargando...' : `${matchResultsRows.length} partido(s)`}

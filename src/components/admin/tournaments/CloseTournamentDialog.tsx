@@ -121,8 +121,8 @@ export function CloseTournamentDialog({
                       <AlertTriangle className="mt-0.5 size-4 shrink-0" />
                       <span>
                         Al confirmar, los partidos sin marcador se cerraran como{' '}
-                        <span className="font-semibold">doble penalizacion</span>: -1 punto para ambos jugadores.
-                        Esto deja el torneo listo para crear el siguiente.
+                        <span className="font-semibold">no reportados</span>: -1 punto para ambos jugadores y marcador
+                        administrativo 3-6, 3-6 para cada uno. Esto deja el torneo listo para crear el siguiente.
                       </span>
                     </div>
                   ) : (

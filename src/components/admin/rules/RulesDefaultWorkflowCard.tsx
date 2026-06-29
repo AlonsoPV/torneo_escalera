@@ -1,4 +1,5 @@
 import { useFormContext } from 'react-hook-form'
+import { ShieldCheck } from 'lucide-react'
 
 import type { TournamentRulesFormValues } from '@/domain/tournamentRulesForm'
 
@@ -21,6 +22,8 @@ export function RulesDefaultWorkflowCard() {
       id="card-rules-defaults"
       title="Reglas de default"
       description="Define cómo se manejan los partidos no disputados o reportados como default (W/O)."
+      icon={ShieldCheck}
+      eyebrow="02 - Resultados especiales"
     >
       <SwitchRow
         id="rules-defaults-enabled"

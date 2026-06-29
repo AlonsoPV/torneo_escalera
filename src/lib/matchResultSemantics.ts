@@ -6,6 +6,10 @@ export const IMPORT_ADMIN_PENALTY_SCORE: ScoreSet[] = [
   { a: 3, b: 6 },
 ]
 
+export function mutualPenaltyLossSets(): ScoreSet[] {
+  return IMPORT_ADMIN_PENALTY_SCORE.map((set) => ({ ...set }))
+}
+
 /** Dos sets 6-3 a favor de A (perspectiva `player_a` en `matches.score_raw`). */
 const ADMIN_SETS_WINNER_IS_A: ScoreSet[] = [
   { a: 6, b: 3 },

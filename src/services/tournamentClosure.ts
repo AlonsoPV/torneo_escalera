@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { IMPORT_ADMIN_PENALTY_SCORE } from '@/lib/matchResultSemantics'
 import { getAdminGroupsForTournament } from '@/services/admin'
 import { getTournamentRules, updateTournament } from '@/services/tournaments'
 import { sortGroupStandingsForMovement } from '@/utils/nextTournamentPromotion'
@@ -87,15 +88,15 @@ async function applyDefaultClosureForUnreportedMatches(params: {
     .from('matches')
     .update({
       status: 'closed',
-      result_type: 'double_penalty',
-      score_raw: null,
+      result_type: 'not_reported',
+      score_raw: IMPORT_ADMIN_PENALTY_SCORE,
       winner_id: null,
       admin_validated_by: params.closedBy,
       admin_validated_at: now,
       closed_at: now,
       updated_by: params.closedBy,
       updated_at: now,
-      admin_notes: 'Cierre de torneo: partido sin marcador, aplica doble penalizacion por reglas.',
+      admin_notes: 'Cierre de torneo: partido sin marcador, aplica no reportado (-1/-1, 3-6 3-6).',
     })
     .eq('tournament_id', params.tournamentId)
     .eq('status', 'pending_score')

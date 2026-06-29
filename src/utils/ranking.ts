@@ -2,6 +2,7 @@ import {
   importResultTypeBothPenalized,
   importResultTypeIsRetiredDraw,
   importResultTypeUsesDefaultPoints,
+  mutualPenaltyLossSets,
   syntheticAdministrativeSetsForDefaultMatch,
 } from '@/lib/matchResultSemantics'
 import type { GroupPlayer, MatchResultType, MatchRow, ScoreSet, TournamentRules } from '@/types/database'
@@ -68,6 +69,14 @@ function addScoreStats(statsA: MutableStats, statsB: MutableStats, sets: ScoreSe
   statsA.gamesAgainst += bGames
   statsB.gamesFor += bGames
   statsB.gamesAgainst += aGames
+}
+
+function addPerspectiveStats(stats: MutableStats, sets: ScoreSet[]): void {
+  if (sets.length === 0) return
+  stats.setsFor += setsWonForA(sets)
+  stats.setsAgainst += setsWonForB(sets)
+  stats.gamesFor += sumScoreSetGames(sets, true)
+  stats.gamesAgainst += sumScoreSetGames(sets, false)
 }
 
 export type RulesPoints = Pick<
@@ -145,11 +154,13 @@ export function computeGroupRanking(players: GroupPlayer[], matches: MatchRow[],
     if (!statsA || !statsB) continue
 
     if (importResultTypeBothPenalized(m.result_type)) {
+      const penaltySets = mutualPenaltyLossSets()
       statsA.played += 1
       statsB.played += 1
       statsA.lost += 1
       statsB.lost += 1
-      addScoreStats(statsA, statsB, m.score_raw?.length ? m.score_raw : [])
+      addPerspectiveStats(statsA, penaltySets)
+      addPerspectiveStats(statsB, penaltySets)
       statsA.points += ptsRules.penaltyBoth
       statsB.points += ptsRules.penaltyBoth
       continue
@@ -207,6 +218,9 @@ export function perspectiveSetsForCell(
   match: MatchRow | undefined,
 ): ScoreSet[] | null {
   if (!match) return null
+  if (importResultTypeBothPenalized(match.result_type)) {
+    return mutualPenaltyLossSets()
+  }
   const canonical =
     match.score_raw?.length ? match.score_raw : syntheticAdministrativeSetsForDefaultMatch(match)
   if (!canonical?.length) return null

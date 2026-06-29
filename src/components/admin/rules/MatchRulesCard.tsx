@@ -1,4 +1,5 @@
 import { useFormContext } from 'react-hook-form'
+import { Swords } from 'lucide-react'
 
 import type { FinalSetFormatId, MatchFormatId, SetTypeId, TournamentRulesFormValues } from '@/domain/tournamentRulesForm'
 import {
@@ -39,6 +40,8 @@ export function MatchRulesCard() {
       id="card-rules-match"
       title="Reglas de partido"
       description="Define el formato de juego, sets, tipo de set y desempate para validar marcadores correctamente."
+      icon={Swords}
+      eyebrow="03 - Formato"
     >
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="space-y-2">

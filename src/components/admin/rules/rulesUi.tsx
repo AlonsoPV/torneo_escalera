@@ -1,4 +1,5 @@
 import type { ComponentProps, ReactNode } from 'react'
+import type { LucideIcon } from 'lucide-react'
 import type { FieldError } from 'react-hook-form'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,20 +13,36 @@ export function RulesSectionCard({
   description,
   children,
   className,
+  icon: Icon,
+  eyebrow,
 }: {
   id?: string
   title: string
   description?: string
   children: ReactNode
   className?: string
+  icon?: LucideIcon
+  eyebrow?: string
 }) {
   return (
-    <Card id={id} className={cn('rounded-2xl border border-slate-200/80 bg-white shadow-sm', className)}>
-      <CardHeader className="space-y-1 pb-3">
-        <CardTitle className="text-base font-semibold text-slate-900">{title}</CardTitle>
-        {description ? <CardDescription className="text-xs leading-relaxed sm:text-sm">{description}</CardDescription> : null}
+    <Card id={id} className={cn('overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm', className)}>
+      <CardHeader className="space-y-0 border-b border-slate-100 bg-gradient-to-b from-white to-slate-50/70 pb-4">
+        <div className="flex items-start gap-3">
+          {Icon ? (
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700">
+              <Icon className="size-5" aria-hidden />
+            </span>
+          ) : null}
+          <div className="min-w-0 flex-1">
+            {eyebrow ? <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{eyebrow}</p> : null}
+            <CardTitle className="text-base font-semibold leading-tight text-slate-950">{title}</CardTitle>
+            {description ? (
+              <CardDescription className="mt-1 text-xs leading-relaxed text-slate-600 sm:text-sm">{description}</CardDescription>
+            ) : null}
+          </div>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-4 pt-0">{children}</CardContent>
+      <CardContent className="space-y-4 pt-4">{children}</CardContent>
     </Card>
   )
 }

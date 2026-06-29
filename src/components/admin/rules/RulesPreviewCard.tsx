@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useFormContext } from 'react-hook-form'
+import { Eye } from 'lucide-react'
 
 import type { TournamentRulesFormValues } from '@/domain/tournamentRulesForm'
 import { formValuesToMatchRulesTournament } from '@/domain/tournamentRulesForm'
@@ -76,6 +77,8 @@ export function RulesPreviewCard() {
       id="card-rules-preview"
       title="Vista previa de reglas"
       description="Puntos de ranking y formato de partido con la configuración actual (ejemplos ilustrativos)."
+      icon={Eye}
+      eyebrow="Resumen vivo"
     >
       <div className="space-y-4 rounded-xl border border-slate-100 bg-slate-50/70 p-4">
         <div>

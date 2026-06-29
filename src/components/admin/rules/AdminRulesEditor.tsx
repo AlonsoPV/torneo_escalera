@@ -1,5 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Eye, ListChecks, RotateCcw, Save, Settings2, ShieldCheck, Swords, Trophy } from 'lucide-react'
 import { FormProvider, useForm, type Resolver } from 'react-hook-form'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -74,6 +75,95 @@ function TournamentStatusPanel({
         </div>
       </div>
     </div>
+  )
+}
+
+const rulesNavItems = [
+  { href: '#card-rules-scoring', label: 'Puntos', icon: Trophy },
+  { href: '#card-rules-defaults', label: 'Defaults', icon: ShieldCheck },
+  { href: '#card-rules-match', label: 'Partido', icon: Swords },
+  { href: '#card-rules-ranking', label: 'Ranking', icon: ListChecks },
+  { href: '#card-rules-preview', label: 'Vista previa', icon: Eye },
+] as const
+
+function RulesOperationsPanel({
+  status,
+  isDirty,
+  saving,
+  onReset,
+  onSave,
+}: {
+  status: Tournament['status']
+  isDirty: boolean
+  saving: boolean
+  onReset: () => void
+  onSave: () => void
+}) {
+  return (
+    <section className="rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+      <div className="grid gap-0 lg:grid-cols-[1.1fr_1.4fr_auto]">
+        <div className="border-b border-slate-100 p-4 sm:p-5 lg:border-b-0 lg:border-r">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Panel de control</p>
+          <div className="mt-3 flex items-center gap-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
+              <Settings2 className="size-5" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-950">Reglas operativas</p>
+              <p className="text-xs leading-relaxed text-slate-500">Ajusta, revisa el impacto y guarda en una sola pantalla.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 border-b border-slate-100 p-4 sm:grid-cols-3 sm:p-5 lg:border-b-0 lg:border-r">
+          <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Torneo</p>
+            <p className="mt-1 text-sm font-bold capitalize text-slate-950">{status}</p>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Cambios</p>
+            <p className="mt-1 text-sm font-bold text-slate-950">{isDirty ? 'Sin guardar' : 'Al día'}</p>
+          </div>
+          <div className="col-span-2 rounded-xl border border-emerald-100 bg-emerald-50/70 p-3 sm:col-span-1">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Flujo</p>
+            <p className="mt-1 text-sm font-bold text-emerald-950">Configurar → Probar → Guardar</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2 p-4 sm:flex-row sm:p-5 lg:min-w-[15rem] lg:flex-col lg:justify-center">
+          <Button type="button" className="h-11 w-full justify-center" disabled={saving} onClick={onSave}>
+            <Save className="size-4" />
+            Guardar
+          </Button>
+          <Button type="button" variant="outline" className="h-11 w-full justify-center" disabled={saving} onClick={onReset}>
+            <RotateCcw className="size-4" />
+            Restaurar
+          </Button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function RulesQuickNav() {
+  return (
+    <nav className="rounded-2xl border border-slate-200/80 bg-white p-2 shadow-sm" aria-label="Secciones de reglas">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        {rulesNavItems.map((item) => {
+          const Icon = item.icon
+          return (
+            <a
+              key={item.href}
+              href={item.href}
+              className="flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/30"
+            >
+              <Icon className="size-4" aria-hidden />
+              {item.label}
+            </a>
+          )
+        })}
+      </div>
+    </nav>
   )
 }
 
@@ -192,44 +282,37 @@ function AdminRulesEditorLoaded({
         eyebrow="Administración"
         title="Reglas del torneo"
         description="Configura la puntuación, criterios de ranking y condiciones de resultados para mantener una clasificación clara y justa."
-        actions={
-          <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 w-full sm:w-auto"
-              disabled={saveMut.isPending || resetDefaultsMut.isPending}
-              onClick={() => resetDefaultsMut.mutate()}
-            >
-              Restaurar reglas por defecto
-            </Button>
-            <Button type="button" className="h-11 w-full sm:w-auto" disabled={saveMut.isPending} onClick={() => void submit()}>
-              Guardar cambios
-            </Button>
-          </div>
-        }
       />
-
-      <RulesSummaryCard
-        tournament={tournament}
-        tournaments={tournaments}
-        onTournamentChange={onTournamentChange}
-        rules={rulesRow}
-      />
-
-      <TournamentStatusPanel tournament={tournament} onPublish={onPublish} publishing={publishing} />
 
       <FormProvider {...form}>
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-          <div className="space-y-6 xl:col-span-7">
+        <RulesOperationsPanel
+          status={tournament.status}
+          isDirty={form.formState.isDirty}
+          saving={saveMut.isPending || resetDefaultsMut.isPending}
+          onReset={() => resetDefaultsMut.mutate()}
+          onSave={() => void submit()}
+        />
+
+        <RulesQuickNav />
+
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_25rem] 2xl:grid-cols-[minmax(0,1fr)_28rem]">
+          <div className="space-y-6">
             <RulesScoringCard />
             <RulesDefaultWorkflowCard />
             <MatchRulesCard />
-          </div>
-          <div className="space-y-6 xl:col-span-5">
             <RulesRankingCard />
-            <RulesPreviewCard />
           </div>
+
+          <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start">
+            <RulesSummaryCard
+              tournament={tournament}
+              tournaments={tournaments}
+              onTournamentChange={onTournamentChange}
+              rules={rulesRow}
+            />
+            <TournamentStatusPanel tournament={tournament} onPublish={onPublish} publishing={publishing} />
+            <RulesPreviewCard />
+          </aside>
         </div>
 
         <RulesActionsBar

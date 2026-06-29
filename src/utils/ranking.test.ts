@@ -287,6 +287,10 @@ describe('computeGroupRanking', () => {
     expect(rows.find((r) => r.groupPlayerId === pb)!.lost).toBe(1)
     expect(rows.find((r) => r.groupPlayerId === pa)!.won).toBe(0)
     expect(rows.find((r) => r.groupPlayerId === pb)!.won).toBe(0)
+    expect(rows.find((r) => r.groupPlayerId === pa)!.gamesFor).toBe(6)
+    expect(rows.find((r) => r.groupPlayerId === pa)!.gamesAgainst).toBe(12)
+    expect(rows.find((r) => r.groupPlayerId === pb)!.gamesFor).toBe(6)
+    expect(rows.find((r) => r.groupPlayerId === pb)!.gamesAgainst).toBe(12)
   })
 
   it('N.R. cuenta penalización -1 y conserva games administrativos 3-6, 3-6', () => {
@@ -308,8 +312,8 @@ describe('computeGroupRanking', () => {
     expect(rb.points).toBe(-1)
     expect(ra.gamesFor).toBe(6)
     expect(ra.gamesAgainst).toBe(12)
-    expect(rb.gamesFor).toBe(12)
-    expect(rb.gamesAgainst).toBe(6)
+    expect(rb.gamesFor).toBe(6)
+    expect(rb.gamesAgainst).toBe(12)
   })
 
   it('RET suma puntos normales al jugador con más games', () => {
