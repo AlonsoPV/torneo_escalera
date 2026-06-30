@@ -1,4 +1,7 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
+import { Suspense } from 'react'
+
+import { RouteLoadingFallback } from '@/components/layout/RouteLoadingFallback'
 
 import { AdminSidebar } from './AdminSidebar'
 import { AdminTopbar } from './AdminTopbar'
@@ -7,6 +10,8 @@ import { AdminTopbar } from './AdminTopbar'
 const ADMIN_MAIN_MIN_H = 'min-h-[calc(100svh-3.75rem)]'
 
 export function AdminShell() {
+  const { pathname } = useLocation()
+
   return (
     <div
       className={`-mx-4 -my-4 ${ADMIN_MAIN_MIN_H} bg-[#F6F3EE] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:-mx-4 sm:-my-4 md:-mx-6`}
@@ -18,7 +23,9 @@ export function AdminShell() {
         <div className="flex min-h-0 min-w-0 flex-col">
           <AdminTopbar />
           <main className="mx-auto w-full max-w-7xl flex-1 overflow-x-hidden px-4 py-4 sm:px-5 sm:py-5 md:px-6 md:py-6">
-            <Outlet />
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <Outlet key={pathname} />
+            </Suspense>
           </main>
         </div>
       </div>

@@ -3,7 +3,6 @@ import { cloneElement, useState, type MouseEvent, type ReactElement } from 'reac
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -46,13 +45,20 @@ export function AdminConfirmDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
-          <DialogClose
-            render={<Button variant="destructive" disabled={disabled} />}
-            onClick={onConfirm}
+          <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={disabled}
+            onClick={() => {
+              onConfirm()
+              setOpen(false)
+            }}
           >
             {confirmLabel}
-          </DialogClose>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

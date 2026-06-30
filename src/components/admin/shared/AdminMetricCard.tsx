@@ -37,7 +37,13 @@ export type AdminMetricCardProps = {
   helper?: string
   /** `inline`: párrafo bajo el valor (por defecto). `info`: solo icono (tooltip nativo al pasar el ratón, detalle al pulsar). */
   descriptionMode?: 'inline' | 'info'
-  trend?: string
+  trend?: ReactNode
+  /** Destaca el texto de `trend` (p. ej. porcentaje en KPIs). */
+  trendVariant?: 'muted' | 'emphasis'
+  /** Complemento visual junto al valor principal (p. ej. badge de %). */
+  valueAccent?: ReactNode
+  /** Texto de ayuda del complemento (icono ℹ junto al accent). */
+  valueAccentInfo?: string
   /** Modo aún más denso (listados secundarios). */
   compact?: boolean
   className?: string
@@ -75,6 +81,9 @@ export function AdminMetricCard({
   description,
   helper,
   trend,
+  trendVariant = 'muted',
+  valueAccent,
+  valueAccentInfo,
   compact,
   className,
   descriptionMode = 'inline',
@@ -117,7 +126,7 @@ export function AdminMetricCard({
               </DropdownMenu>
             ) : null}
           </div>
-          <div className="mt-0.5 flex items-end gap-2 sm:mt-1">
+          <div className="mt-0.5 flex flex-wrap items-end gap-2 sm:mt-1">
             <p
               className={cn(
                 'font-bold tabular-nums tracking-tight text-slate-950',
@@ -126,6 +135,35 @@ export function AdminMetricCard({
             >
               {value}
             </p>
+            {valueAccent ? (
+              <span className="inline-flex items-end gap-1">
+                {valueAccent}
+                {valueAccentInfo?.trim() ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      type="button"
+                      className={cn(
+                        'mb-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-md text-slate-400 outline-none sm:mb-1',
+                        'hover:bg-slate-100 hover:text-slate-700 focus-visible:ring-2 focus-visible:ring-[#1F5A4C]/35',
+                      )}
+                      title={valueAccentInfo}
+                      aria-label="Información sobre el porcentaje"
+                    >
+                      <Info className="size-3.5 shrink-0" aria-hidden />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="start"
+                      side="bottom"
+                      sideOffset={8}
+                      className="w-[min(calc(100vw-2rem),18rem)] p-3 text-xs leading-relaxed text-slate-700"
+                    >
+                      <p className="font-medium text-slate-900">Porcentaje jugado</p>
+                      <p className="mt-1.5 text-slate-600">{valueAccentInfo}</p>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : null}
+              </span>
+            ) : null}
           </div>
           {desc && !infoMode ? (
             <p className="mt-0.5 text-[11px] leading-snug text-slate-400 sm:mt-1 sm:text-xs sm:leading-relaxed">
@@ -133,7 +171,14 @@ export function AdminMetricCard({
             </p>
           ) : null}
           {trend ? (
-            <p className="mt-0.5 text-[10px] font-medium uppercase leading-snug tracking-wide text-slate-400 sm:mt-1 sm:text-[11px]">
+            <p
+              className={cn(
+                'mt-1.5 leading-snug',
+                trendVariant === 'emphasis'
+                  ? 'text-sm font-semibold text-slate-700 sm:text-base'
+                  : 'mt-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400 sm:mt-1 sm:text-[11px]',
+              )}
+            >
               {trend}
             </p>
           ) : null}

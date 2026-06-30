@@ -28,6 +28,7 @@ import { AdminMatchScopeFiltersBar } from '@/components/admin/shared/AdminMatchS
 import { AdminEmptyState } from '@/components/admin/shared/AdminEmptyState'
 import { AdminPageHeader } from '@/components/admin/shared/AdminPageHeader'
 import { AdminSectionTitle } from '@/components/admin/shared/AdminSectionTitle'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { parseAdminMatchesStatusQueryParam } from '@/lib/adminStaffNotificationLinks'
@@ -53,6 +54,25 @@ import type { MatchStatus, ScoreSet } from '@/types/database'
 
 const PAGE_SIZE = 50
 
+const ADMIN_MATCHES_QUERY_BASE = {
+  refetchOnMount: 'always' as const,
+}
+
+function AdminMatchesDirectorySkeleton() {
+  return (
+    <div
+      className="space-y-4 sm:space-y-5"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label="Cargando partidos"
+    >
+      <Skeleton className="h-44 rounded-2xl" />
+      <Skeleton className="h-12 rounded-xl" />
+      <Skeleton className="h-96 rounded-2xl" />
+    </div>
+  )
+}
+
 export function AdminMatchesPage() {
   const qc = useQueryClient()
   const actorId = useAuthStore((s) => s.user?.id)
@@ -75,15 +95,21 @@ export function AdminMatchesPage() {
   const matchesQ = useQuery({
     queryKey: ['admin-matches'],
     queryFn: () => getAdminMatches(),
+    ...ADMIN_MATCHES_QUERY_BASE,
     refetchInterval: tab === 'disputed' ? 15_000 : false,
     refetchOnWindowFocus: tab === 'disputed',
-    staleTime: tab === 'disputed' ? 10_000 : 60_000,
+    staleTime: tab === 'disputed' ? 10_000 : 30_000,
   })
   const groupsQ = useQuery({
     queryKey: ['admin-groups'],
     queryFn: () => getAdminGroups(),
-    staleTime: 60_000,
+    ...ADMIN_MATCHES_QUERY_BASE,
+    staleTime: 30_000,
   })
+
+  const isDirectoryLoading = matchesQ.isPending || groupsQ.isPending
+  const isDirectoryRefreshing =
+    !isDirectoryLoading && (matchesQ.isFetching || groupsQ.isFetching)
   const rulesForEditor = useQuery({
     queryKey: ['tournament-rules', editingResult?.tournament_id ?? ''],
     queryFn: () => getTournamentRules(editingResult!.tournament_id),
@@ -407,14 +433,17 @@ export function AdminMatchesPage() {
     ]
   }, [tournamentId, tournamentOpts, groupId, groupOpts, playerGroupPlayerId, playerOpts, status, statusOpts, resetPage])
 
-  const loadingShell = matchesQ.isLoading
-
   return (
     <div className="space-y-5 sm:space-y-7 md:space-y-9 pb-10">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <AdminPageHeader
           eyebrow="Administración"
           title="Partidos"
+          actions={
+            isDirectoryRefreshing ? (
+              <span className="text-xs font-medium text-muted-foreground">Actualizando partidos…</span>
+            ) : undefined
+          }
         />
         <span
           className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm"
@@ -425,6 +454,26 @@ export function AdminMatchesPage() {
         </span>
       </div>
 
+      {matchesQ.isError && matchesQ.data === undefined ? (
+        <AdminEmptyState
+          id="admin-matches-load-error"
+          title="No se pudieron cargar los partidos"
+          description={
+            matchesQ.error instanceof Error
+              ? matchesQ.error.message
+              : 'Revisa permisos de administrador o la conexión con Supabase.'
+          }
+          icon={CalendarClock}
+          action={
+            <Button type="button" variant="outline" size="sm" onClick={() => void matchesQ.refetch()}>
+              Reintentar
+            </Button>
+          }
+        />
+      ) : isDirectoryLoading ? (
+        <AdminMatchesDirectorySkeleton />
+      ) : (
+        <>
       <AdminMatchScopeFiltersBar
         heading="Filtros"
         description="Torneo, grupo, jugador, estado y búsqueda por nombre."
@@ -488,9 +537,12 @@ export function AdminMatchesPage() {
             title="No se pudieron cargar los partidos."
             description={matchesQ.error instanceof Error ? matchesQ.error.message : 'Revisa permisos o conexión.'}
             icon={CalendarClock}
+            action={
+              <Button type="button" variant="outline" size="sm" onClick={() => void matchesQ.refetch()}>
+                Reintentar
+              </Button>
+            }
           />
-        ) : loadingShell ? (
-          <Skeleton className="h-96 rounded-2xl" />
         ) : totalRows === 0 ? (
           <AdminEmptyState
             title="No hay partidos con estos filtros."
@@ -516,6 +568,8 @@ export function AdminMatchesPage() {
           />
         )}
       </section>
+        </>
+      )}
 
       <MatchScoreModal
         match={editingResult}

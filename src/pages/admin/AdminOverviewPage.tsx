@@ -3,13 +3,12 @@ import {
   CalendarClock,
   Flag,
   Sparkles,
-  ListChecks,
   Trophy,
   Users,
 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { AdminEmptyState } from '@/components/admin/shared/AdminEmptyState'
 import { AdminMetricCard, ADMIN_METRIC_GRID_4 } from '@/components/admin/shared/AdminMetricCard'
@@ -28,6 +27,7 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { buildAdminMatchDetailUrl } from '@/lib/adminStaffNotificationLinks'
+import { adminQuickNavHref, refreshAdminQuickNavSection } from '@/lib/adminQuickNav'
 import { getAdminOverviewData } from '@/services/admin'
 import { listTournaments } from '@/services/tournaments'
 import { cn } from '@/lib/utils'
@@ -37,7 +37,7 @@ const quickActions = [
   { id: 'admin-overview-link-users', dataName: 'quick-nav-users', label: 'Ir a usuarios', href: '/admin/users' },
   { id: 'admin-overview-link-groups', dataName: 'quick-nav-groups', label: 'Ir a grupos', href: '/admin/groups' },
   { id: 'admin-overview-link-matches', dataName: 'quick-nav-matches', label: 'Ir a partidos', href: '/admin/matches' },
-  { id: 'admin-overview-link-overview', dataName: 'quick-nav-overview', label: 'Ir a resumen general', href: '/admin/overview' },
+  { id: 'admin-overview-link-dashboard', dataName: 'quick-nav-dashboard', label: 'Ir a resumen general', href: '/dashboard' },
 ] as const
 
 function pickDefaultTournamentId(rows: Tournament[]): string {
@@ -60,6 +60,8 @@ function tournamentSelectLabel(t: Tournament): string {
 }
 
 export function AdminOverviewPage() {
+  const navigate = useNavigate()
+  const qc = useQueryClient()
   const tournamentsQ = useQuery({
     queryKey: ['admin-tournaments'],
     queryFn: listTournaments,
@@ -106,6 +108,16 @@ export function AdminOverviewPage() {
   )
 
   const overview = overviewQ.data
+
+  const playedMatchesPct = useMemo(() => {
+    if (!overview || overview.totalMatches <= 0) return null
+    return Math.round((overview.playedMatches / overview.totalMatches) * 100)
+  }, [overview])
+
+  const goToAdminSection = async (href: string) => {
+    await refreshAdminQuickNavSection(qc, href)
+    navigate(adminQuickNavHref(href, selectedTournamentId))
+  }
 
   return (
     <div id="page-admin-overview" className="space-y-5 sm:space-y-8 md:space-y-10">
@@ -256,7 +268,16 @@ export function AdminOverviewPage() {
               <AdminMetricCard
                 label="Partidos jugados"
                 value={overview.playedMatches}
-                icon={ListChecks}
+                valueAccent={
+                  <span className="mb-0.5 inline-flex items-center rounded-lg bg-emerald-100 px-2.5 py-1 text-lg font-bold tabular-nums text-emerald-800 ring-1 ring-emerald-200/80 sm:mb-1 sm:px-3 sm:py-1.5 sm:text-xl">
+                    {playedMatchesPct ?? 0}%
+                  </span>
+                }
+                valueAccentInfo={
+                  overview.totalMatches > 0
+                    ? `${overview.playedMatches} de ${overview.totalMatches} partidos del torneo (${playedMatchesPct ?? 0}% del total).`
+                    : 'Sin partidos en el torneo.'
+                }
                 tone="success"
                 descriptionMode="info"
                 description="Con marcador enviado y confirmado por el rival o cerrado como oficial (fuera del estado sin marcador o solo provisional pendiente)."
@@ -282,11 +303,11 @@ export function AdminOverviewPage() {
               </CardHeader>
               <CardContent className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3">
                 {quickActions.map((action, index) => (
-                  <Link
+                  <button
                     key={action.href}
                     id={action.id}
                     data-name={action.dataName}
-                    to={action.href}
+                    type="button"
                     className={cn(
                       buttonVariants({ variant: index === 0 ? 'default' : 'outline', size: 'lg' }),
                       'h-11 w-full justify-center',
@@ -294,9 +315,10 @@ export function AdminOverviewPage() {
                         ? 'shadow-sm shadow-emerald-900/10'
                         : 'border-slate-300/80 bg-white/90 hover:bg-emerald-50/40',
                     )}
+                    onClick={() => void goToAdminSection(action.href)}
                   >
                     {action.label}
-                  </Link>
+                  </button>
                 ))}
               </CardContent>
             </Card>

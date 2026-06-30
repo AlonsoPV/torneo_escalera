@@ -10,11 +10,13 @@ type Props = {
   players: SimPlayer[]
   matches: SimMatch[]
   standings: GroupStandingRow[]
+  /** Nombre del grupo cuando se muestran varias matrices del torneo. */
+  groupName?: string
   className?: string
 }
 
 export function ResultsMatrixCard(props: Props) {
-  const { playerCount, matchCount, players, matches, standings, className } = props
+  const { playerCount, matchCount, players, matches, standings, groupName, className } = props
 
   return (
     <section
@@ -23,16 +25,11 @@ export function ResultsMatrixCard(props: Props) {
         className,
       )}
     >
-      <div className="border-b border-[var(--tdash-border)] bg-[var(--tdash-surface)] px-4 py-4 sm:px-5 md:px-6">
-        <div className="flex flex-col gap-1.5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h2 className="text-lg font-bold tracking-tight text-[var(--tdash-text)] sm:text-xl">
-              {TDASH_COPY.matrixTitle}
-            </h2>
-            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-[var(--tdash-muted)] sm:text-sm">
-              {TDASH_COPY.matrixSubtitle}
-            </p>
-          </div>
+      <div className="border-b border-[var(--tdash-border)] bg-[var(--tdash-surface)] px-4 py-3 sm:px-5 md:px-6">
+        <div className="flex flex-col gap-1 lg:flex-row lg:items-center lg:justify-between">
+          <h2 className="text-lg font-bold tracking-tight text-[var(--tdash-text)] sm:text-xl">
+            {groupName ? `${TDASH_COPY.matrixTitle} — ${groupName}` : TDASH_COPY.matrixTitle}
+          </h2>
           <p className="hidden text-xs font-medium uppercase tracking-wide text-[var(--tdash-muted)] lg:block">
             Desliza horizontalmente para ver todo el grupo
           </p>

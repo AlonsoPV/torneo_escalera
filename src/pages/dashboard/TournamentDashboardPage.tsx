@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
-import { GroupProgressCard } from '@/components/dashboard/GroupProgressCard'
 import { RecentMatchesCard } from '@/components/dashboard/RecentMatchesCard'
 import { TournamentDashboardHeaderCompact } from '@/components/dashboard/TournamentDashboardHeaderCompact'
 import { TournamentFiltersBar } from '@/components/dashboard/TournamentFiltersBar'
@@ -20,13 +19,44 @@ import {
   listTournamentOptionsForDashboard,
   recomputeTournamentDashboardPresentation,
 } from '@/services/dashboard/tournamentDashboardService'
-import { ensureDefaultGroupCategories, listGroupCategories } from '@/services/groupCategories'
-import type { Tournament } from '@/types/database'
+import type { Group, Tournament } from '@/types/database'
+import type { GroupStandingRow, SimMatch, SimPlayer } from '@/types/tournament'
+import { compareGroupsForPromotionTier } from '@/utils/nextTournamentPromotion'
 import { computeGroupRanking } from '@/utils/ranking'
 
 function defaultTournamentId(tournaments: Tournament[]): string | null {
   const active = tournaments.find((t) => t.status === 'active')
   return active?.id ?? tournaments[0]?.id ?? null
+}
+
+function sortDashboardGroups(groups: Group[]): Group[] {
+  return [...groups].sort((a, b) =>
+    compareGroupsForPromotionTier(
+      { name: a.name, order_index: a.order_index ?? 0, players: [] },
+      { name: b.name, order_index: b.order_index ?? 0, players: [] },
+    ),
+  )
+}
+
+function resolveDashboardGroupId(
+  groupId: 'all' | string,
+  searchParams: URLSearchParams,
+  groups: Group[],
+): 'all' | string {
+  const groupFromUrl = searchParams.get('group') ?? searchParams.get('grupo')
+  const requested = groupId !== 'all' ? groupId : groupFromUrl
+  if (!requested || requested === 'all') return 'all'
+  return groups.some((g) => g.id === requested) ? requested : 'all'
+}
+
+type GroupMatrixBoard = {
+  groupId: string
+  groupName: string
+  playerCount: number
+  matchCount: number
+  players: SimPlayer[]
+  matches: SimMatch[]
+  standings: GroupStandingRow[]
 }
 
 export function TournamentDashboardPage() {
@@ -39,7 +69,6 @@ export function TournamentDashboardPage() {
   const tournaments = useMemo(() => tq.data ?? [], [tq.data])
 
   const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null)
-  const [groupCategoryId, setGroupCategoryId] = useState<'all' | 'none' | string>('all')
   const [groupId, setGroupId] = useState<'all' | string>('all')
 
   const tournamentId = useMemo(() => {
@@ -49,33 +78,6 @@ export function TournamentDashboardPage() {
     if (selectedTournamentId && tournaments.some((t) => t.id === selectedTournamentId)) return selectedTournamentId
     return defaultTournamentId(tournaments)
   }, [tq.isSuccess, tournaments, searchParams, selectedTournamentId])
-
-  const categoriesQ = useQuery({
-    queryKey: ['group-categories', 'dashboard', tournamentId],
-    queryFn: async () => {
-      await ensureDefaultGroupCategories(tournamentId!)
-      return listGroupCategories(tournamentId!)
-    },
-    enabled: Boolean(tournamentId),
-    staleTime: 10 * 60_000,
-  })
-  const groupCategories = useMemo(() => categoriesQ.data ?? [], [categoriesQ.data])
-
-  const effectiveGroupCategoryId = useMemo(() => {
-    if (groupCategoryId !== 'all') return groupCategoryId
-    const fromUrl = searchParams.get('category') ?? searchParams.get('categoria')
-    if (fromUrl === 'none') return 'none'
-    if (fromUrl && groupCategories.some((c) => c.id === fromUrl)) return fromUrl
-    return 'all'
-  }, [groupCategories, groupCategoryId, searchParams])
-
-  const filters = useMemo(
-    () => ({
-      groupCategoryId: effectiveGroupCategoryId,
-      groupId,
-    }),
-    [effectiveGroupCategoryId, groupId],
-  )
 
   const baseFilters = useMemo(
     () => ({
@@ -96,25 +98,21 @@ export function TournamentDashboardPage() {
     staleTime: 90_000,
   })
 
+  const sortedGroups = useMemo(() => sortDashboardGroups(dq.data?.groups ?? []), [dq.data?.groups])
+
+  const selectedGroupId = useMemo(
+    () => resolveDashboardGroupId(groupId, searchParams, sortedGroups),
+    [groupId, searchParams, sortedGroups],
+  )
+
   const data = useMemo(() => {
     const raw = dq.data
     if (!raw) return raw
 
-    const groups =
-      effectiveGroupCategoryId === 'all'
-        ? raw.groups
-        : effectiveGroupCategoryId === 'none'
-          ? raw.groups.filter((g) => !g.group_category_id)
-          : raw.groups.filter((g) => g.group_category_id === effectiveGroupCategoryId)
-
-    const groupFromUrl = searchParams.get('group') ?? searchParams.get('grupo')
-    const requestedGroupId = groupId !== 'all' ? groupId : groupFromUrl
-    const defaultGroupId = groups[0]?.id ?? null
-    const groupStillVisible = requestedGroupId ? groups.some((g) => g.id === requestedGroupId) : false
-    const effectiveGroupId = groupStillVisible ? requestedGroupId : defaultGroupId
+    const groups = sortDashboardGroups(raw.groups)
     const effectiveFilters = {
-      ...filters,
-      groupId: effectiveGroupId ?? ('all' as const),
+      groupCategoryId: 'all' as const,
+      groupId: selectedGroupId,
     }
     const derived = recomputeTournamentDashboardPresentation({
       groups,
@@ -125,47 +123,43 @@ export function TournamentDashboardPage() {
     })
 
     return { ...raw, groups, ...derived }
-  }, [dq.data, effectiveGroupCategoryId, filters, groupId, searchParams])
-
-  const selectedGroupId = useMemo(() => {
-    const groupFromUrl = searchParams.get('group') ?? searchParams.get('grupo')
-    const requestedGroupId = groupId !== 'all' ? groupId : groupFromUrl
-    if (!data?.groups.length) return 'all'
-    if (!requestedGroupId || !data.groups.some((g) => g.id === requestedGroupId)) return data.groups[0]?.id ?? 'all'
-    return requestedGroupId
-  }, [data, groupId, searchParams])
+  }, [dq.data, selectedGroupId])
 
   const leaderboardGroupTitle =
-    selectedGroupId === 'all' ? 'general' : data?.groups.find((g) => g.id === selectedGroupId)?.name ?? 'Grupo'
+    selectedGroupId === 'all'
+      ? 'general'
+      : data?.groups.find((g) => g.id === selectedGroupId)?.name ?? 'Grupo'
 
-  const matrixGroup = useMemo(() => {
-    if (!data?.groups.length) return null
-    if (selectedGroupId !== 'all') return data.groups.find((g) => g.id === selectedGroupId) ?? null
-    return data.groups[0] ?? null
-  }, [data, selectedGroupId])
+  const matrixBoards = useMemo((): GroupMatrixBoard[] => {
+    if (!data) return []
+    const targetGroups =
+      selectedGroupId === 'all'
+        ? sortedGroups
+        : sortedGroups.filter((g) => g.id === selectedGroupId)
 
-  const matrixData = useMemo(() => {
-    if (!data || !matrixGroup) return null
-    const players = data.groupPlayers
-      .filter((p) => p.group_id === matrixGroup.id)
-      .sort((a, b) => a.seed_order - b.seed_order || a.display_name.localeCompare(b.display_name, 'es'))
-    const matches = data.matches.filter((m) => m.group_id === matrixGroup.id)
-    const ranking = computeGroupRanking(players, matches, data.rules)
-    return {
-      players: groupPlayersToSimPlayers(players, matrixGroup.id),
-      matches: matchRowsToSimMatches(matches, matrixGroup.id),
-      standings: rankingRowsToGroupStandings(players, ranking),
-    }
-  }, [data, matrixGroup])
+    return targetGroups.map((group) => {
+      const players = data.groupPlayers
+        .filter((p) => p.group_id === group.id)
+        .sort((a, b) => a.seed_order - b.seed_order || a.display_name.localeCompare(b.display_name, 'es'))
+      const matches = data.matches.filter((m) => m.group_id === group.id)
+      const ranking = computeGroupRanking(players, matches, data.rules)
+      return {
+        groupId: group.id,
+        groupName: group.name,
+        playerCount: players.length,
+        matchCount: matches.length,
+        players: groupPlayersToSimPlayers(players, group.id),
+        matches: matchRowsToSimMatches(matches, group.id),
+        standings: rankingRowsToGroupStandings(players, ranking),
+      }
+    })
+  }, [data, selectedGroupId, sortedGroups])
 
   const clearDashboardFilters = () => {
-    setGroupCategoryId('all')
     setGroupId('all')
     setSearchParams(
       (prev) => {
         const n = new URLSearchParams(prev)
-        n.delete('category')
-        n.delete('categoria')
         n.delete('group')
         n.delete('grupo')
         return n
@@ -189,7 +183,7 @@ export function TournamentDashboardPage() {
       <div className="mx-auto max-w-lg rounded-2xl border border-dashed border-border/80 bg-card px-6 py-10 text-center shadow-sm">
         <h1 className="text-lg font-semibold text-foreground">No hay torneo activo</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          Cuando se active un torneo, aquí podrás consultar su desempeño general, ranking y avance por grupo.
+          Cuando se active un torneo, aquí podrás consultar su desempeño general, ranking y cuadros de resultados.
         </p>
       </div>
     )
@@ -240,43 +234,17 @@ export function TournamentDashboardPage() {
       <TournamentFiltersBar
         tournaments={tournaments}
         tournamentId={tournamentId}
-        groupCategories={groupCategories}
-        groupCategoryId={effectiveGroupCategoryId}
         groups={data.groups}
         groupId={selectedGroupId}
-        defaultGroupId={data.groups[0]?.id ?? 'all'}
         isFetching={filtersBarShowRefreshing}
         onTournamentChange={(id) => {
           setSelectedTournamentId(id)
-          setGroupCategoryId('all')
           setGroupId('all')
           setSearchParams(
             (prev) => {
               const n = new URLSearchParams(prev)
               n.set('tournament', id)
               n.delete('torneo')
-              n.delete('category')
-              n.delete('categoria')
-              n.delete('group')
-              n.delete('grupo')
-              return n
-            },
-            { replace: true },
-          )
-        }}
-        onGroupCategoryChange={(id) => {
-          setGroupCategoryId(id)
-          setGroupId('all')
-          setSearchParams(
-            (prev) => {
-              const n = new URLSearchParams(prev)
-              if (id === 'all') {
-                n.delete('category')
-                n.delete('categoria')
-              } else {
-                n.set('category', id)
-                n.delete('categoria')
-              }
               n.delete('group')
               n.delete('grupo')
               return n
@@ -306,32 +274,28 @@ export function TournamentDashboardPage() {
 
       <TournamentPerformanceOverview metrics={data.metrics} />
 
-      {matrixGroup && matrixData ? (
-        <ResultsMatrixCard
-          playerCount={matrixData.players.length}
-          matchCount={matrixData.matches.length}
-          players={matrixData.players}
-          matches={matrixData.matches}
-          standings={matrixData.standings}
-        />
+      <TournamentLeaderboardCard leaderboard={data.leaderboard} groupLabel={leaderboardGroupTitle} />
+
+      {matrixBoards.length > 0 ? (
+        <div className="space-y-5 sm:space-y-6">
+          {matrixBoards.map((board) => (
+            <ResultsMatrixCard
+              key={board.groupId}
+              groupName={board.groupName}
+              playerCount={board.playerCount}
+              matchCount={board.matchCount}
+              players={board.players}
+              matches={board.matches}
+              standings={board.standings}
+            />
+          ))}
+        </div>
       ) : null}
 
-      {/* Una columna hasta lg: evita leaderboard + progreso demasiado estrechos en tablet */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-5 xl:gap-6">
-        <div className="min-w-0 lg:col-span-7 xl:col-span-8">
-          <TournamentLeaderboardCard leaderboard={data.leaderboard} groupLabel={leaderboardGroupTitle} />
-        </div>
-        <div className="min-w-0 lg:col-span-5 xl:col-span-4">
-          <GroupProgressCard items={data.groupProgress} />
-        </div>
-      </div>
-
-      <div className="min-w-0">
-        <RecentMatchesCard
-          matches={data.recentMatches}
-          noMatchesScheduled={data.metrics.matchesTotal === 0}
-        />
-      </div>
+      <RecentMatchesCard
+        matches={data.recentMatches}
+        noMatchesScheduled={data.metrics.matchesTotal === 0}
+      />
     </div>
   )
 }

@@ -45,7 +45,6 @@ import {
 } from '@/components/ui/select'
 import { TableCell, TableRow } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatRecoveryEmailDisplay, recoveryEmailComplete } from '@/lib/profileEmail'
 import { ADMIN_USER_FILTER_ROLES, userRoleLabelEs } from '@/lib/permissions'
 import { cn } from '@/lib/utils'
 import {
@@ -61,12 +60,38 @@ import {
 } from '@/services/admin'
 import { invokeAdminUpdateUserContact } from '@/services/authEdge'
 import { listPlayerCategories } from '@/services/playerCategories'
+import { listTournaments } from '@/services/tournaments'
 import { useAuthStore } from '@/stores/authStore'
 import type { UserRole } from '@/types/database'
 
 const PAGE_SIZE = 25
 
-type UserSortKey = 'id' | 'name' | 'phone' | 'recovery' | 'recovery_status' | 'group' | 'account'
+const ADMIN_USERS_QUERY_OPTIONS = {
+  refetchOnMount: 'always' as const,
+  staleTime: 30_000,
+}
+
+function AdminUsersDirectorySkeleton() {
+  return (
+    <div
+      className="space-y-4 sm:space-y-5"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label="Cargando directorio de usuarios"
+    >
+      <div className={cn(ADMIN_METRIC_GRID_4, 'max-sm:gap-3')}>
+        {Array.from({ length: 4 }, (_, index) => (
+          <Skeleton key={index} className="h-[7.5rem] rounded-2xl" />
+        ))}
+      </div>
+      <Skeleton className="h-44 rounded-2xl" />
+      <Skeleton className="h-24 rounded-2xl" />
+      <Skeleton className="h-80 rounded-2xl" />
+    </div>
+  )
+}
+
+type UserSortKey = 'id' | 'name' | 'phone' | 'group' | 'entry_position' | 'ranking_position'
 
 function userSortValue(user: AdminUserRecord, key: UserSortKey): string {
   switch (key) {
@@ -76,14 +101,12 @@ function userSortValue(user: AdminUserRecord, key: UserSortKey): string {
       return user.full_name ?? ''
     case 'phone':
       return user.phone ?? ''
-    case 'recovery':
-      return formatRecoveryEmailDisplay(user.email)
-    case 'recovery_status':
-      return recoveryEmailComplete(user) ? '1' : '0'
     case 'group':
       return user.group?.name ?? ''
-    case 'account':
-      return user.status ?? ''
+    case 'entry_position':
+      return String(user.tournamentEntryPosition ?? 9999).padStart(4, '0')
+    case 'ranking_position':
+      return String(user.tournamentRankingPosition ?? 9999).padStart(4, '0')
     default:
       return ''
   }
@@ -160,20 +183,55 @@ export function AdminUsersPage() {
   const [search, setSearch] = useState('')
   const deferredSearch = useDeferredValue(search)
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all')
+  const [tournamentFilter, setTournamentFilter] = useState('')
   const [groupFilter, setGroupFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState<'all' | string>('all')
-  const [estadoFilter, setEstadoFilter] = useState<'all' | 'pendiente' | 'cuenta_activa' | 'cuenta_inactiva'>('all')
   const [sort, setSort] = useState<AdminDataTableSort>({ key: 'name', direction: 'asc' })
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [passwordModalOpen, setPasswordModalOpen] = useState(false)
 
-  const usersQ = useQuery({ queryKey: ['admin-users'], queryFn: getAdminUsers })
-  const groupsQ = useQuery({ queryKey: ['admin-groups'], queryFn: () => getAdminGroups() })
-  const categoriesQ = useQuery({ queryKey: ['player-categories'], queryFn: listPlayerCategories })
+  const tournamentsQ = useQuery({
+    queryKey: ['admin-tournaments'],
+    queryFn: listTournaments,
+    ...ADMIN_USERS_QUERY_OPTIONS,
+  })
+  const tournaments = useMemo(() => tournamentsQ.data ?? [], [tournamentsQ.data])
+  const activeTournament = useMemo(
+    () => tournaments.find((tournament) => tournament.status === 'active') ?? null,
+    [tournaments],
+  )
+  const selectedTournamentId = tournamentFilter || activeTournament?.id || tournaments[0]?.id || 'all'
+  const selectedTournamentName =
+    selectedTournamentId === 'all'
+      ? 'Todos los torneos'
+      : tournaments.find((tournament) => tournament.id === selectedTournamentId)?.name ?? 'Torneo'
+  const selectedTournamentForQuery = selectedTournamentId === 'all' ? undefined : selectedTournamentId
+
+  const usersQ = useQuery({
+    queryKey: ['admin-users', selectedTournamentId],
+    queryFn: () => getAdminUsers(selectedTournamentForQuery),
+    enabled: tournamentsQ.isSuccess,
+    ...ADMIN_USERS_QUERY_OPTIONS,
+  })
+  const groupsQ = useQuery({
+    queryKey: ['admin-groups', selectedTournamentId],
+    queryFn: () => getAdminGroups(selectedTournamentForQuery),
+    enabled: tournamentsQ.isSuccess,
+    ...ADMIN_USERS_QUERY_OPTIONS,
+  })
+  const categoriesQ = useQuery({
+    queryKey: ['player-categories'],
+    queryFn: listPlayerCategories,
+    ...ADMIN_USERS_QUERY_OPTIONS,
+  })
   const groups = useMemo(() => groupsQ.data ?? [], [groupsQ.data])
   const categories = useMemo(() => categoriesQ.data ?? [], [categoriesQ.data])
+
+  const isDirectoryLoading = tournamentsQ.isPending || usersQ.isPending || groupsQ.isPending || categoriesQ.isPending
+  const isDirectoryRefreshing =
+    !isDirectoryLoading && (tournamentsQ.isFetching || usersQ.isFetching || groupsQ.isFetching || categoriesQ.isFetching)
   const groupOpts = useMemo(
     () => groupFilterOptionsFromRecords(groups, { primarySort: 'group_number' }),
     [groups],
@@ -197,7 +255,12 @@ export function AdminUsersPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset explícito de página al cambiar criterios
     setVisibleCount(PAGE_SIZE)
-  }, [deferredSearch, roleFilter, groupFilter, categoryFilter, estadoFilter, sort.key, sort.direction])
+  }, [deferredSearch, roleFilter, tournamentFilter, selectedTournamentId, groupFilter, categoryFilter, sort.key, sort.direction])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- al cambiar torneo, los grupos disponibles cambian
+    setGroupFilter('all')
+  }, [selectedTournamentId])
 
   const handleSortChange = useCallback((next: AdminDataTableSort) => {
     setSort(next)
@@ -253,13 +316,14 @@ export function AdminUsersPage() {
 
   const stats = useMemo(() => {
     const all = usersQ.data ?? []
+    const scoped = selectedTournamentId === 'all' ? all : all.filter((u) => Boolean(u.group))
     return {
-      total: all.length,
-      jugadores: all.filter((u) => u.role === 'player').length,
-      sinCategoria: all.filter((u) => !u.category_id).length,
-      sinGrupo: all.filter((u) => !u.group).length,
+      total: scoped.length,
+      jugadores: scoped.filter((u) => u.role === 'player').length,
+      sinCategoria: scoped.filter((u) => !u.category_id).length,
+      sinGrupo: scoped.filter((u) => !u.group).length,
     }
-  }, [usersQ.data])
+  }, [selectedTournamentId, usersQ.data])
 
   const userMetricContext = useMemo(() => {
     const { total, jugadores } = stats
@@ -276,19 +340,14 @@ export function AdminUsersPage() {
         !normalizedSearch ||
         user.full_name?.toLowerCase().includes(normalizedSearch) ||
         user.phone?.toLowerCase().includes(normalizedSearch) ||
-        user.external_id?.toLowerCase().includes(normalizedSearch) ||
-        formatRecoveryEmailDisplay(user.email).toLowerCase().includes(normalizedSearch)
+        user.external_id?.toLowerCase().includes(normalizedSearch)
+      const matchesTournament = selectedTournamentId === 'all' || Boolean(user.group)
       const matchesRole = roleFilter === 'all' || user.role === roleFilter
       const matchesGroup = userMatchesGroupFilter(user, groupFilter)
       const matchesCategory = categoryFilter === 'all' || user.category_id === categoryFilter
-      const matchesEstado =
-        estadoFilter === 'all' ||
-        (estadoFilter === 'pendiente' && !recoveryEmailComplete(user)) ||
-        (estadoFilter === 'cuenta_activa' && user.status === 'active') ||
-        (estadoFilter === 'cuenta_inactiva' && user.status === 'inactive')
-      return matchesSearch && matchesRole && matchesGroup && matchesCategory && matchesEstado
+      return matchesSearch && matchesTournament && matchesRole && matchesGroup && matchesCategory
     })
-  }, [categoryFilter, deferredSearch, estadoFilter, groupFilter, roleFilter, usersQ.data])
+  }, [categoryFilter, deferredSearch, groupFilter, roleFilter, selectedTournamentId, usersQ.data])
 
   const sortedFilteredUsers = useMemo(() => {
     const list = [...filteredUsers]
@@ -400,39 +459,6 @@ export function AdminUsersPage() {
         ),
       },
       {
-        key: 'recovery',
-        header: 'Correo recuperación',
-        sortable: true,
-        render: (user) => (
-          <span className="max-w-[14rem] truncate text-xs leading-tight text-[#334E68]" title={formatRecoveryEmailDisplay(user.email)}>
-            {formatRecoveryEmailDisplay(user.email)}
-          </span>
-        ),
-      },
-      {
-        key: 'recovery_status',
-        header: 'Recuperación',
-        sortable: true,
-        headerTitle:
-          'Indica si ya registró un correo para recuperar contraseña. No confundir con la columna «Cuenta» (activo/desactivado por admin).',
-        render: (user) =>
-          recoveryEmailComplete(user) ? (
-            <Badge
-              variant="secondary"
-              className="h-5 border-emerald-200/80 bg-emerald-50 px-1.5 text-[10px] font-medium leading-none text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-100"
-            >
-              Listo
-            </Badge>
-          ) : (
-            <Badge
-              variant="secondary"
-              className="h-5 border-amber-200/90 bg-amber-50 px-1.5 text-[10px] font-medium leading-none text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
-            >
-              Falta correo
-            </Badge>
-          ),
-      },
-      {
         key: 'group',
         header: 'Grupo',
         sortable: true,
@@ -443,15 +469,25 @@ export function AdminUsersPage() {
         ),
       },
       {
-        key: 'account',
-        header: 'Cuenta',
+        key: 'entry_position',
+        header: 'Entró',
         sortable: true,
-        headerTitle: 'Cuenta activa o desactivada por un administrador (no puede iniciar sesión si está desactivada).',
+        headerTitle: 'Posición en la que entró al grupo del torneo seleccionado.',
         render: (user) => (
-          <AdminStatusBadge
-            status={user.status === 'inactive' ? 'inactive' : 'active'}
-            className="h-5 shrink-0 rounded-md px-1.5 py-0 text-[10px] font-medium leading-none"
-          />
+          <span className="font-mono text-xs font-semibold tabular-nums text-[#334E68]">
+            {user.tournamentEntryPosition ? `#${user.tournamentEntryPosition}` : '—'}
+          </span>
+        ),
+      },
+      {
+        key: 'ranking_position',
+        header: 'Ranking',
+        sortable: true,
+        headerTitle: 'Posición actual del jugador en el ranking de su grupo para el torneo seleccionado.',
+        render: (user) => (
+          <span className="font-mono text-xs font-semibold tabular-nums text-[#0F766E]">
+            {user.tournamentRankingPosition ? `#${user.tournamentRankingPosition}` : '—'}
+          </span>
         ),
       },
     ],
@@ -468,32 +504,37 @@ export function AdminUsersPage() {
       ? 'Todas'
       : categoriesSortedForFilter.find((c) => c.id === categoryFilter)?.name ?? categories.find((c) => c.id === categoryFilter)?.name ?? 'Categoría'
 
-  const estadoTriggerLabel =
-    estadoFilter === 'all'
-      ? 'Todos'
-      : estadoFilter === 'pendiente'
-        ? 'Sin correo de recuperación'
-        : estadoFilter === 'cuenta_activa'
-          ? 'Cuenta activa (admin)'
-          : 'Cuenta desactivada (admin)'
-
   const hasActiveFilters =
     deferredSearch.trim() !== '' ||
+    tournamentFilter !== '' ||
     roleFilter !== 'all' ||
     groupFilter !== 'all' ||
-    categoryFilter !== 'all' ||
-    estadoFilter !== 'all'
+    categoryFilter !== 'all'
 
   const clearUserFilters = useCallback(() => {
     setSearch('')
+    setTournamentFilter('')
     setRoleFilter('all')
     setGroupFilter('all')
     setCategoryFilter('all')
-    setEstadoFilter('all')
   }, [])
 
   const userFilterSelects = useMemo((): AdminScopeFilterSelectConfig[] => {
     return [
+      {
+        id: 'tournament',
+        label: 'Torneo',
+        value: selectedTournamentId,
+        valueLabel: selectedTournamentName,
+        onValueChange: (value) => setTournamentFilter(value ?? ''),
+        items: [
+          ...tournaments.map((tournament) => ({
+            value: tournament.id,
+            label: tournament.status === 'active' ? `${tournament.name} (activo)` : tournament.name,
+          })),
+          { value: 'all', label: 'Todos los torneos' },
+        ],
+      },
       {
         id: 'role',
         label: 'Rol',
@@ -517,19 +558,6 @@ export function AdminUsersPage() {
         ],
       },
       {
-        id: 'estado',
-        label: 'Estado',
-        value: estadoFilter,
-        valueLabel: estadoTriggerLabel,
-        onValueChange: (value) => setEstadoFilter((value ?? 'all') as typeof estadoFilter),
-        items: [
-          { value: 'all', label: 'Todos' },
-          { value: 'pendiente', label: 'Sin correo de recuperación' },
-          { value: 'cuenta_activa', label: 'Cuenta activa (admin)' },
-          { value: 'cuenta_inactiva', label: 'Cuenta desactivada (admin)' },
-        ],
-      },
-      {
         id: 'group',
         label: 'Grupo',
         value: groupFilter,
@@ -546,13 +574,14 @@ export function AdminUsersPage() {
     categoriesSortedForFilter,
     categoryFilter,
     categoryTriggerLabel,
-    estadoFilter,
-    estadoTriggerLabel,
     groupFilter,
     groupOpts,
     groupTriggerLabel,
     roleFilter,
     roleTriggerLabel,
+    selectedTournamentId,
+    selectedTournamentName,
+    tournaments,
   ])
 
   const loadMoreFooter =
@@ -578,6 +607,11 @@ export function AdminUsersPage() {
         eyebrow="Administración"
         title="Usuarios"
         description="Administra jugadores, roles y credenciales. Verás métricas en tarjetas (totales y pendientes por categoría/grupo), filtros y listado. La carga masiva está en «Dar de alta usuarios»."
+        actions={
+          isDirectoryRefreshing ? (
+            <span className="text-xs font-medium text-muted-foreground">Actualizando directorio…</span>
+          ) : undefined
+        }
       />
 
       {/* Barra «Exportaciones» (plantillas Excel/CSV, credenciales y menú Exportar) deshabilitada; ver historial git para recuperar el marcado JSX. */}
@@ -608,6 +642,7 @@ export function AdminUsersPage() {
               <CreateUserModal
                 groups={groups}
                 categories={categories}
+                disabled={isDirectoryLoading}
                 onSubmit={(values) =>
                   actionMut.mutate(async () => {
                     await createUser(values)
@@ -621,6 +656,26 @@ export function AdminUsersPage() {
         </Card>
       </section>
 
+      {usersQ.isError && usersQ.data === undefined ? (
+        <AdminEmptyState
+          id="admin-users-load-error"
+          title="No se pudo cargar el directorio de usuarios"
+          description={
+            usersQ.error instanceof Error
+              ? usersQ.error.message
+              : 'Revisa permisos de administrador o la conexión con Supabase.'
+          }
+          icon={Users}
+          action={
+            <Button type="button" variant="outline" size="sm" onClick={() => void usersQ.refetch()}>
+              Reintentar
+            </Button>
+          }
+        />
+      ) : isDirectoryLoading ? (
+        <AdminUsersDirectorySkeleton />
+      ) : (
+        <>
       <section className="space-y-4 sm:space-y-5" aria-labelledby="users-metrics-heading">
         <AdminSectionTitle
           id="users-metrics-heading"
@@ -636,7 +691,7 @@ export function AdminUsersPage() {
             tone="neutral"
             compact
             descriptionMode="info"
-            description="Cuenta de perfiles en base de datos sin aplicar filtros. Incluye administradores, jugadores y demás roles configurados."
+            description="Total de perfiles dentro del alcance actual. Incluye administradores, jugadores y demás roles configurados."
             trend={stats.total === 0 ? undefined : `${userMetricContext.playersPct}% son rol jugador`}
           />
           <AdminMetricCard
@@ -646,7 +701,7 @@ export function AdminUsersPage() {
             tone="info"
             compact
             descriptionMode="info"
-            description="Usuarios con rol jugador activo o inactivo según la columna «Cuenta» en el listado (aquí sólo contamos perfil)."
+            description="Usuarios con rol jugador dentro del alcance actual del listado."
             trend={
               stats.total === 0
                 ? undefined
@@ -680,11 +735,11 @@ export function AdminUsersPage() {
 
       <AdminMatchScopeFiltersBar
         heading="Filtros"
-        description="Busca por nombre, ID, celular o correo. Refina por rol, categoría, estado de cuenta y grupo."
+        description="Busca por nombre, ID o celular. Refina por torneo, rol, categoría y grupo."
         search={{
           value: search,
           onChange: setSearch,
-          placeholder: 'Buscar por nombre, ID, celular o correo…',
+          placeholder: 'Buscar por nombre, ID o celular…',
           ariaLabel: 'Buscar usuarios',
         }}
         selects={userFilterSelects}
@@ -732,24 +787,29 @@ export function AdminUsersPage() {
             </div>
             <dl className="grid min-w-0 gap-2 sm:grid-cols-2 lg:max-w-lg lg:gap-x-4 lg:gap-y-1.5">
               <div className="min-w-0">
-                <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Recuperación</dt>
-                <dd className="text-xs leading-snug text-slate-600">Correo registrado para reset de contraseña.</dd>
+                <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Torneo</dt>
+                <dd className="truncate text-xs leading-snug text-slate-600" title={selectedTournamentName}>
+                  {selectedTournamentName}
+                </dd>
               </div>
               <div className="min-w-0">
-                <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Cuenta</dt>
-                <dd className="text-xs leading-snug text-slate-600">Alta o baja de acceso por administrador.</dd>
+                <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Posiciones</dt>
+                <dd className="text-xs leading-snug text-slate-600">Entrada al grupo y ranking actual.</dd>
               </div>
             </dl>
           </div>
         </div>
 
-        {usersQ.isLoading ? (
-          <Skeleton className="h-72 rounded-2xl" />
-        ) : usersQ.isError ? (
+        {usersQ.isError ? (
           <AdminEmptyState
             title="No se pudo cargar el directorio de usuarios."
             description={usersQ.error instanceof Error ? usersQ.error.message : 'Revisa permisos o conexión con Supabase.'}
             icon={Users}
+            action={
+              <Button type="button" variant="outline" size="sm" onClick={() => void usersQ.refetch()}>
+                Reintentar
+              </Button>
+            }
           />
         ) : sortedFilteredUsers.length === 0 ? (
           <AdminEmptyState
@@ -970,17 +1030,14 @@ export function AdminUsersPage() {
                       <SelectItem value="phone" label="Celular">
                         Celular
                       </SelectItem>
-                      <SelectItem value="recovery" label="Correo recuperación">
-                        Correo recuperación
-                      </SelectItem>
-                      <SelectItem value="recovery_status" label="Recuperación">
-                        Recuperación
-                      </SelectItem>
                       <SelectItem value="group" label="Grupo">
                         Grupo
                       </SelectItem>
-                      <SelectItem value="account" label="Cuenta">
-                        Cuenta
+                      <SelectItem value="entry_position" label="Entró">
+                        Entró
+                      </SelectItem>
+                      <SelectItem value="ranking_position" label="Ranking">
+                        Ranking
                       </SelectItem>
                     </SelectContent>
                   </Select>
@@ -1018,26 +1075,14 @@ export function AdminUsersPage() {
                           </p>
                           <div className="flex flex-wrap items-center gap-2 text-xs text-[#64748B]">
                             <span className="tabular-nums">{user.phone ?? '—'}</span>
-                            <span className="hidden sm:inline">·</span>
-                            <span>{formatRecoveryEmailDisplay(user.email)}</span>
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            {recoveryEmailComplete(user) ? (
-                              <Badge
-                                variant="secondary"
-                                className="border-emerald-200/80 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-100"
-                              >
-                                Recuperación: listo
-                              </Badge>
-                            ) : (
-                              <Badge
-                                variant="secondary"
-                                className="border-amber-200/90 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
-                              >
-                                Recuperación: falta correo
-                              </Badge>
-                            )}
-                            <AdminStatusBadge status={user.status === 'inactive' ? 'inactive' : 'active'} />
+                            <Badge variant="secondary" className="border-slate-200 bg-slate-50 text-slate-700">
+                              Entró: {user.tournamentEntryPosition ? `#${user.tournamentEntryPosition}` : '—'}
+                            </Badge>
+                            <Badge variant="secondary" className="border-emerald-200 bg-emerald-50 text-emerald-900">
+                              Ranking: {user.tournamentRankingPosition ? `#${user.tournamentRankingPosition}` : '—'}
+                            </Badge>
                           </div>
                         </div>
                         <div className="shrink-0">
@@ -1069,6 +1114,8 @@ export function AdminUsersPage() {
           </>
         )}
       </section>
+        </>
+      )}
     </div>
   )
 }

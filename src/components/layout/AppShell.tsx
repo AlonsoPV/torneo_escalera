@@ -2,6 +2,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 
 import { AppErrorBoundary } from '@/components/layout/AppErrorBoundary'
 import { AppHeader } from '@/components/layout/AppHeader'
+import { AppSiteFooter } from '@/components/layout/AppSiteFooter'
 import { cn } from '@/lib/utils'
 
 const playerStyleBg = (pathname: string) =>
@@ -28,6 +29,7 @@ export function AppShell() {
           <Outlet />
         </AppErrorBoundary>
       </main>
+      <AppSiteFooter />
     </div>
   )
 }

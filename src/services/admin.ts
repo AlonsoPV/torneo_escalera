@@ -3,6 +3,7 @@ import { isMissingPostgrestRelationError } from '@/lib/postgrestErrors'
 import { supabase } from '@/lib/supabase'
 import { addGroupPlayer, removeGroupPlayer as removeGroupMembership } from '@/services/groups'
 import { adminCorrectDisputedMatch, correctAdminScore, saveMatchScore } from '@/services/matches'
+import { getTournamentRules } from '@/services/tournaments'
 import type {
   Group,
   GroupCategory,
@@ -16,6 +17,7 @@ import type {
   TournamentStatus,
   UserRole,
 } from '@/types/database'
+import { computeGroupRanking } from '@/utils/ranking'
 
 export type AdminGroupPlayer = GroupPlayer & {
   profile: Profile | null
@@ -50,6 +52,8 @@ export type AdminMatchRecord = MatchRow & {
 export type AdminUserRecord = Profile & {
   group: Group | null
   groupPlayer: GroupPlayer | null
+  tournamentEntryPosition: number | null
+  tournamentRankingPosition: number | null
 }
 
 export type AdminOverviewPendingAction = {
@@ -769,12 +773,49 @@ export async function correctResult(
   return data as MatchRow
 }
 
-export async function getAdminUsers(): Promise<AdminUserRecord[]> {
+function sortGroupPlayersForEntryPosition(a: GroupPlayer, b: GroupPlayer): number {
+  return a.seed_order - b.seed_order || a.display_name.localeCompare(b.display_name, 'es', { numeric: true }) || a.id.localeCompare(b.id)
+}
+
+export async function getAdminUsers(tournamentId?: string): Promise<AdminUserRecord[]> {
   const data = await listAllAdminData()
   const groupById = new Map(data.groups.map((g) => [g.id, g]))
   const membershipByUserId = new Map<string, GroupPlayer>()
+  const entryPositionByGroupPlayerId = new Map<string, number>()
+  const rankingPositionByGroupPlayerId = new Map<string, number>()
+  const tournamentGroupIds = tournamentId
+    ? new Set(data.groups.filter((g) => g.tournament_id === tournamentId).map((g) => g.id))
+    : null
 
-  for (const membership of data.groupPlayers) {
+  const eligibleMemberships = tournamentGroupIds
+    ? data.groupPlayers.filter((membership) => tournamentGroupIds.has(membership.group_id))
+    : data.groupPlayers
+
+  for (const group of data.groups) {
+    if (tournamentGroupIds && !tournamentGroupIds.has(group.id)) continue
+    const groupRoster = eligibleMemberships
+      .filter((membership) => membership.group_id === group.id)
+      .sort(sortGroupPlayersForEntryPosition)
+    groupRoster.forEach((membership, index) => {
+      entryPositionByGroupPlayerId.set(membership.id, index + 1)
+    })
+  }
+
+  if (tournamentId) {
+    const rules = await getTournamentRules(tournamentId)
+    if (rules) {
+      for (const group of data.groups.filter((g) => g.tournament_id === tournamentId)) {
+        const groupPlayers = eligibleMemberships.filter((membership) => membership.group_id === group.id)
+        const groupMatches = data.matches.filter((match) => match.group_id === group.id)
+        const ranking = computeGroupRanking(groupPlayers, groupMatches, rules)
+        for (const row of ranking) {
+          rankingPositionByGroupPlayerId.set(row.groupPlayerId, row.position)
+        }
+      }
+    }
+  }
+
+  for (const membership of eligibleMemberships) {
     if (!membershipByUserId.has(membership.user_id)) {
       membershipByUserId.set(membership.user_id, membership)
     }
@@ -786,6 +827,8 @@ export async function getAdminUsers(): Promise<AdminUserRecord[]> {
       ...profile,
       groupPlayer,
       group: groupPlayer ? groupById.get(groupPlayer.group_id) ?? null : null,
+      tournamentEntryPosition: groupPlayer ? entryPositionByGroupPlayerId.get(groupPlayer.id) ?? null : null,
+      tournamentRankingPosition: groupPlayer ? rankingPositionByGroupPlayerId.get(groupPlayer.id) ?? null : null,
     }
   })
 }

@@ -8,23 +8,24 @@ const DEFAULT_CATEGORIES: { name: string; order_index: number }[] = [
   { name: 'Fuerzas básicas', order_index: 2 },
 ]
 
-/** Inserta las tres categorías por defecto si el torneo aún no las tiene. */
+/** Inserta las tres categorías por defecto solo si el torneo aún no tiene ninguna. */
 export async function ensureDefaultGroupCategories(tournamentId: string): Promise<void> {
   const { data: existing, error: exErr } = await supabase
     .from('group_categories')
-    .select('name')
+    .select('id')
     .eq('tournament_id', tournamentId)
+    .limit(1)
   if (exErr) {
     if (isMissingPostgrestRelationError(exErr)) return
     throw exErr
   }
-  const have = new Set((existing ?? []).map((r) => r.name))
-  const rows = DEFAULT_CATEGORIES.filter((d) => !have.has(d.name)).map((d) => ({
+  if ((existing ?? []).length > 0) return
+
+  const rows = DEFAULT_CATEGORIES.map((d) => ({
     tournament_id: tournamentId,
     name: d.name,
     order_index: d.order_index,
   }))
-  if (rows.length === 0) return
   const { error } = await supabase.from('group_categories').insert(rows)
   if (error) throw error
 }
@@ -74,6 +75,9 @@ export async function updateGroupCategory(
 }
 
 export async function deleteGroupCategory(id: string): Promise<void> {
-  const { error } = await supabase.from('group_categories').delete().eq('id', id)
+  const { data, error } = await supabase.from('group_categories').delete().eq('id', id).select('id')
   if (error) throw error
+  if (!data?.length) {
+    throw new Error('No se pudo eliminar la categoría. Verifica permisos de administrador.')
+  }
 }

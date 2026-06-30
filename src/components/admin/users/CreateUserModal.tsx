@@ -24,10 +24,12 @@ export function CreateUserModal({
   categories,
   onSubmit,
   triggerClassName,
+  disabled = false,
 }: {
   groups: Group[]
   categories: PlayerCategory[]
   triggerClassName?: string
+  disabled?: boolean
   onSubmit: (values: {
     fullName: string
     phone: string
@@ -51,6 +53,7 @@ export function CreateUserModal({
         <Button
           type="button"
           size="lg"
+          disabled={disabled}
           className={cn(
             'h-11 w-full gap-2 bg-[#1F5A4C] text-white shadow-sm hover:bg-[#174a3f] sm:w-auto sm:min-w-[12rem]',
             triggerClassName,

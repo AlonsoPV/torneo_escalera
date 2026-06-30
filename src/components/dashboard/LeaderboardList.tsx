@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp, Crown, Medal, Trophy } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 
 import { PlayerNameWithPhoneCopy } from '@/components/player/PlayerNameWithPhoneCopy'
 import type { TournamentLeaderboardEntry } from '@/services/dashboard/tournamentDashboardService'
@@ -27,10 +27,11 @@ function rowCardClass(position: number) {
   )
 }
 
-function RankBadge({ position }: { position: number }) {
+function RankBadge({ position, compact }: { position: number; compact?: boolean }) {
   const podium = position <= 3
   const circle = cn(
-    'flex size-9 items-center justify-center rounded-full text-sm font-bold tabular-nums shadow-sm ring-1 ring-inset sm:size-10 sm:text-base',
+    'flex items-center justify-center rounded-full font-bold tabular-nums shadow-sm ring-1 ring-inset',
+    compact ? 'size-8 text-sm' : 'size-9 text-sm sm:size-10 sm:text-base',
     position === 1 &&
       'bg-gradient-to-b from-amber-100 to-amber-50 text-amber-950 ring-amber-300/70 dark:from-amber-900/70 dark:to-amber-950/50 dark:text-amber-50 dark:ring-amber-700/40',
     position === 2 &&
@@ -41,16 +42,18 @@ function RankBadge({ position }: { position: number }) {
   )
 
   return (
-    <div className={cn(COL_RANK, 'flex flex-col items-center justify-center gap-0.5')}>
-      <span className="flex h-3.5 items-center justify-center sm:h-4" aria-hidden>
-        {position === 1 ? (
-          <Crown className="size-3.5 text-amber-600 dark:text-amber-400" />
-        ) : position === 2 ? (
-          <Medal className="size-3.5 text-slate-500 dark:text-slate-400" />
-        ) : position === 3 ? (
-          <Medal className="size-3.5 text-orange-600 dark:text-orange-400" />
-        ) : null}
-      </span>
+    <div className={cn(COL_RANK, 'flex flex-col items-center justify-center', compact ? 'gap-0' : 'gap-0.5')}>
+      {!compact ? (
+        <span className="flex h-3.5 items-center justify-center sm:h-4" aria-hidden>
+          {position === 1 ? (
+            <Crown className="size-3.5 text-amber-600 dark:text-amber-400" />
+          ) : position === 2 ? (
+            <Medal className="size-3.5 text-slate-500 dark:text-slate-400" />
+          ) : position === 3 ? (
+            <Medal className="size-3.5 text-orange-600 dark:text-orange-400" />
+          ) : null}
+        </span>
+      ) : null}
       <span className={circle} aria-label={`Posición ${position}`}>
         {position}
       </span>
@@ -67,7 +70,18 @@ function StatCell({ label, value, className }: { label: string; value: number | 
   )
 }
 
-function PointsPill({ points }: { points: number }) {
+function PointsPill({ points, compact }: { points: number; compact?: boolean }) {
+  if (compact) {
+    return (
+      <div className="shrink-0 text-right leading-none">
+        <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Pts</span>
+        <span className="mt-0.5 block text-base font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
+          {points}
+        </span>
+      </div>
+    )
+  }
+
   return (
     <div className={cn(COL_PTS, 'flex flex-col items-end justify-center gap-0.5')}>
       <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Pts</span>
@@ -83,29 +97,44 @@ function PointsPill({ points }: { points: number }) {
   )
 }
 
-function MobileStatTile({
-  label,
-  fullLabel,
-  value,
-  emphasize,
+function MobileStatsRow({
+  played,
+  won,
+  lost,
+  setsDiff,
+  gamesDiff,
 }: {
-  label: string
-  fullLabel: string
-  value: number | string
-  emphasize?: boolean
+  played: number
+  won: number
+  lost: number
+  setsDiff: number
+  gamesDiff: number
 }) {
+  const fmtDiff = (value: number) => (value > 0 ? `+${value}` : String(value))
+
+  const items = [
+    { label: 'PJ', value: played, title: 'Partidos jugados' },
+    { label: 'PG', value: won, title: 'Partidos ganados' },
+    { label: 'PP', value: lost, title: 'Partidos perdidos' },
+    { label: 'S±', value: fmtDiff(setsDiff), title: 'Diferencia de sets' },
+    { label: 'G±', value: fmtDiff(gamesDiff), title: 'Diferencia de games' },
+  ] as const
+
   return (
-    <div
-      className={cn(
-        'rounded-xl border px-2 py-2 text-center shadow-sm',
-        emphasize
-          ? 'border-emerald-500/20 bg-emerald-500/[0.07] ring-1 ring-emerald-500/10'
-          : 'border-border/50 bg-background/90 ring-1 ring-border/40',
-      )}
-      title={fullLabel}
-    >
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-0.5 text-base font-bold tabular-nums leading-none text-foreground">{value}</p>
+    <div className="mt-1.5 flex flex-wrap items-center pl-[2.625rem] text-[11px] leading-tight text-muted-foreground">
+      {items.map((item, index) => (
+        <Fragment key={item.label}>
+          {index > 0 ? (
+            <span className="mx-1.5 text-border/80" aria-hidden>
+              ·
+            </span>
+          ) : null}
+          <span className="inline-flex items-baseline gap-0.5" title={item.title}>
+            <span className="font-semibold tabular-nums text-foreground">{item.value}</span>
+            <span className="text-[9px] font-medium uppercase tracking-wide">{item.label}</span>
+          </span>
+        </Fragment>
+      ))}
     </div>
   )
 }
@@ -184,7 +213,7 @@ export function LeaderboardList({
               key={`${r.userId}-${r.position}`}
               className={cn(
                 rowCardClass(r.position),
-                'px-3 py-2.5 sm:flex sm:items-center sm:gap-2 sm:px-4 sm:py-3',
+                'px-3 py-2 sm:flex sm:items-center sm:gap-2 sm:px-4 sm:py-3',
                 highlighted &&
                   'relative z-[1] shadow-[inset_0_0_0_2px] shadow-emerald-500/45 ring-emerald-500/30 dark:shadow-emerald-400/35',
                 rankMoved &&
@@ -193,44 +222,27 @@ export function LeaderboardList({
             >
               {/* Mobile */}
               <div className="sm:hidden">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 flex-1 items-start gap-3">
-                    <RankBadge position={r.position} />
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                    <RankBadge position={r.position} compact />
                     <div className="min-w-0 pt-0.5">
                       <PlayerNameWithPhoneCopy
                         name={r.displayName}
                         phone={phoneByUserId?.get(r.userId)}
-                        nameClassName="text-[15px] font-semibold leading-tight text-foreground"
+                        nameClassName="text-sm font-semibold leading-tight text-foreground"
                       />
-                      <p className="mt-1 truncate text-xs text-muted-foreground">{r.groupName}</p>
+                      <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{r.groupName}</p>
                     </div>
                   </div>
-                  <PointsPill points={r.points} />
+                  <PointsPill points={r.points} compact />
                 </div>
-                <div className="mt-3 border-t border-border/35 pt-3">
-                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    Estadísticas del grupo
-                  </p>
-                  <div className="grid grid-cols-3 gap-2">
-                    <MobileStatTile label="PJ" fullLabel="Partidos jugados" value={r.played} />
-                    <MobileStatTile label="PG" fullLabel="Partidos ganados" value={r.won} />
-                    <MobileStatTile label="PP" fullLabel="Partidos perdidos" value={r.lost} />
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <MobileStatTile
-                      label="S±"
-                      fullLabel="Diferencia de sets a favor"
-                      value={sd >= 0 ? `+${sd}` : sd}
-                      emphasize
-                    />
-                    <MobileStatTile
-                      label="G±"
-                      fullLabel="Diferencia de games a favor"
-                      value={gd >= 0 ? `+${gd}` : gd}
-                      emphasize
-                    />
-                  </div>
-                </div>
+                <MobileStatsRow
+                  played={r.played}
+                  won={r.won}
+                  lost={r.lost}
+                  setsDiff={sd}
+                  gamesDiff={gd}
+                />
               </div>
 
               {/* Tablet / desktop */}

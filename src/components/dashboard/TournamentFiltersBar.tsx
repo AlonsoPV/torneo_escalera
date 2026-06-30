@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import type { Group, GroupCategory, Tournament } from '@/types/database'
+import type { Group, Tournament } from '@/types/database'
 import { compareGroupsForPromotionTier } from '@/utils/nextTournamentPromotion'
 
 function localeEsNumericNameCompare(a: string, b: string): number {
@@ -46,41 +46,25 @@ function FieldLabel({ children }: { children: string }) {
 export function TournamentFiltersBar({
   tournaments,
   tournamentId,
-  groupCategories,
-  groupCategoryId,
   groups,
   groupId,
-  defaultGroupId,
   isFetching,
   onTournamentChange,
-  onGroupCategoryChange,
   onGroupChange,
   onClearFilters,
 }: {
   tournaments: Tournament[]
   tournamentId: string
-  groupCategories: GroupCategory[]
-  groupCategoryId: 'all' | 'none' | string
   groups: Group[]
   groupId: 'all' | string
-  defaultGroupId?: 'all' | string
   isFetching?: boolean
   onTournamentChange: (id: string) => void
-  onGroupCategoryChange: (id: 'all' | 'none' | string) => void
   onGroupChange: (id: 'all' | string) => void
   onClearFilters: () => void
 }) {
   const sortedTournaments = useMemo(
     () => [...tournaments].sort(tournamentDashboardSort),
     [tournaments],
-  )
-
-  const sortedCategories = useMemo(
-    () =>
-      [...groupCategories].sort(
-        (a, b) => a.order_index - b.order_index || localeEsNumericNameCompare(a.name, b.name),
-      ),
-    [groupCategories],
   )
 
   const sortedGroups = useMemo(
@@ -94,19 +78,15 @@ export function TournamentFiltersBar({
     [groups],
   )
 
-  const defaultSelectedGroupId = defaultGroupId ?? sortedGroups[0]?.id ?? 'all'
-  const filtersActive = groupCategoryId !== 'all' || groupId !== defaultSelectedGroupId
+  const defaultSelectedGroupId: 'all' | string = 'all'
+  const filtersActive = groupId !== defaultSelectedGroupId
 
   const tournamentLabel = sortedTournaments.find((t) => t.id === tournamentId)?.name ?? '-'
 
-  const categoryTriggerLabel =
-    groupCategoryId === 'all'
-      ? 'Todas'
-      : groupCategoryId === 'none'
-        ? 'Sin categoria'
-        : sortedCategories.find((c) => c.id === groupCategoryId)?.name ?? 'Todas'
-
-  const groupTriggerLabel = groupId === 'all' ? 'Todos' : sortedGroups.find((g) => g.id === groupId)?.name ?? 'Todos'
+  const groupTriggerLabel =
+    groupId === 'all'
+      ? 'Todo el torneo'
+      : sortedGroups.find((g) => g.id === groupId)?.name ?? 'Todo el torneo'
 
   return (
     <section className="overflow-hidden rounded-lg border border-[var(--tdash-border)] bg-[var(--tdash-surface)] shadow-sm">
@@ -120,7 +100,7 @@ export function TournamentFiltersBar({
               Filtros del torneo
             </h2>
             <p className="truncate text-xs text-[var(--tdash-muted)]">
-              {tournamentLabel} / {categoryTriggerLabel} / {groupTriggerLabel}
+              {tournamentLabel} / {groupTriggerLabel}
             </p>
           </div>
         </div>
@@ -149,8 +129,8 @@ export function TournamentFiltersBar({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 md:p-4 xl:grid-cols-12">
-        <div className="min-w-0 sm:col-span-2 xl:col-span-5">
+      <div className="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 md:p-4">
+        <div className="min-w-0">
           <FieldLabel>Torneo</FieldLabel>
           <Select
             value={tournamentId}
@@ -175,35 +155,7 @@ export function TournamentFiltersBar({
           </Select>
         </div>
 
-        <div className="min-w-0 xl:col-span-3">
-          <FieldLabel>Categoria</FieldLabel>
-          <Select
-            value={groupCategoryId}
-            onValueChange={(v) => onGroupCategoryChange((v ?? 'all') as 'all' | 'none' | string)}
-          >
-            <SelectTrigger
-              className={selectTriggerClass(groupCategoryId !== 'all')}
-              aria-label={`Categoria: ${categoryTriggerLabel}`}
-            >
-              <SelectValue placeholder="Categoria">{categoryTriggerLabel}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" label="Todas">
-                Todas
-              </SelectItem>
-              <SelectItem value="none" label="Sin categoria">
-                Sin categoria
-              </SelectItem>
-              {sortedCategories.map((c) => (
-                <SelectItem key={c.id} value={c.id} label={c.name}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="min-w-0 xl:col-span-4">
+        <div className="min-w-0">
           <FieldLabel>Grupo</FieldLabel>
           <Select value={groupId} onValueChange={(v) => onGroupChange((v ?? 'all') as 'all' | string)}>
             <SelectTrigger
@@ -213,6 +165,9 @@ export function TournamentFiltersBar({
               <SelectValue placeholder="Grupo">{groupTriggerLabel}</SelectValue>
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="all" label="Todo el torneo">
+                Todo el torneo
+              </SelectItem>
               {sortedGroups.map((g) => (
                 <SelectItem key={g.id} value={g.id} label={g.name}>
                   {g.name}

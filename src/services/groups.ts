@@ -286,7 +286,15 @@ export async function removeGroupPlayer(id: string): Promise<void> {
   if (error) throw error
 }
 
-/** Elimina el grupo solo si no tiene jugadores inscritos. `matches` vacíos pueden eliminarse en cascada con el grupo. */
+function mapGroupDeleteError(error: { message: string; code?: string }): string {
+  const message = error.message ?? ''
+  if (error.code === '42501' || message.toLowerCase().includes('row-level security')) {
+    return 'No se pudo eliminar el grupo ni sus partidos vinculados por permisos del servidor.'
+  }
+  return message || 'No se pudo eliminar el grupo.'
+}
+
+/** Elimina el grupo solo si no tiene jugadores inscritos. Los partidos se eliminan en cascada. */
 export async function deleteGroup(groupId: string): Promise<void> {
   const { count, error: countErr } = await supabase
     .from('group_players')
@@ -298,6 +306,9 @@ export async function deleteGroup(groupId: string): Promise<void> {
       'No puedes eliminar un grupo con jugadores inscritos. Quita primero a todos los jugadores del grupo.',
     )
   }
-  const { error } = await supabase.from('groups').delete().eq('id', groupId)
-  if (error) throw error
+  const { data, error } = await supabase.from('groups').delete().eq('id', groupId).select('id')
+  if (error) throw new Error(mapGroupDeleteError(error))
+  if (!data?.length) {
+    throw new Error('No se pudo eliminar el grupo ni sus partidos vinculados.')
+  }
 }

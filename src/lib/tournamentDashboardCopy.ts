@@ -15,7 +15,6 @@ export const TDASH_COPY = {
   },
   groupNav: 'Selecciona un grupo',
   matrixTitle: 'Cuadro de resultados',
-  matrixSubtitle: 'Consulta enfrentamientos, marcadores y resumen del grupo',
   rankingTitle: 'Ranking del grupo',
   rankingSubtitle: 'Posición actual según puntos y resultados',
   emptyGroup:

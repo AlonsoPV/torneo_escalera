@@ -22,11 +22,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Badge } from '@/components/ui/badge'
 import { assignPlayerToGroup, deleteGroup, getAdminGroupsForTournament, removePlayerFromGroup, updateGroup, type AdminGroupRecord } from '@/services/admin'
 import {
   createGroupCategory,
   deleteGroupCategory,
-  ensureDefaultGroupCategories,
   listGroupCategories,
   updateGroupCategory,
 } from '@/services/groupCategories'
@@ -158,8 +158,18 @@ function FreePlayersPanel({
   )
 }
 
+function countGroupsByCategoryId(groups: readonly AdminGroupRecord[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const group of groups) {
+    if (!group.group_category_id) continue
+    counts.set(group.group_category_id, (counts.get(group.group_category_id) ?? 0) + 1)
+  }
+  return counts
+}
+
 function GroupCategoriesPanel({
   categories,
+  groupCountByCategoryId,
   disabled,
   onAdd,
   onRename,
@@ -167,6 +177,7 @@ function GroupCategoriesPanel({
   onDelete,
 }: {
   categories: GroupCategory[]
+  groupCountByCategoryId: Map<string, number>
   disabled: boolean
   onAdd: (name: string) => void
   onRename: (id: string, name: string) => void
@@ -216,8 +227,9 @@ function GroupCategoriesPanel({
         <p className="p-4 text-sm text-muted-foreground">No hay categorías. Añade la primera arriba.</p>
       ) : (
         <div className="space-y-1.5 p-3">
-          {sortedCategories.map((category) =>
-            editingId === category.id ? (
+          {sortedCategories.map((category) => {
+            if (editingId === category.id) {
+              return (
               <div
                 key={category.id}
                 className="flex flex-col gap-2 rounded-lg border border-border/20 bg-muted/30 px-3 py-2 sm:flex-row sm:items-end"
@@ -248,14 +260,34 @@ function GroupCategoriesPanel({
                   </Button>
                 </div>
               </div>
-            ) : (
+              )
+            }
+
+            const groupCount = groupCountByCategoryId.get(category.id) ?? 0
+            const inUse = groupCount > 0
+
+            return (
               <div
                 key={category.id}
                 className="flex items-center justify-between gap-2 rounded-lg border border-border/20 bg-muted/50 px-3 py-2"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">{category.name}</p>
-                  <p className="text-xs text-muted-foreground">Orden {category.order_index}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate text-sm font-medium text-foreground">{category.name}</p>
+                    <Badge
+                      variant="secondary"
+                      className={
+                        inUse
+                          ? 'h-5 border-amber-200/90 bg-amber-50 px-1.5 text-[10px] font-medium text-amber-950'
+                          : 'h-5 border-slate-200 bg-slate-50 px-1.5 text-[10px] font-medium text-slate-600'
+                      }
+                    >
+                      {inUse
+                        ? `En uso · ${groupCount} grupo${groupCount === 1 ? '' : 's'}`
+                        : 'Sin grupos'}
+                    </Badge>
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Orden {category.order_index}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <Input
@@ -289,10 +321,10 @@ function GroupCategoriesPanel({
                     className="rounded-md p-1.5 text-muted-foreground hover:text-red-600 disabled:opacity-50"
                     disabled={disabled}
                     onClick={() => {
-                      if (
-                        typeof window !== 'undefined' &&
-                        window.confirm('¿Eliminar esta categoría? Los grupos quedarán sin categoría.')
-                      ) {
+                      const confirmMessage = inUse
+                        ? `Esta categoría está en uso por ${groupCount} grupo${groupCount === 1 ? '' : 's'}. Si la eliminas, esos grupos quedarán sin categoría. ¿Continuar?`
+                        : '¿Eliminar esta categoría? No hay grupos asignados.'
+                      if (typeof window !== 'undefined' && window.confirm(confirmMessage)) {
                         onDelete(category.id)
                       }
                     }}
@@ -302,8 +334,8 @@ function GroupCategoriesPanel({
                   </button>
                 </div>
               </div>
-            ),
-          )}
+            )
+          })}
         </div>
       )}
     </div>
@@ -477,7 +509,7 @@ export function AdminGroupsPage() {
   const qc = useQueryClient()
   const currentUserId = useAuthStore((s) => s.user?.id ?? null)
   const [searchParams, setSearchParams] = useSearchParams()
-  const [tournamentId, setTournamentId] = useState<string | null>(null)
+  const [tournamentOverride, setTournamentOverride] = useState<string | null>(null)
   const [managedGroup, setManagedGroup] = useState<AdminGroupRecord | null>(null)
   const [managerOpen, setManagerOpen] = useState(false)
   const [draftPreview, setDraftPreview] = useState<Awaited<ReturnType<typeof previewDraftTournamentRebalance>> | null>(null)
@@ -486,6 +518,23 @@ export function AdminGroupsPage() {
   useEffect(() => {
     managedGroupIdRef.current = managedGroup?.id ?? null
   }, [managedGroup?.id])
+
+  const tournamentsQ = useQuery({
+    queryKey: ['admin-tournaments'],
+    queryFn: listTournaments,
+    staleTime: 5 * 60_000,
+    refetchOnMount: true,
+  })
+
+  const tournamentId = useMemo(() => {
+    const list = tournamentsQ.data ?? []
+    if (!list.length) return null
+    const fromUrl = searchParams.get('tournament')
+    if (fromUrl && list.some((t) => t.id === fromUrl)) return fromUrl
+    if (tournamentOverride && list.some((t) => t.id === tournamentOverride)) return tournamentOverride
+    const active = list.find((t) => t.status === 'active')
+    return active?.id ?? list[0]!.id
+  }, [searchParams, tournamentOverride, tournamentsQ.data])
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -501,48 +550,19 @@ export function AdminGroupsPage() {
     queryFn: () => getAdminGroupsForTournament(tournamentId!),
     enabled: Boolean(tournamentId),
     staleTime: 60_000,
+    refetchOnMount: true,
   })
   const profilesQ = useQuery({
     queryKey: ['profiles-admin'],
     queryFn: listProfilesForAdmin,
     enabled: Boolean(tournamentId),
     staleTime: 2 * 60_000,
+    refetchOnMount: true,
   })
-  const tournamentsQ = useQuery({
-    queryKey: ['admin-tournaments'],
-    queryFn: listTournaments,
-    staleTime: 5 * 60_000,
-  })
-
-  useEffect(() => {
-    const list = tournamentsQ.data
-    if (!list?.length) return
-    const handle = window.setTimeout(() => {
-      setTournamentId((prev) => {
-        if (prev && list.some((t) => t.id === prev)) return prev
-        const active = list.find((t) => t.status === 'active')
-        return active?.id ?? list[0].id
-      })
-    }, 0)
-    return () => window.clearTimeout(handle)
-  }, [tournamentsQ.data])
-
-  useEffect(() => {
-    const fromUrl = searchParams.get('tournament')
-    const list = tournamentsQ.data
-    if (!fromUrl || !list?.length) return
-    if (list.some((t) => t.id === fromUrl)) {
-      const handle = window.setTimeout(() => setTournamentId(fromUrl), 0)
-      return () => window.clearTimeout(handle)
-    }
-  }, [searchParams, tournamentsQ.data])
 
   const categoriesQ = useQuery({
     queryKey: ['group-categories', tournamentId],
-    queryFn: async () => {
-      await ensureDefaultGroupCategories(tournamentId!)
-      return listGroupCategories(tournamentId!)
-    },
+    queryFn: () => listGroupCategories(tournamentId!),
     enabled: Boolean(tournamentId),
     staleTime: 10 * 60_000,
   })
@@ -551,11 +571,7 @@ export function AdminGroupsPage() {
 
   const modalGroupCategoriesQ = useQuery({
     queryKey: ['group-categories', 'manager', managedGroup?.tournament_id],
-    queryFn: async () => {
-      const tid = managedGroup!.tournament_id
-      await ensureDefaultGroupCategories(tid)
-      return listGroupCategories(tid)
-    },
+    queryFn: () => listGroupCategories(managedGroup!.tournament_id),
     enabled: Boolean(managerOpen && managedGroup?.tournament_id),
     staleTime: 15_000,
   })
@@ -751,6 +767,11 @@ export function AdminGroupsPage() {
 
   const groupsInTournament = useMemo(() => groupsQ.data ?? [], [groupsQ.data])
 
+  const groupCountByCategoryId = useMemo(
+    () => countGroupsByCategoryId(groupsInTournament),
+    [groupsInTournament],
+  )
+
   const assignedUserIdsInTournament = useMemo(() => {
     const ids = new Set<string>()
     for (const group of groupsInTournament) {
@@ -888,7 +909,7 @@ export function AdminGroupsPage() {
                 value={tournamentId ?? ADMIN_GROUPS_TOURNAMENT_PENDING}
                 onValueChange={(value) => {
                   if (!value || value === ADMIN_GROUPS_TOURNAMENT_PENDING) return
-                  setTournamentId(value)
+                  setTournamentOverride(value)
                   setSearchParams((prev) => {
                     const next = new URLSearchParams(prev)
                     next.set('tournament', value)
@@ -949,13 +970,14 @@ export function AdminGroupsPage() {
           <AdminSectionTitle
             id="group-categories-heading"
             title="Categorías de grupo"
-            description="Clasifica los bloques del torneo (p. ej. divisiones). Las tres por defecto se crean al abrir este torneo por primera vez."
+            description="Clasifica los bloques del torneo (p. ej. divisiones). Las tres por defecto se crean al crear el torneo; puedes eliminar las que no uses."
           />
           {categoriesQ.isLoading ? (
             <Skeleton className="h-36 rounded-xl border border-border/20" />
           ) : (
             <GroupCategoriesPanel
               categories={categories}
+              groupCountByCategoryId={groupCountByCategoryId}
               disabled={categoryMut.isPending}
               onAdd={(name) =>
                 categoryMut.mutate(() =>
