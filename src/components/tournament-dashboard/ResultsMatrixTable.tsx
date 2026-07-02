@@ -1,4 +1,5 @@
 import { ScoreCell } from '@/components/simulation/ScoreCell'
+import { PlayerNameWithPhoneCopy } from '@/components/player/PlayerNameWithPhoneCopy'
 import { getMatrixCellKind } from '@/components/simulation/matrixCellState'
 import { getCellLabelAndTitle } from '@/components/simulation/matrixLabels'
 import { TDASH_COPY } from '@/lib/tournamentDashboardCopy'
@@ -122,13 +123,16 @@ export function ResultsMatrixTable(props: Props) {
                   <th
                     scope="row"
                     className={cn(
-                      'sticky left-9 z-20 max-w-[8rem] border-b border-[var(--tdash-border)] px-2 py-1.5 text-left align-middle shadow-[2px_0_8px_rgba(15,23,42,0.04)] sm:left-11 sm:max-w-[11rem] sm:px-3 sm:py-2',
+                      'sticky left-9 z-20 max-w-[9.5rem] border-b border-[var(--tdash-border)] px-2 py-1.5 text-left align-middle shadow-[2px_0_8px_rgba(15,23,42,0.04)] sm:left-11 sm:max-w-[12.5rem] sm:px-3 sm:py-2',
                       rowSurface,
                     )}
                   >
-                    <span className="line-clamp-2 text-left text-xs font-semibold leading-snug text-[var(--tdash-text)] sm:text-sm">
-                      {row.full_name}
-                    </span>
+                    <PlayerNameWithPhoneCopy
+                      name={row.full_name}
+                      phone={row.phone}
+                      className="max-w-full"
+                      nameClassName="line-clamp-2 text-left text-xs font-semibold leading-snug text-[var(--tdash-text)] sm:text-sm"
+                    />
                   </th>
                   {colPlayers.map((col) => {
                     const isDiag = row.id === col.id

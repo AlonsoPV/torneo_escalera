@@ -2,7 +2,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-import { PlayerGroupSection } from '@/components/player/PlayerGroupSection'
 import { PlayerHeroSummary } from '@/components/player/PlayerHeroSummary'
 import { PlayerMatchesPanel } from '@/components/player/PlayerMatchesPanel'
 import { PlayerQuickMetrics } from '@/components/player/PlayerQuickMetrics'
@@ -251,14 +250,6 @@ export function PlayerDashboardPage() {
       <PlayerQuickMetrics summary={summary} />
 
       {userId ? <PlayerTournamentMovementCard playerId={userId} tournamentId={t.id} /> : null}
-
-      <PlayerGroupSection
-        groupId={g.id}
-        groupName={g.name}
-        ranking={data.ranking}
-        players={players}
-        currentUserId={userId}
-      />
 
       <ResultsMatrixCard
         playerCount={matrix.players.length}

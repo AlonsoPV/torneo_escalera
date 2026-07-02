@@ -9,7 +9,11 @@ import {
   importResultTypeUsesDefaultPoints,
 } from '@/lib/matchResultSemantics'
 import { getTournamentRules } from '@/services/tournaments'
-import type { Group, GroupPlayer, MatchRow, Tournament, TournamentRules } from '@/types/database'
+import {
+  getGroupPlayerContactsForGroups,
+  withGroupPlayerContacts,
+} from '@/services/dashboardPlayer'
+import type { Group, GroupPlayer, GroupPlayerContact, MatchRow, Tournament, TournamentRules } from '@/types/database'
 import { buildGroupProgressItems, type GroupProgressItem } from '@/utils/groupProgress'
 import { compareRankingRowsForLeaderboard, computeGroupRanking, type RankingRow } from '@/utils/ranking'
 import { getOfficialWinnerGroupPlayerId } from '@/utils/matchOfficialWinner'
@@ -59,7 +63,7 @@ export type TournamentDashboardData = {
   tournament: Tournament
   rules: TournamentRules
   groups: Group[]
-  groupPlayers: GroupPlayer[]
+  groupPlayers: GroupPlayerContact[]
   matches: MatchRow[]
   metrics: TournamentScopeMetrics
   leaderboard: TournamentLeaderboardEntry[]
@@ -77,7 +81,7 @@ const RECENT_STATUS_VISIBLE = new Set<MatchRow['status']>([
 /** Recalcula vistas derivadas del dashboard (misma lógica que `getTournamentDashboardData`). */
 export function recomputeTournamentDashboardPresentation(input: {
   groups: Group[]
-  groupPlayers: GroupPlayer[]
+  groupPlayers: GroupPlayerContact[]
   allMatches: MatchRow[]
   rules: TournamentRules
   filters: TournamentDashboardFiltersInput
@@ -353,10 +357,13 @@ export async function getTournamentDashboardData(
     allGroupPlayers = (playersRes.data ?? []) as GroupPlayer[]
   }
 
+  const phonesByUserId = await getGroupPlayerContactsForGroups(groupIdList)
+  const groupPlayersWithContact = withGroupPlayerContacts(allGroupPlayers, phonesByUserId)
+
   const { metrics, leaderboard, groupProgress, recentMatches } =
     recomputeTournamentDashboardPresentation({
       groups,
-      groupPlayers: allGroupPlayers,
+      groupPlayers: groupPlayersWithContact,
       allMatches,
       rules,
       filters,
@@ -372,7 +379,7 @@ export async function getTournamentDashboardData(
     tournament,
     rules,
     groups,
-    groupPlayers: allGroupPlayers,
+    groupPlayers: groupPlayersWithContact,
     matches: allMatches,
     metrics,
     leaderboard,

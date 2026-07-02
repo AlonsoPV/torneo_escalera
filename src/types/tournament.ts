@@ -11,6 +11,7 @@ export type SimPlayer = {
   full_name: string
   seed_order: number
   group_id: string
+  phone?: string | null
 }
 
 export type SimGroup = {

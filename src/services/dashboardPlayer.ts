@@ -77,6 +77,32 @@ async function listGroupPlayerContacts(groupId: string): Promise<Map<string, str
   return new Map(((data ?? []) as GroupPlayerContactRow[]).map((row) => [row.user_id, row.phone]))
 }
 
+export async function getGroupPlayerContactsMap(groupId: string): Promise<Map<string, string | null>> {
+  return listGroupPlayerContacts(groupId)
+}
+
+export async function getGroupPlayerContactsForGroups(
+  groupIds: string[],
+): Promise<Map<string, string | null>> {
+  if (groupIds.length === 0) return new Map()
+  const maps = await Promise.all(groupIds.map((groupId) => listGroupPlayerContacts(groupId)))
+  const merged = new Map<string, string | null>()
+  for (const map of maps) {
+    for (const [userId, phone] of map) merged.set(userId, phone)
+  }
+  return merged
+}
+
+export function withGroupPlayerContacts(
+  players: GroupPlayer[],
+  phonesByUserId: Map<string, string | null>,
+): GroupPlayerContact[] {
+  return players.map((player) => ({
+    ...player,
+    phone: phonesByUserId.get(player.user_id) ?? null,
+  }))
+}
+
 async function listGroupPlayersWithContact(groupId: string): Promise<GroupPlayerContact[]> {
   const players = await listGroupPlayers(groupId)
   if (players.length === 0) return []

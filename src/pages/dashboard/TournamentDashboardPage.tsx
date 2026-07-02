@@ -5,7 +5,6 @@ import { useSearchParams } from 'react-router-dom'
 import { RecentMatchesCard } from '@/components/dashboard/RecentMatchesCard'
 import { TournamentDashboardHeaderCompact } from '@/components/dashboard/TournamentDashboardHeaderCompact'
 import { TournamentFiltersBar } from '@/components/dashboard/TournamentFiltersBar'
-import { TournamentLeaderboardCard } from '@/components/dashboard/TournamentLeaderboardCard'
 import { TournamentPerformanceOverview } from '@/components/dashboard/TournamentPerformanceOverview'
 import { ResultsMatrixCard } from '@/components/tournament-dashboard/ResultsMatrixCard'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -125,11 +124,6 @@ export function TournamentDashboardPage() {
     return { ...raw, groups, ...derived }
   }, [dq.data, selectedGroupId])
 
-  const leaderboardGroupTitle =
-    selectedGroupId === 'all'
-      ? 'general'
-      : data?.groups.find((g) => g.id === selectedGroupId)?.name ?? 'Grupo'
-
   const matrixBoards = useMemo((): GroupMatrixBoard[] => {
     if (!data) return []
     const targetGroups =
@@ -183,7 +177,7 @@ export function TournamentDashboardPage() {
       <div className="mx-auto max-w-lg rounded-2xl border border-dashed border-border/80 bg-card px-6 py-10 text-center shadow-sm">
         <h1 className="text-lg font-semibold text-foreground">No hay torneo activo</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          Cuando se active un torneo, aquí podrás consultar su desempeño general, ranking y cuadros de resultados.
+          Cuando se active un torneo, aquí podrás consultar su desempeño general y cuadros de resultados.
         </p>
       </div>
     )
@@ -273,8 +267,6 @@ export function TournamentDashboardPage() {
       />
 
       <TournamentPerformanceOverview metrics={data.metrics} />
-
-      <TournamentLeaderboardCard leaderboard={data.leaderboard} groupLabel={leaderboardGroupTitle} />
 
       {matrixBoards.length > 0 ? (
         <div className="space-y-5 sm:space-y-6">

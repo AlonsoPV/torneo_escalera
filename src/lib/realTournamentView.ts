@@ -3,12 +3,15 @@ import type { GroupPlayer, MatchRow, ScoreSet } from '@/types/database'
 import type { RankingRow } from '@/utils/ranking'
 import type { GroupStandingRow, SimMatch, SimPlayer } from '@/types/tournament'
 
-export function groupPlayersToSimPlayers(players: GroupPlayer[], groupId: string): SimPlayer[] {
+type GroupPlayerWithPhone = GroupPlayer & { phone?: string | null }
+
+export function groupPlayersToSimPlayers(players: GroupPlayerWithPhone[], groupId: string): SimPlayer[] {
   return players.map((p) => ({
     id: p.id,
     full_name: p.display_name,
     seed_order: p.seed_order,
     group_id: groupId,
+    phone: p.phone ?? null,
   }))
 }
 
