@@ -6,6 +6,7 @@ import { AppShell } from '@/components/layout/AppShell'
 import { IndexRedirect } from '@/components/layout/IndexRedirect'
 import { RequireAdmin } from '@/components/layout/RequireAdmin'
 import { RequireAuth } from '@/components/layout/RequireAuth'
+import { routerBasename } from '@/lib/routerBasename'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
@@ -64,7 +65,8 @@ const AdminSettingsPage = lazy(() =>
   import('@/pages/admin/AdminSettingsPage').then((m) => ({ default: m.AdminSettingsPage })),
 )
 
-export const router = createBrowserRouter([
+export const router = createBrowserRouter(
+  [
   { path: '/login', element: <LoginPage /> },
   { path: '/forgot-password', element: <ForgotPasswordPage /> },
   { path: '/auth/reset-password', element: <ResetPasswordPage /> },
@@ -119,4 +121,6 @@ export const router = createBrowserRouter([
       },
     ],
   },
-])
+  ],
+  { basename: routerBasename() },
+)
