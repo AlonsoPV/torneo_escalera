@@ -866,7 +866,12 @@ export async function createNextTournamentWithProgress(
 
     currentStep = 'generating_matches'
     cb.onStepStart?.(currentStep)
-    const completeIndices: number[] = []
+    const completeIndices = planned
+      .map((_, index) => index)
+      .filter((index) => {
+        const gid = (createdGroups[index] as { id: string }).id
+        return (byGroupId.get(gid)?.length ?? 0) === groupSize
+      })
 
     const perGroupMatchCount = (groupSize * (groupSize - 1)) / 2
     const matchesExpectedTotal = completeIndices.length * perGroupMatchCount
